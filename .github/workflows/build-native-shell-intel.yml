@@ -1,4 +1,4 @@
-name: Build Composition Studio Native Shell Intel
+name: Build Composition Studio Native Intel
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
       - '.github/workflows/build-native-shell-intel.yml'
 
 concurrency:
-  group: composition-studio-native-shell-intel
+  group: composition-studio-native-intel
   cancel-in-progress: true
 
 jobs:
@@ -19,14 +19,25 @@ jobs:
     steps:
       - name: Checkout Composition Studio
         uses: actions/checkout@v4
-      - name: Build Intel native app
+
+      - name: Build native Intel application
         shell: bash
         run: |
           set -euo pipefail
           APP='dist/Composition Studio.app'
           MACOS="$APP/Contents/MacOS"
           mkdir -p "$MACOS"
-          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit native/Sources/main.swift -o "$MACOS/Composition Studio"
+          {
+            echo 'import UniformTypeIdentifiers'
+            cat native/Sources/CompositionStudioApp.swift
+          } > /tmp/CompositionStudioApp.swift
+          xcrun swiftc \
+            -target x86_64-apple-macosx11.0 \
+            -O \
+            -framework AppKit \
+            -framework UniformTypeIdentifiers \
+            /tmp/CompositionStudioApp.swift \
+            -o "$MACOS/Composition Studio"
           cat > "$APP/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -36,26 +47,29 @@ jobs:
             <key>CFBundleName</key><string>Composition Studio</string>
             <key>CFBundleDisplayName</key><string>Composition Studio</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>0.3.0</string>
-            <key>CFBundleVersion</key><string>1</string>
+            <key>CFBundleShortVersionString</key><string>0.4.0</string>
+            <key>CFBundleVersion</key><string>2</string>
             <key>LSMinimumSystemVersion</key><string>11.0</string>
             <key>NSHighResolutionCapable</key><true/>
           </dict></plist>
           PLIST
           file "$MACOS/Composition Studio"
           lipo -info "$MACOS/Composition Studio"
+
       - name: Ad-hoc sign
         run: codesign --force --deep --sign - 'dist/Composition Studio.app'
+
       - name: Package
         shell: bash
         run: |
-          ditto -c -k --sequesterRsrc --keepParent 'dist/Composition Studio.app' 'dist/Composition-Studio-V0.3-Native-Shell-Intel.zip'
-          shasum -a 256 'dist/Composition-Studio-V0.3-Native-Shell-Intel.zip' > 'dist/Composition-Studio-V0.3-Native-Shell-Intel.zip.sha256'
+          ditto -c -k --sequesterRsrc --keepParent 'dist/Composition Studio.app' 'dist/Composition-Studio-V0.4-Functional-Intel.zip'
+          shasum -a 256 'dist/Composition-Studio-V0.4-Functional-Intel.zip' > 'dist/Composition-Studio-V0.4-Functional-Intel.zip.sha256'
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Composition-Studio-V0.3-Native-Shell-Intel
+          name: Composition-Studio-V0.4-Functional-Intel
           path: |
-            dist/Composition-Studio-V0.3-Native-Shell-Intel.zip
-            dist/Composition-Studio-V0.3-Native-Shell-Intel.zip.sha256
+            dist/Composition-Studio-V0.4-Functional-Intel.zip
+            dist/Composition-Studio-V0.4-Functional-Intel.zip.sha256
           retention-days: 30
