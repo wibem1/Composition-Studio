@@ -78,13 +78,26 @@ jobs:
             brew install ninja
           fi
 
+      # Keep the expensive MAGDA/Tracktion/Faust compilation between runs.
+      # The key changes only when the pinned MAGDA revision or fundamental
+      # engine build settings change. Composition Studio Swift/bridge edits
+      # therefore reuse the already compiled engine and rebuild only what is dirty.
+      - name: Restore MAGDA engine build cache
+        id: engine-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: upstream/build
+          key: magda-engine-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v2
+
       - name: Add Composition Studio EngineBridge
         shell: bash
         run: |
           set -euo pipefail
           rm -rf upstream/composition_studio_bridge
           cp -R studio/native/EngineBridge upstream/composition_studio_bridge
-          printf '\nadd_subdirectory(composition_studio_bridge)\n' >> upstream/CMakeLists.txt
+          if ! grep -q '^add_subdirectory(composition_studio_bridge)$' upstream/CMakeLists.txt; then
+            printf '\nadd_subdirectory(composition_studio_bridge)\n' >> upstream/CMakeLists.txt
+          fi
 
       - name: Configure engine for Intel
         working-directory: upstream
@@ -105,6 +118,15 @@ jobs:
         working-directory: upstream
         shell: bash
         run: cmake --build build --target CompositionStudioEngineBridge -j $(sysctl -n hw.ncpu)
+
+      # Save immediately after the expensive engine build, so the cache is kept
+      # even if a later Swift/link/package step fails.
+      - name: Save MAGDA engine build cache
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: upstream/build
+          key: magda-engine-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v2
 
       - name: Locate EngineBridge
         id: bridge
