@@ -1,14 +1,22 @@
 # Composition Studio
 
-Composition Studio ist ein eigenständiges Projekt für eine moderne, helle Musikproduktions- und Kompositionsoberfläche.
+Composition Studio ist das neue Zielprojekt für eine moderne Musikproduktions- und Kompositionsumgebung.
 
 ## Aktueller Stand
 
 **GUI-Prototyp V0.2**
 
-Die funktionale Entwicklung ist vorerst eingefroren. Der aktuelle Schwerpunkt liegt ausschließlich auf dem Interface und seiner visuellen Struktur.
+Die funktionale Entwicklung ist vorerst eingefroren. Der aktuelle Schwerpunkt liegt auf Interface und visueller Struktur. Der klickfreie Referenzprototyp liegt in `index.html`.
 
-Der aktuelle klickfreie Referenzprototyp liegt direkt in `index.html` und orientiert sich an dem am 14. September festgelegten GUI-Maßstab.
+## Rolle im Gesamtsystem
+
+Composition Studio soll bewährte Teile der drei anderen aktiven Projekte zusammenführen, ohne deren historische Architektur vollständig zu übernehmen:
+
+- **Music Chat Lab** — Dialog- und Workflow-Referenz
+- **Minimal Composer** — Minimalarchitektur und Kompositionsforschung
+- **Composition Lab Native** — macOS, Notation, MusicXML, MIDI-I/O und CLAB
+
+Composition Studio bleibt dabei ein eigenständiges, möglichst schlankes Zielsystem.
 
 ## Zielaufbau
 
@@ -24,29 +32,11 @@ Der aktuelle klickfreie Referenzprototyp liegt direkt in `index.html` und orient
 
 ## Designrichtung
 
-Die Oberfläche kombiniert:
-
-- die klare Gliederung und Helligkeitsstaffelung moderner DAWs wie Fender Studio
-- kräftige Kontraste aus dem bevorzugten Ableton-Theme
-- eine eigene Composition-Studio-Identität
-
-Nicht gewünscht sind monotones Einheitsgrau, weiß-auf-grau wirkende Bedienelemente, eine dominierende weiße obere Transportleiste oder ein überladenes Farbschema.
-
-## V0.2 – Referenzzustand
-
-V0.2 setzt den visuellen Maßstab erstmals als komplette Oberfläche um:
-
-- Composition-Studio-Branding links oben
-- heller KI-Dialog mit großen Vorschlagsflächen
-- klar getrenntes Arrangement mit farbcodierten Spuren und Clips
-- heller Plugin-Browser rechts
-- Routing-/Instrument-/Effektbereich unter dem Arrangement
-- Pianoroll direkt darunter
-- zentrale Transportsteuerung in der unteren Statusleiste
+Die Oberfläche verbindet die klare Gliederung moderner DAWs, kräftige Kontraste und eine eigene Composition-Studio-Identität. Nicht gewünscht sind monotones Einheitsgrau, schwache Weiß-auf-Grau-Kontraste, eine dominierende weiße obere Transportleiste oder ein überladenes Farbschema.
 
 ## Versionsprinzip
 
-- `V0.x` – GUI-Prototypen
-- `V1.0` – erster konsolidierter Composition-Studio-Stand
+- `V0.x` — GUI-Prototypen
+- `V1.0` — erster konsolidierter Composition-Studio-Stand
 
-Jeder relevante Zwischenstand wird ab jetzt im Repository gesichert.
+Relevante Zwischenstände werden im Repository gesichert; Wegwerf-Patches und einmalige Migrationshilfen sollen nicht dauerhaft im aktiven Quellbaum verbleiben.
