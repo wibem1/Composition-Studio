@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - 'native/Sources/**'
+      - 'native/EngineBridge/**'
+      - 'native/upstream.env'
       - '.github/workflows/build-native-shell-intel.yml'
 
 concurrency:
@@ -15,29 +17,95 @@ concurrency:
 jobs:
   build-intel:
     runs-on: macos-15-intel
-    timeout-minutes: 30
+    timeout-minutes: 120
     steps:
       - name: Checkout Composition Studio
         uses: actions/checkout@v4
+        with:
+          path: studio
 
-      - name: Build native Intel application
+      - name: Read pinned MAGDA revision
+        id: upstream
+        shell: bash
+        run: |
+          source studio/native/upstream.env
+          echo "repo=$MAGDA_REPOSITORY" >> "$GITHUB_OUTPUT"
+          echo "ref=$MAGDA_REF" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout MAGDA engine source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.upstream.outputs.repo }}
+          ref: ${{ steps.upstream.outputs.ref }}
+          path: upstream
+          submodules: recursive
+          lfs: true
+
+      - name: Install build dependency
+        run: brew install ninja
+
+      - name: Add Composition Studio engine bridge to MAGDA build
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf upstream/composition_studio_bridge
+          cp -R studio/native/EngineBridge upstream/composition_studio_bridge
+          printf '\nadd_subdirectory(composition_studio_bridge)\n' >> upstream/CMakeLists.txt
+
+      - name: Configure MAGDA engine for Intel
+        working-directory: upstream
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
+            -DMAGDA_BUILD_TESTS=OFF \
+            -DMAGDA_HAVE_CLAP=OFF
+
+      - name: Build engine bridge
+        working-directory: upstream
+        run: cmake --build build --target CompositionStudioEngineBridge -j $(sysctl -n hw.ncpu)
+
+      - name: Locate engine bridge
+        id: bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRIDGE=$(find upstream/build -type f -name 'libCompositionStudioEngineBridge.dylib' -print -quit)
+          if [ -z "$BRIDGE" ]; then
+            echo 'Engine bridge dylib not found'
+            find upstream/build -type f -name '*CompositionStudioEngineBridge*' -print || true
+            exit 1
+          fi
+          echo "path=$BRIDGE" >> "$GITHUB_OUTPUT"
+          echo "dir=$(dirname "$BRIDGE")" >> "$GITHUB_OUTPUT"
+          file "$BRIDGE"
+
+      - name: Build Composition Studio Intel application
         shell: bash
         run: |
           set -euo pipefail
           APP='dist/Composition Studio.app'
           MACOS="$APP/Contents/MacOS"
-          mkdir -p "$MACOS"
-          {
-            echo 'import UniformTypeIdentifiers'
-            cat native/Sources/CompositionStudioApp.swift
-          } > /tmp/CompositionStudioApp.swift
+          FRAMEWORKS="$APP/Contents/Frameworks"
+          mkdir -p "$MACOS" "$FRAMEWORKS"
+
+          BRIDGE='${{ steps.bridge.outputs.path }}'
+          cp "$BRIDGE" "$FRAMEWORKS/"
+          install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FRAMEWORKS/libCompositionStudioEngineBridge.dylib"
+
           xcrun swiftc \
             -target x86_64-apple-macosx11.0 \
             -O \
             -framework AppKit \
             -framework UniformTypeIdentifiers \
-            /tmp/CompositionStudioApp.swift \
+            studio/native/Sources/EngineBridge.swift \
+            studio/native/Sources/CompositionStudioApp.swift \
+            -L "$FRAMEWORKS" \
+            -lCompositionStudioEngineBridge \
+            -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' \
             -o "$MACOS/Composition Studio"
+
           cat > "$APP/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -47,29 +115,34 @@ jobs:
             <key>CFBundleName</key><string>Composition Studio</string>
             <key>CFBundleDisplayName</key><string>Composition Studio</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>0.4.0</string>
-            <key>CFBundleVersion</key><string>2</string>
+            <key>CFBundleShortVersionString</key><string>0.5.0</string>
+            <key>CFBundleVersion</key><string>3</string>
             <key>LSMinimumSystemVersion</key><string>11.0</string>
             <key>NSHighResolutionCapable</key><true/>
+            <key>NSMicrophoneUsageDescription</key><string>Composition Studio benötigt Mikrofonzugriff für Audioaufnahmen.</string>
           </dict></plist>
           PLIST
+
           file "$MACOS/Composition Studio"
           lipo -info "$MACOS/Composition Studio"
+          otool -L "$MACOS/Composition Studio"
 
-      - name: Ad-hoc sign
-        run: codesign --force --deep --sign - 'dist/Composition Studio.app'
+      - name: Ad-hoc sign complete app
+        run: |
+          codesign --force --sign - 'dist/Composition Studio.app/Contents/Frameworks/libCompositionStudioEngineBridge.dylib'
+          codesign --force --deep --sign - 'dist/Composition Studio.app'
 
-      - name: Package
+      - name: Package V0.5 Engine build
         shell: bash
         run: |
-          ditto -c -k --sequesterRsrc --keepParent 'dist/Composition Studio.app' 'dist/Composition-Studio-V0.4-Functional-Intel.zip'
-          shasum -a 256 'dist/Composition-Studio-V0.4-Functional-Intel.zip' > 'dist/Composition-Studio-V0.4-Functional-Intel.zip.sha256'
+          ditto -c -k --sequesterRsrc --keepParent 'dist/Composition Studio.app' 'dist/Composition-Studio-V0.5-Engine-Intel.zip'
+          shasum -a 256 'dist/Composition-Studio-V0.5-Engine-Intel.zip' > 'dist/Composition-Studio-V0.5-Engine-Intel.zip.sha256'
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Composition-Studio-V0.4-Functional-Intel
+          name: Composition-Studio-V0.5-Engine-Intel
           path: |
-            dist/Composition-Studio-V0.4-Functional-Intel.zip
-            dist/Composition-Studio-V0.4-Functional-Intel.zip.sha256
+            dist/Composition-Studio-V0.5-Engine-Intel.zip
+            dist/Composition-Studio-V0.5-Engine-Intel.zip.sha256
           retention-days: 30
