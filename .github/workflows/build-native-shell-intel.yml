@@ -65,6 +65,12 @@ jobs:
             third_party/eurorack \
             third_party/asiosdk
 
+          # MAGDA's Faust DSP compilation needs stdfaust.lib. It lives in the
+          # Faust repository's dedicated libraries submodule. Initialise only
+          # that nested dependency instead of recursing through all Faust tools.
+          git -C upstream/third_party/faust submodule sync
+          git -C upstream/third_party/faust submodule update --init --depth 1 libraries
+
       - name: Install Ninja if needed
         shell: bash
         run: |
