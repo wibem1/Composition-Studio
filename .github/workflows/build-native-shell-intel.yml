@@ -80,14 +80,26 @@ jobs:
 
       # Keep the expensive MAGDA/Tracktion/Faust compilation between runs.
       # The key changes only when the pinned MAGDA revision or fundamental
-      # engine build settings change. Composition Studio Swift/bridge edits
-      # therefore reuse the already compiled engine and rebuild only what is dirty.
+      # engine build settings change.
       - name: Restore MAGDA engine build cache
         id: engine-cache
         uses: actions/cache/restore@v4
         with:
           path: upstream/build
           key: magda-engine-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v2
+
+      # A fresh git checkout gives every source file a new timestamp. Ninja would
+      # then regard all restored object files as stale and rebuild MAGDA anyway.
+      # On a cache hit, move the pinned upstream source timestamps safely into the
+      # past. Composition Studio's EngineBridge is copied afterwards, so bridge
+      # edits still get rebuilt normally.
+      - name: Preserve restored engine objects
+        if: steps.engine-cache.outputs.cache-hit == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          touch -t 202001010000 upstream/CMakeLists.txt
+          find upstream/magda upstream/third_party -type f -exec touch -t 202001010000 {} +
 
       - name: Add Composition Studio EngineBridge
         shell: bash
@@ -119,8 +131,6 @@ jobs:
         shell: bash
         run: cmake --build build --target CompositionStudioEngineBridge -j $(sysctl -n hw.ncpu)
 
-      # Save immediately after the expensive engine build, so the cache is kept
-      # even if a later Swift/link/package step fails.
       - name: Save MAGDA engine build cache
         if: steps.engine-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
