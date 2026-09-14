@@ -2,405 +2,313 @@ import AppKit
 import UniformTypeIdentifiers
 
 final class StudioModel: NSObject {
-    var selectedTrack = "Cello"
+    var selectedTrack = 2
+    var selectedRegion = 2
     var projectName = "Abendlicht"
+    var tracks = ["Piano", "Violine", "Cello", "Holzbläser", "Synth Pads", "Percussion", "Audio"]
+    var regions = ["Piano – Thema", "Violine – Melodie", "Cello – Begleitung", "Holzbläser – Flächen", "Pads", "Percussion", "Ambience"]
 }
 
 private extension NSColor {
-    static let csBackground = NSColor(calibratedRed: 0.93, green: 0.96, blue: 0.985, alpha: 1)
-    static let csPanel = NSColor(calibratedRed: 0.975, green: 0.988, blue: 1.0, alpha: 1)
-    static let csLine = NSColor(calibratedRed: 0.80, green: 0.85, blue: 0.91, alpha: 1)
-    static let csText = NSColor(calibratedRed: 0.07, green: 0.13, blue: 0.22, alpha: 1)
-    static let csBlue = NSColor(calibratedRed: 0.16, green: 0.48, blue: 0.94, alpha: 1)
-    static let csGreen = NSColor(calibratedRed: 0.05, green: 0.62, blue: 0.39, alpha: 1)
+    static let csWindow = NSColor(calibratedRed: 0.885, green: 0.925, blue: 0.965, alpha: 1)
+    static let csTop = NSColor(calibratedRed: 0.955, green: 0.975, blue: 0.995, alpha: 1)
+    static let csPanel = NSColor(calibratedRed: 0.972, green: 0.985, blue: 0.998, alpha: 1)
+    static let csPanelStrong = NSColor(calibratedRed: 0.915, green: 0.945, blue: 0.975, alpha: 1)
+    static let csArrangement = NSColor(calibratedRed: 0.885, green: 0.925, blue: 0.965, alpha: 1)
+    static let csEditor = NSColor(calibratedRed: 0.945, green: 0.968, blue: 0.990, alpha: 1)
+    static let csTransport = NSColor(calibratedRed: 0.900, green: 0.935, blue: 0.970, alpha: 1)
+    static let csLine = NSColor(calibratedRed: 0.71, green: 0.78, blue: 0.86, alpha: 1)
+    static let csText = NSColor(calibratedRed: 0.055, green: 0.11, blue: 0.20, alpha: 1)
+    static let csBlue = NSColor(calibratedRed: 0.12, green: 0.43, blue: 0.92, alpha: 1)
+    static let csGreen = NSColor(calibratedRed: 0.05, green: 0.63, blue: 0.36, alpha: 1)
 }
 
-private func drawText(_ text: String, _ rect: NSRect, size: CGFloat = 12, weight: NSFont.Weight = .regular, color: NSColor = .csText, alignment: NSTextAlignment = .left) {
-    let p = NSMutableParagraphStyle()
-    p.alignment = alignment
-    p.lineBreakMode = .byTruncatingTail
-    let attrs: [NSAttributedString.Key: Any] = [
-        .font: NSFont.systemFont(ofSize: size, weight: weight),
-        .foregroundColor: color,
-        .paragraphStyle: p
-    ]
-    (text as NSString).draw(in: rect, withAttributes: attrs)
-}
+private final class FlippedView: NSView { override var isFlipped: Bool { true } }
 
-final class StudioCanvas: NSView {
-    var selectedTrack = 2 { didSet { needsDisplay = true } }
-
-    private let tracks = ["Piano", "Violine", "Cello", "Holzbläser", "Synth Pads", "Percussion", "Audio"]
-    private let trackColors: [NSColor] = [.systemBlue, .systemRed, .systemGreen, .systemYellow, .systemPurple, .systemTeal, .systemGray]
-
-    override var isFlipped: Bool { true }
-
-    private func fill(_ rect: NSRect, _ color: NSColor, radius: CGFloat = 0) {
-        color.setFill()
-        if radius > 0 { NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill() }
-        else { rect.fill() }
-    }
-
-    private func stroke(_ rect: NSRect, _ color: NSColor = .csLine, radius: CGFloat = 8, width: CGFloat = 1) {
-        color.setStroke()
-        let p = NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
-        p.lineWidth = width
+private final class CardView: FlippedView {
+    var fillColor: NSColor = .csPanel
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        fillColor.setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 8, yRadius: 8).fill()
+        NSColor.csLine.setStroke()
+        let p = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 8, yRadius: 8)
+        p.lineWidth = 1
         p.stroke()
     }
+}
 
-    private func panel(_ rect: NSRect, radius: CGFloat = 8) {
-        fill(rect, .csPanel, radius: radius)
-        stroke(rect, radius: radius)
-    }
+private func label(_ text: String, size: CGFloat = 12, weight: NSFont.Weight = .regular, color: NSColor = .csText) -> NSTextField {
+    let f = NSTextField(labelWithString: text)
+    f.font = .systemFont(ofSize: size, weight: weight)
+    f.textColor = color
+    f.lineBreakMode = .byTruncatingTail
+    return f
+}
 
-    private func line(_ a: NSPoint, _ b: NSPoint, color: NSColor, width: CGFloat = 1) {
-        color.setStroke()
-        let p = NSBezierPath()
-        p.move(to: a); p.line(to: b); p.lineWidth = width; p.stroke()
+private func styleButton(_ b: NSButton, strong: Bool = false) {
+    b.bezelStyle = .rounded
+    b.font = .systemFont(ofSize: 11, weight: strong ? .semibold : .regular)
+    if strong { b.contentTintColor = .csBlue }
+}
+
+private final class ArrangementView: FlippedView {
+    let model: StudioModel
+    var selectionChanged: (() -> Void)?
+    var regionChanged: (() -> Void)?
+    private let colors: [NSColor] = [.systemBlue, .systemRed, .systemGreen, .systemYellow, .systemPurple, .systemTeal, .systemGray]
+
+    init(model: StudioModel) { self.model = model; super.init(frame: .zero); wantsLayer = true }
+    required init?(coder: NSCoder) { fatalError() }
+
+    private func text(_ s: String, _ r: NSRect, size: CGFloat, weight: NSFont.Weight = .regular, color: NSColor = .csText, align: NSTextAlignment = .left) {
+        let p = NSMutableParagraphStyle(); p.alignment = align; p.lineBreakMode = .byTruncatingTail
+        (s as NSString).draw(in: r, withAttributes: [.font:NSFont.systemFont(ofSize:size, weight:weight), .foregroundColor:color, .paragraphStyle:p])
     }
+    private func fill(_ r: NSRect, _ c: NSColor, radius: CGFloat = 0) { c.setFill(); radius > 0 ? NSBezierPath(roundedRect:r, xRadius:radius, yRadius:radius).fill() : r.fill() }
+    private func line(_ a: NSPoint, _ b: NSPoint, _ c: NSColor, _ w: CGFloat = 1) { c.setStroke(); let p=NSBezierPath(); p.move(to:a); p.line(to:b); p.lineWidth=w; p.stroke() }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        fill(bounds, .csBackground)
+        fill(bounds, .csArrangement)
+        let headerW: CGFloat = 164
+        let top: CGFloat = 58
+        fill(NSRect(x:0,y:0,width:headerW,height:bounds.height), .csPanelStrong)
+        fill(NSRect(x:headerW,y:0,width:bounds.width-headerW,height:top), .csTop)
+        line(NSPoint(x:headerW,y:0), NSPoint(x:headerW,y:bounds.height), .csLine)
+        line(NSPoint(x:0,y:top), NSPoint(x:bounds.width,y:top), .csLine)
+        text("◫  ◧  ↔  ⊕  ⌁", NSRect(x:12,y:11,width:130,height:18), size:11, color:.secondaryLabelColor)
 
-        let W = bounds.width
-        let H = bounds.height
-        let topH: CGFloat = 44
-        let transportH: CGFloat = 56
-        let browserW: CGFloat = max(290, W * 0.225)
-        let chatW: CGFloat = max(300, W * 0.205)
-        let gap: CGFloat = 6
-        let midX = chatW + gap
-        let rightX = W - browserW
-        let centerW = rightX - midX - gap
-        let arrangementH = max(460, (H - topH - transportH) * 0.63)
-        let inspectorTop = topH + gap + arrangementH + gap
-        let inspectorH = H - inspectorTop - transportH - gap
-
-        // top bar
-        fill(NSRect(x: 0, y: 0, width: W, height: topH), NSColor(calibratedWhite: 0.985, alpha: 1))
-        line(NSPoint(x: 0, y: topH), NSPoint(x: W, y: topH), color: .csLine)
-        fill(NSRect(x: 12, y: 9, width: 26, height: 26), NSColor(calibratedRed: 0.86, green: 0.92, blue: 1, alpha: 1), radius: 7)
-        drawText("◉", NSRect(x: 18, y: 12, width: 16, height: 18), size: 15, weight: .bold, color: .csBlue)
-        drawText("COMPOSITION STUDIO", NSRect(x: 48, y: 8, width: 220, height: 24), size: 17, weight: .bold)
-        drawText("by Klangwerke", NSRect(x: 236, y: 12, width: 105, height: 18), size: 11, color: .secondaryLabelColor)
-        drawText("Projekt: Abendlicht", NSRect(x: W * 0.29, y: 13, width: 150, height: 18), size: 11)
-        fill(NSRect(x: W * 0.39, y: 17, width: 8, height: 8), .systemGreen, radius: 4)
-        drawText("Gespeichert", NSRect(x: W * 0.397, y: 13, width: 90, height: 18), size: 11, color: NSColor(calibratedRed: 0.08, green: 0.25, blue: 0.45, alpha: 1))
-
-        // left chat
-        let chatRect = NSRect(x: 6, y: topH + gap, width: chatW - 6, height: H - topH - transportH - 2 * gap)
-        panel(chatRect)
-        let tabsY = chatRect.minY + 10
-        drawText("KI-Dialog", NSRect(x: 22, y: tabsY, width: 80, height: 22), size: 12, weight: .semibold, color: .csBlue)
-        drawText("Verlauf", NSRect(x: 115, y: tabsY, width: 60, height: 22), size: 12)
-        drawText("Ideen", NSRect(x: 195, y: tabsY, width: 55, height: 22), size: 12)
-        line(NSPoint(x: 18, y: tabsY + 29), NSPoint(x: 110, y: tabsY + 29), color: .csBlue, width: 2)
-        drawText("⚙", NSRect(x: chatRect.maxX - 34, y: tabsY, width: 24, height: 22), size: 14)
-
-        fill(NSRect(x: 20, y: tabsY + 48, width: 40, height: 40), NSColor(calibratedRed: 0.42, green: 0.30, blue: 0.93, alpha: 1), radius: 10)
-        drawText("✦", NSRect(x: 31, y: tabsY + 56, width: 22, height: 24), size: 19, weight: .bold, color: .white)
-        drawText("Hallo!", NSRect(x: 70, y: tabsY + 49, width: 100, height: 26), size: 17, weight: .bold)
-        drawText("Ich bin dein musikalischer Partner.\nWir können gemeinsam komponieren,\nArrangements entwickeln, Spuren\nbearbeiten oder neue Ideen ausprobieren.\nWas möchtest du heute tun?", NSRect(x: 70, y: tabsY + 78, width: chatW - 95, height: 102), size: 12)
-
-        let prompts = [
-            "Eine neue Komposition im\nkammermusikalischen Stil erstellen",
-            "Nur die Cellostimme überarbeiten",
-            "Drei Varianten für den Mittelteil erzeugen",
-            "Harmonische Alternativen vorschlagen",
-            "Diese Passage analysieren"
-        ]
-        var py = tabsY + 198
-        for (i, p) in prompts.enumerated() {
-            let h: CGFloat = i == 0 ? 54 : 38
-            fill(NSRect(x: 20, y: py, width: chatW - 42, height: h), NSColor(calibratedWhite: 0.995, alpha: 1), radius: 7)
-            stroke(NSRect(x: 20, y: py, width: chatW - 42, height: h), radius: 7)
-            drawText(p, NSRect(x: 34, y: py + 9, width: chatW - 70, height: h - 12), size: 11)
-            py += h + 8
-        }
-
-        // arrangement area
-        let arr = NSRect(x: midX, y: topH + gap, width: centerW, height: arrangementH)
-        panel(arr)
-        let headerH: CGFloat = 56
-        let trackHeaderW: CGFloat = 158
-        fill(NSRect(x: arr.minX + 1, y: arr.minY + 1, width: trackHeaderW, height: arr.height - 2), NSColor(calibratedRed: 0.96, green: 0.98, blue: 1.0, alpha: 1), radius: 8)
-        line(NSPoint(x: arr.minX + trackHeaderW, y: arr.minY), NSPoint(x: arr.minX + trackHeaderW, y: arr.maxY), color: .csLine)
-
-        // arrangement toolbar + ruler
-        drawText("◫  ◧  ↔  ⊕  ⌁", NSRect(x: arr.minX + 13, y: arr.minY + 9, width: 130, height: 22), size: 12, color: .secondaryLabelColor)
-        let timelineX = arr.minX + trackHeaderW
-        let timelineW = arr.width - trackHeaderW - 10
-        let rulerY = arr.minY + 28
+        let tx = headerW
+        let tw = bounds.width - headerW
         for i in 0...9 {
-            let x = timelineX + CGFloat(i) * timelineW / 9
-            drawText("\(1 + i * 4)", NSRect(x: x - 8, y: rulerY - 10, width: 25, height: 16), size: 9, color: .secondaryLabelColor, alignment: .center)
-            line(NSPoint(x: x, y: arr.minY + headerH), NSPoint(x: x, y: arr.maxY - 10), color: NSColor(calibratedWhite: 0.86, alpha: 1))
+            let x = tx + CGFloat(i) * tw / 9
+            text("\(1+i*4)", NSRect(x:x-10,y:5,width:28,height:15), size:9, color:.secondaryLabelColor, align:.center)
+            line(NSPoint(x:x,y:top), NSPoint(x:x,y:bounds.height), NSColor(calibratedWhite:0.79, alpha:0.48))
         }
-        let sections: [(String, NSColor)] = [
-            ("A – Einführung", NSColor(calibratedRed: 0.79, green: 0.96, blue: 0.92, alpha: 1)),
-            ("B – Entwicklung", NSColor(calibratedRed: 0.81, green: 0.88, blue: 1.0, alpha: 1)),
-            ("C – Höhepunkt", NSColor(calibratedRed: 1.0, green: 0.84, blue: 0.82, alpha: 1)),
-            ("D – Ausklang", NSColor(calibratedRed: 0.88, green: 0.82, blue: 1.0, alpha: 1))
-        ]
+        let sections: [(String,NSColor)] = [
+            ("A – Einführung", NSColor(calibratedRed:0.74,green:0.94,blue:0.89,alpha:1)),
+            ("B – Entwicklung", NSColor(calibratedRed:0.72,green:0.84,blue:0.98,alpha:1)),
+            ("C – Höhepunkt", NSColor(calibratedRed:0.99,green:0.78,blue:0.75,alpha:1)),
+            ("D – Ausklang", NSColor(calibratedRed:0.82,green:0.75,blue:0.96,alpha:1))]
         for i in 0..<4 {
-            let x = timelineX + CGFloat(i) * timelineW / 4
-            fill(NSRect(x: x, y: arr.minY + 28, width: timelineW / 4, height: 28), sections[i].1)
-            drawText(sections[i].0, NSRect(x: x, y: arr.minY + 34, width: timelineW / 4, height: 16), size: 10, weight: .medium, alignment: .center)
+            let x = tx + CGFloat(i)*tw/4
+            fill(NSRect(x:x,y:24,width:tw/4,height:34), sections[i].1)
+            text(sections[i].0, NSRect(x:x,y:34,width:tw/4,height:16), size:10, weight:.medium, align:.center)
         }
 
-        let rowH: CGFloat = (arr.height - headerH - 18) / 7
-        let regionNames = ["Piano – Thema", "Violine – Melodie", "Cello – Begleitung", "Holzbläser – Flächen", "Pads", "Percussion", "Ambience"]
-        for i in 0..<7 {
-            let y = arr.minY + headerH + CGFloat(i) * rowH
-            if i == selectedTrack { fill(NSRect(x: arr.minX + 4, y: y + 2, width: trackHeaderW - 8, height: rowH - 4), NSColor(calibratedRed: 0.90, green: 0.95, blue: 1.0, alpha: 1), radius: 5) }
-            fill(NSRect(x: arr.minX + 8, y: y + 8, width: 15, height: rowH - 16), trackColors[i], radius: 3)
-            drawText("\(i + 1)", NSRect(x: arr.minX + 10, y: y + 17, width: 12, height: 18), size: 10, weight: .bold, color: .white, alignment: .center)
-            drawText(tracks[i], NSRect(x: arr.minX + 32, y: y + 8, width: 104, height: 20), size: 11, weight: .semibold)
-            drawText("M   S    ●", NSRect(x: arr.minX + 32, y: y + 30, width: 90, height: 18), size: 10, color: .secondaryLabelColor)
-            line(NSPoint(x: arr.minX + 4, y: y + rowH), NSPoint(x: arr.maxX - 8, y: y + rowH), color: NSColor(calibratedWhite: 0.91, alpha: 1))
+        let n = max(1, model.tracks.count)
+        let rowH = (bounds.height-top)/CGFloat(n)
+        for i in 0..<n {
+            let y = top + CGFloat(i)*rowH
+            let selected = i == model.selectedTrack
+            fill(NSRect(x:0,y:y,width:headerW,height:rowH), selected ? NSColor(calibratedRed:0.82,green:0.90,blue:0.98,alpha:1) : .csPanelStrong)
+            fill(NSRect(x:8,y:y+7,width:16,height:rowH-14), colors[i % colors.count], radius:3)
+            text("\(i+1)", NSRect(x:9,y:y+18,width:14,height:14), size:10, weight:.bold, color:.white, align:.center)
+            text(model.tracks[i], NSRect(x:33,y:y+8,width:118,height:18), size:11, weight:.semibold)
+            text("M   S    ●", NSRect(x:33,y:y+29,width:90,height:16), size:10, color:.secondaryLabelColor)
+            line(NSPoint(x:0,y:y+rowH), NSPoint(x:bounds.width,y:y+rowH), NSColor(calibratedWhite:0.78,alpha:0.58))
 
-            let start = timelineX + 10 + CGFloat((i % 3) * 18)
-            let width = timelineW * (i == 3 ? 0.68 : (i == 5 ? 0.60 : 0.82))
-            let base = trackColors[i].withAlphaComponent(i == 6 ? 0.18 : 0.16)
-            fill(NSRect(x: start, y: y + 8, width: width, height: rowH - 16), base, radius: 4)
-            drawText(regionNames[i], NSRect(x: start + 8, y: y + 11, width: width - 16, height: 16), size: 10, weight: .medium)
-            if i == 6 {
-                var xx = start + 10
-                while xx < start + width - 10 {
-                    let amp = CGFloat((Int(xx) / 7) % 16) + 3
-                    line(NSPoint(x: xx, y: y + rowH / 2 - amp / 2), NSPoint(x: xx, y: y + rowH / 2 + amp / 2), color: .systemGray, width: 1)
-                    xx += 3
-                }
-            } else if i == 5 {
-                var xx = start + 12
-                while xx < start + width - 12 {
-                    line(NSPoint(x: xx, y: y + 25), NSPoint(x: xx, y: y + 40), color: trackColors[i], width: 1.4)
-                    xx += 14
-                }
+            let start = tx + 12 + CGFloat((i % 3) * 18)
+            let width = max(80, tw * (i == 3 ? 0.68 : (i == 5 ? 0.60 : 0.83)))
+            let rc = colors[i % colors.count]
+            let regionRect = NSRect(x:start,y:y+7,width:min(width,tw-24),height:rowH-14)
+            fill(regionRect, rc.withAlphaComponent(model.selectedRegion == i ? 0.28 : 0.18), radius:5)
+            if model.selectedRegion == i { rc.setStroke(); let p=NSBezierPath(roundedRect:regionRect,xRadius:5,yRadius:5); p.lineWidth=1.5; p.stroke() }
+            let title = i < model.regions.count ? model.regions[i] : "Region"
+            text(title, NSRect(x:start+8,y:y+10,width:regionRect.width-16,height:15), size:10, weight:.medium)
+            if model.tracks[i] == "Audio" {
+                var xx=start+10; while xx < regionRect.maxX-8 { let a=CGFloat((Int(xx)/5)%18)+3; line(NSPoint(x:xx,y:y+rowH/2-a/2),NSPoint(x:xx,y:y+rowH/2+a/2),.systemGray); xx += 3 }
+            } else if model.tracks[i] == "Percussion" {
+                var xx=start+12; while xx < regionRect.maxX-10 { line(NSPoint(x:xx,y:y+26),NSPoint(x:xx,y:y+42),rc,1.3); xx += 14 }
             } else {
-                var xx = start + 10
-                var step = 0
-                while xx < start + width - 12 {
-                    let yy = y + 31 + CGFloat((step * 7 + i * 4) % 21) - 10
-                    line(NSPoint(x: xx, y: yy), NSPoint(x: xx + 16, y: yy), color: trackColors[i], width: 1.5)
-                    xx += 20
-                    step += 1
-                }
+                var xx=start+10; var step=0; while xx < regionRect.maxX-18 { let yy=y+rowH/2+CGFloat((step*7+i*5)%22)-11; line(NSPoint(x:xx,y:yy),NSPoint(x:xx+16,y:yy),rc,1.5); xx += 20; step += 1 }
             }
         }
-        let playheadX = timelineX + timelineW * 0.46
-        line(NSPoint(x: playheadX, y: arr.minY + headerH), NSPoint(x: playheadX, y: arr.maxY - 12), color: NSColor(calibratedRed: 0.05, green: 0.17, blue: 0.34, alpha: 1), width: 1.2)
-        fill(NSRect(x: playheadX - 4, y: arr.minY + headerH - 4, width: 8, height: 8), NSColor(calibratedRed: 0.05, green: 0.17, blue: 0.34, alpha: 1), radius: 4)
+        let playX = tx + tw*0.46
+        line(NSPoint(x:playX,y:top),NSPoint(x:playX,y:bounds.height),NSColor(calibratedRed:0.05,green:0.16,blue:0.33,alpha:1),1.3)
+        fill(NSRect(x:playX-4,y:top-4,width:8,height:8),NSColor(calibratedRed:0.05,green:0.16,blue:0.33,alpha:1),radius:4)
+    }
 
-        // browser
-        let br = NSRect(x: rightX, y: topH + gap, width: browserW - 6, height: H - topH - transportH - 2 * gap)
-        panel(br)
-        drawText("Plugins", NSRect(x: br.minX + 16, y: br.minY + 10, width: 70, height: 24), size: 12, weight: .semibold, color: .csBlue)
-        drawText("Dateien", NSRect(x: br.minX + 95, y: br.minY + 10, width: 55, height: 24), size: 11)
-        drawText("Instrumente", NSRect(x: br.minX + 158, y: br.minY + 10, width: 80, height: 24), size: 11)
-        drawText("Effekte", NSRect(x: br.minX + 247, y: br.minY + 10, width: 55, height: 24), size: 11)
-        line(NSPoint(x: br.minX + 12, y: br.minY + 39), NSPoint(x: br.minX + 80, y: br.minY + 39), color: .csBlue, width: 2)
-        drawText("☆  Favoriten", NSRect(x: br.minX + 20, y: br.minY + 84, width: 120, height: 20), size: 11, weight: .semibold)
-        for (j, c) in ["Alle Plugins", "VST3", "VST2", "AU", "Instrumente", "Effekte", "Zuletzt verwendet"].enumerated() {
-            drawText("◫  \(c)", NSRect(x: br.minX + 22, y: br.minY + 112 + CGFloat(j) * 25, width: 150, height: 20), size: 11)
-        }
-        let plugins = [("Pianoteq", "Modartt"), ("Vital", "Spectral Synthesizer"), ("Kontakt 7", "Native Instruments"), ("Valhalla Supermassive", "Valhalla DSP"), ("FabFilter Pro-Q 3", "FabFilter"), ("Scaler 2", "Plugin Boutique"), ("Soothe2", "oeksound"), ("RX 11", "iZotope")]
-        var by = br.minY + 300
-        for (idx, p) in plugins.enumerated() {
-            fill(NSRect(x: br.minX + 20, y: by, width: 42, height: 42), trackColors[idx % trackColors.count].withAlphaComponent(0.82), radius: 5)
-            drawText(p.0, NSRect(x: br.minX + 74, y: by + 2, width: br.width - 105, height: 18), size: 11, weight: .semibold)
-            drawText(p.1, NSRect(x: br.minX + 74, y: by + 20, width: br.width - 105, height: 17), size: 10, color: .secondaryLabelColor)
-            drawText("☆", NSRect(x: br.maxX - 32, y: by + 10, width: 20, height: 20), size: 13, color: .secondaryLabelColor)
-            by += 48
-        }
+    override func mouseDown(with event: NSEvent) {
+        let p = convert(event.locationInWindow, from:nil)
+        let top: CGFloat = 58; let headerW: CGFloat = 164
+        guard p.y >= top, model.tracks.count > 0 else { return }
+        let rowH = (bounds.height-top)/CGFloat(model.tracks.count)
+        let row = min(model.tracks.count-1, max(0, Int((p.y-top)/rowH)))
+        model.selectedTrack = row
+        if p.x > headerW { model.selectedRegion = row; regionChanged?() }
+        selectionChanged?(); needsDisplay = true
+    }
+}
 
-        // inspector + piano roll
-        let insp = NSRect(x: midX, y: inspectorTop, width: centerW, height: inspectorH)
-        panel(insp)
-        let sideW: CGFloat = 170
-        fill(NSRect(x: insp.minX + 1, y: insp.minY + 1, width: sideW, height: insp.height - 2), NSColor(calibratedRed: 0.96, green: 0.98, blue: 1.0, alpha: 1), radius: 8)
-        fill(NSRect(x: insp.minX + 1, y: insp.minY + 1, width: 5, height: insp.height - 2), .systemGreen, radius: 3)
-        drawText("Spur: Cello", NSRect(x: insp.minX + 18, y: insp.minY + 14, width: 130, height: 20), size: 13, weight: .bold)
-        let menu = ["Routing", "Instrumente", "Effekte", "MIDI Einstellungen", "Audio Einstellungen", "Notizen"]
-        for (i, m) in menu.enumerated() {
-            let yy = insp.minY + 52 + CGFloat(i) * 29
-            if i == 0 { fill(NSRect(x: insp.minX + 8, y: yy - 4, width: sideW - 16, height: 27), NSColor(calibratedRed: 0.82, green: 0.90, blue: 1.0, alpha: 1), radius: 5) }
-            drawText("▣  \(m)", NSRect(x: insp.minX + 18, y: yy, width: sideW - 30, height: 18), size: 10)
-        }
-        drawText("🎻", NSRect(x: insp.minX + 62, y: insp.minY + 218, width: 45, height: 45), size: 30, alignment: .center)
-
-        let routeY = insp.minY + 15
-        let routeX = insp.minX + sideW + 12
-        let routeW = insp.width - sideW - 24
-        let boxW = routeW / 5 - 8
-        let routeTitles = ["MIDI Eingang", "MIDI Verarbeitung", "Instrument / Plugin", "Audio Effekte", "Audio Ausgang"]
-        for i in 0..<5 {
-            let x = routeX + CGFloat(i) * (boxW + 10)
-            drawText(routeTitles[i], NSRect(x: x, y: routeY, width: boxW, height: 18), size: 10, weight: .semibold)
-            fill(NSRect(x: x, y: routeY + 26, width: boxW, height: 74), .white, radius: 5)
-            stroke(NSRect(x: x, y: routeY + 26, width: boxW, height: 74), radius: 5)
-            if i < 4 { drawText("➜", NSRect(x: x + boxW, y: routeY + 50, width: 18, height: 20), size: 17, weight: .bold, color: i % 2 == 0 ? .csGreen : .csBlue) }
-        }
-        drawText("Alle Eingänge\nKanal: Alle", NSRect(x: routeX + 10, y: routeY + 39, width: boxW - 20, height: 50), size: 10)
-        drawText("MIDI FX\nTranspose     Velocity", NSRect(x: routeX + boxW + 22, y: routeY + 39, width: boxW - 20, height: 50), size: 10)
-        drawText("🎹  Pianoteq 8\n      Plugin öffnen", NSRect(x: routeX + 2*(boxW + 10) + 10, y: routeY + 39, width: boxW - 20, height: 50), size: 10, weight: .medium)
-        drawText("Compressor\nEQ\nReverb", NSRect(x: routeX + 3*(boxW + 10) + 10, y: routeY + 34, width: boxW - 20, height: 62), size: 10)
-        drawText("Master\n-6.0 dB", NSRect(x: routeX + 4*(boxW + 10) + 10, y: routeY + 39, width: boxW - 20, height: 50), size: 10)
-
-        let rollY = insp.minY + 125
-        drawText("Pianoroll", NSRect(x: routeX + 12, y: rollY, width: 70, height: 21), size: 11, weight: .semibold, color: .csBlue)
-        drawText("Velocity     Controller     Notenexpression     Skalen     Akkorde", NSRect(x: routeX + 100, y: rollY, width: routeW - 110, height: 21), size: 10)
-        line(NSPoint(x: routeX, y: rollY + 25), NSPoint(x: routeX + routeW, y: rollY + 25), color: .csLine)
-        let pianoX = routeX
-        let gridY = rollY + 28
-        let gridH = max(80, insp.maxY - gridY - 10)
-        fill(NSRect(x: pianoX, y: gridY, width: routeW, height: gridH), .white)
+private final class PianoRollView: FlippedView {
+    var selectedTrackName = "Cello" { didSet { needsDisplay = true } }
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        NSColor.csEditor.setFill(); bounds.fill()
+        let keyW: CGFloat = 48; let top: CGFloat = 22
+        NSColor(calibratedRed:0.91,green:0.94,blue:0.97,alpha:1).setFill(); NSRect(x:0,y:top,width:keyW,height:bounds.height-top).fill()
+        NSColor.csLine.setStroke(); let border=NSBezierPath(rect:bounds.insetBy(dx:0.5,dy:0.5)); border.lineWidth=1; border.stroke()
         for i in 0...16 {
-            let x = pianoX + 52 + CGFloat(i) * (routeW - 52) / 16
-            line(NSPoint(x: x, y: gridY), NSPoint(x: x, y: gridY + gridH), color: NSColor(calibratedWhite: 0.89, alpha: 1))
-            if i < 16 { drawText("\(i + 1)", NSRect(x: x + 2, y: gridY + 3, width: 20, height: 14), size: 8, color: .secondaryLabelColor) }
+            let x=keyW+CGFloat(i)*(bounds.width-keyW)/16
+            NSColor(calibratedWhite:0.75,alpha:0.45).setStroke(); let p=NSBezierPath(); p.move(to:NSPoint(x:x,y:top)); p.line(to:NSPoint(x:x,y:bounds.height)); p.stroke()
+            if i<16 { ("\(i+1)" as NSString).draw(in:NSRect(x:x+3,y:3,width:24,height:14),withAttributes:[.font:NSFont.systemFont(ofSize:8),.foregroundColor:NSColor.secondaryLabelColor]) }
         }
-        for i in 0...7 {
-            let y = gridY + CGFloat(i) * gridH / 7
-            line(NSPoint(x: pianoX, y: y), NSPoint(x: pianoX + routeW, y: y), color: NSColor(calibratedWhite: 0.90, alpha: 1))
+        for i in 0...6 {
+            let y=top+CGFloat(i)*(bounds.height-top)/6
+            NSColor(calibratedWhite:0.78,alpha:0.5).setStroke(); let p=NSBezierPath(); p.move(to:NSPoint(x:0,y:y)); p.line(to:NSPoint(x:bounds.width,y:y)); p.stroke()
         }
-        drawText("C4\n\n\nC3", NSRect(x: pianoX + 4, y: gridY + 18, width: 42, height: gridH - 22), size: 8, color: .secondaryLabelColor)
-        for n in 0..<15 {
-            let nx = pianoX + 58 + CGFloat(n) * (routeW - 82) / 15
-            let ny = gridY + 25 + CGFloat((n * 3 + 2) % 5) * 13
-            fill(NSRect(x: nx, y: ny, width: 46, height: 5), .systemGreen, radius: 2)
+        (selectedTrackName as NSString).draw(in:NSRect(x:6,y:3,width:120,height:16),withAttributes:[.font:NSFont.systemFont(ofSize:10,weight:.semibold),.foregroundColor:NSColor.csText])
+        let green=NSColor(calibratedRed:0.08,green:0.68,blue:0.36,alpha:1)
+        for i in 0..<15 {
+            let x=keyW+18+CGFloat(i)*((bounds.width-keyW-55)/15)
+            let y=top+18+CGFloat((i*3)%5)*18
+            green.setFill(); NSBezierPath(roundedRect:NSRect(x:x,y:y,width:46,height:6),xRadius:3,yRadius:3).fill()
         }
-
-        // bottom transport
-        let tr = NSRect(x: 6, y: H - transportH, width: W - 12, height: transportH - 6)
-        panel(tr)
-        drawText("↺     ↶     ↷     ⟳", NSRect(x: tr.minX + 14, y: tr.minY + 17, width: 170, height: 20), size: 14, color: NSColor(calibratedRed: 0.06, green: 0.17, blue: 0.30, alpha: 1))
-        drawText("13 . 1 . 1 . 0", NSRect(x: W * 0.30, y: tr.minY + 15, width: 120, height: 24), size: 15, weight: .medium)
-        drawText("Tempo\n120.00", NSRect(x: W * 0.58, y: tr.minY + 7, width: 70, height: 38), size: 10)
-        drawText("Taktart\n4/4", NSRect(x: W * 0.66, y: tr.minY + 7, width: 60, height: 38), size: 10)
-        drawText("♩  Metronom", NSRect(x: W * 0.74, y: tr.minY + 16, width: 110, height: 20), size: 10)
-        drawText("▰   ☰", NSRect(x: tr.maxX - 95, y: tr.minY + 16, width: 80, height: 20), size: 14)
     }
 }
 
 final class StudioViewController: NSViewController, NSTextFieldDelegate {
     private let model = StudioModel()
-    private let canvas = StudioCanvas()
-    private let chatInput = NSTextField()
-    private let search = NSSearchField()
-    private let modelPopup = NSPopUpButton()
-    private let playButton = NSButton(title: "▶", target: nil, action: nil)
-    private let stopButton = NSButton(title: "■", target: nil, action: nil)
-    private let recordButton = NSButton(title: "●", target: nil, action: nil)
-    private let timeLabel = NSTextField(labelWithString: "00:00.000")
-    private let statusLabel = NSTextField(labelWithString: "Gespeichert")
-    private let browserTitle = NSTextField(labelWithString: "Plugins")
+    private let topBar = CardView(); private let chatCard = CardView(); private let arrangementCard = CardView(); private let browserCard = CardView(); private let inspectorCard = CardView(); private let transportCard = CardView()
+    private lazy var arrangement = ArrangementView(model:model)
+    private let pianoRoll = PianoRollView()
+    private let chatText = NSTextView(); private let chatInput = NSTextField(); private let browserList = FlippedView(); private let statusLabel = label("Gespeichert",size:11,color:.csGreen)
+    private let projectLabel = label("Projekt: Abendlicht",size:11,weight:.medium)
+    private let inspectorTitle = label("Spur: Cello",size:13,weight:.bold)
+    private let timeLabel = label("00:00.000",size:17,weight:.medium)
+    private let browserTitle = label("Plugins",size:13,weight:.bold,color:.csBlue)
+    private let tracksBox = FlippedView()
+    private var browserButtons:[NSButton]=[]
+    private var topControls:[NSView]=[]
+    private var inspectorButtons:[NSButton]=[]
+    private var sectionButtons:[NSButton]=[]
+    private let playButton=NSButton(title:"▶",target:nil,action:nil); private let stopButton=NSButton(title:"■",target:nil,action:nil); private let recordButton=NSButton(title:"●",target:nil,action:nil)
 
     override func loadView() {
-        view = NSView()
+        view = FlippedView()
         view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.csBackground.cgColor
-        canvas.autoresizingMask = [.width, .height]
-        view.addSubview(canvas)
-        setupControls()
+        view.layer?.backgroundColor = NSColor.csWindow.cgColor
+        buildUI()
     }
 
-    private func setupControls() {
-        modelPopup.addItems(withTitles: ["Claude 3.5 Sonnet", "Gemini", "OpenAI"])
-        modelPopup.controlSize = .small
-        view.addSubview(modelPopup)
+    private func add(_ child:NSView,to parent:NSView){ parent.addSubview(child) }
+    private func button(_ title:String,_ action:Selector,strong:Bool=false)->NSButton{ let b=NSButton(title:title,target:self,action:action); styleButton(b,strong:strong); return b }
 
-        chatInput.placeholderString = "Schreibe eine Nachricht..."
-        chatInput.delegate = self
-        chatInput.bezelStyle = .roundedBezel
-        view.addSubview(chatInput)
+    private func buildUI() {
+        topBar.fillColor = .csTop; chatCard.fillColor = .csPanel; arrangementCard.fillColor = .csArrangement; browserCard.fillColor = .csPanel; inspectorCard.fillColor = .csPanelStrong; transportCard.fillColor = .csTransport
+        [topBar,chatCard,arrangementCard,browserCard,inspectorCard,transportCard].forEach{view.addSubview($0)}
 
-        search.placeholderString = "Suchen..."
-        search.controlSize = .small
-        view.addSubview(search)
+        let brand=label("COMPOSITION STUDIO",size:18,weight:.bold); let by=label("by Klangwerke",size:10,color:.secondaryLabelColor); let dot=label("●",size:12,color:.csGreen)
+        let ai=NSPopUpButton(); ai.addItems(withTitles:["Claude 3.5 Sonnet","Gemini","OpenAI"]); ai.font=.systemFont(ofSize:11)
+        let ki=button("＋ KI",#selector(focusChat),strong:true); let browser=button("▣ Browser",#selector(focusBrowser),strong:true); let display=button("Darstellung",#selector(displayAction))
+        topControls=[brand,by,projectLabel,dot,statusLabel,ai,ki,browser,display]; topControls.forEach{topBar.addSubview($0)}
 
-        for b in [stopButton, playButton, recordButton] {
-            b.bezelStyle = .circular
-            b.font = .systemFont(ofSize: 16, weight: .semibold)
-            view.addSubview(b)
-        }
-        playButton.contentTintColor = .systemGreen
-        recordButton.contentTintColor = .systemRed
-        stopButton.target = self; stopButton.action = #selector(stopPressed)
-        playButton.target = self; playButton.action = #selector(playPressed)
-        recordButton.target = self; recordButton.action = #selector(recordPressed)
+        let tabs=[button("KI-Dialog",#selector(chatTab(_:)),strong:true),button("Verlauf",#selector(chatTab(_:))),button("Ideen",#selector(chatTab(_:))]
+        tabs.forEach{chatCard.addSubview($0)}
+        let hello=label("Hallo!",size:17,weight:.bold); let intro=label("Ich bin dein musikalischer Partner.\nWir können gemeinsam komponieren, Arrangements entwickeln, Spuren bearbeiten oder neue Ideen ausprobieren.\n\nWas möchtest du heute tun?",size:12)
+        intro.maximumNumberOfLines=8; intro.lineBreakMode=.byWordWrapping
+        chatCard.addSubview(hello); chatCard.addSubview(intro)
+        chatText.isEditable=false; chatText.font=.systemFont(ofSize:11); chatText.backgroundColor=.clear; chatText.string=""
+        let scroll=NSScrollView(); scroll.documentView=chatText; scroll.hasVerticalScroller=true; scroll.borderType=.noBorder; scroll.drawsBackground=false; chatCard.addSubview(scroll); scroll.identifier=NSUserInterfaceItemIdentifier("chatScroll")
+        let prompts=["Eine neue Komposition im kammermusikalischen Stil erstellen","Nur die Cellostimme überarbeiten","Drei Varianten für den Mittelteil erzeugen","Harmonische Alternativen vorschlagen","Diese Passage analysieren"]
+        for p in prompts { let b=button(p,#selector(promptPressed(_:))); b.alignment=.left; sectionButtons.append(b); chatCard.addSubview(b) }
+        chatInput.placeholderString="Schreibe eine Nachricht…"; chatInput.delegate=self; chatCard.addSubview(chatInput); let send=button("➤",#selector(sendChat),strong:true); chatCard.addSubview(send); send.identifier=NSUserInterfaceItemIdentifier("send")
+        hello.identifier=NSUserInterfaceItemIdentifier("hello"); intro.identifier=NSUserInterfaceItemIdentifier("intro")
 
-        timeLabel.font = .monospacedDigitSystemFont(ofSize: 16, weight: .medium)
-        view.addSubview(timeLabel)
-        statusLabel.isHidden = true
-        browserTitle.isHidden = true
-        view.addSubview(statusLabel)
-        view.addSubview(browserTitle)
+        arrangementCard.addSubview(arrangement)
+        let plus=button("＋",#selector(addTrack)); let minus=button("−",#selector(removeTrack)); plus.identifier=NSUserInterfaceItemIdentifier("arrPlus"); minus.identifier=NSUserInterfaceItemIdentifier("arrMinus"); arrangementCard.addSubview(plus); arrangementCard.addSubview(minus)
+        arrangement.selectionChanged={ [weak self] in self?.selectionChanged() }; arrangement.regionChanged={ [weak self] in self?.statusLabel.stringValue="Region ausgewählt" }
+
+        let browserTabs=[button("Plugins",#selector(browserTab(_:)),strong:true),button("Dateien",#selector(browserTab(_:))),button("Instrumente",#selector(browserTab(_:))),button("Effekte",#selector(browserTab(_:))]
+        browserTabs.forEach{browserCard.addSubview($0); browserButtons.append($0)}
+        browserCard.addSubview(browserTitle)
+        let search=NSSearchField(); search.placeholderString="Suchen…"; browserCard.addSubview(search); search.identifier=NSUserInterfaceItemIdentifier("browserSearch")
+        browserCard.addSubview(browserList)
+        rebuildBrowserList()
+
+        inspectorCard.addSubview(inspectorTitle)
+        let sections=["Routing","Instrumente","Effekte","MIDI Einstellungen","Audio Einstellungen","Notizen"]
+        for s in sections { let b=button(s,#selector(inspectorSection(_:)),strong:s=="Routing"); b.alignment=.left; inspectorButtons.append(b); inspectorCard.addSubview(b) }
+        let chainTitles=["MIDI Eingang","MIDI Verarbeitung","Instrument / Plugin","Audio Effekte","Audio Ausgang"]
+        for t in chainTitles { let v=CardView(); v.fillColor=.csEditor; v.identifier=NSUserInterfaceItemIdentifier("chain_\(t)"); let h=label(t,size:11,weight:.semibold); v.addSubview(h); h.frame=NSRect(x:10,y:9,width:130,height:16); inspectorCard.addSubview(v) }
+        let editorTabs=["Pianoroll","Velocity","Controller","Notenexpression","Skalen","Akkorde"]
+        for (i,t) in editorTabs.enumerated(){ let b=button(t,#selector(editorTab(_:)),strong:i==0); b.identifier=NSUserInterfaceItemIdentifier("editor_\(i)"); inspectorCard.addSubview(b) }
+        inspectorCard.addSubview(pianoRoll)
+
+        let undo=button("↶",#selector(genericAction(_:))); let redo=button("↷",#selector(genericAction(_:))); transportCard.addSubview(undo); transportCard.addSubview(redo)
+        transportCard.addSubview(timeLabel); let bars=label("13 . 1 . 1 . 0",size:14,weight:.medium); transportCard.addSubview(bars); bars.identifier=NSUserInterfaceItemIdentifier("bars")
+        [stopButton,playButton,recordButton].forEach{ styleButton($0,strong:true); transportCard.addSubview($0) }; recordButton.contentTintColor=.systemRed
+        let tempo=label("Tempo\n120.00",size:10); let meter=label("Taktart\n4/4",size:10); let metro=button("♩ Metronom",#selector(genericAction(_:))); transportCard.addSubview(tempo); transportCard.addSubview(meter); transportCard.addSubview(metro); tempo.identifier=NSUserInterfaceItemIdentifier("tempo"); meter.identifier=NSUserInterfaceItemIdentifier("meter")
+        let open=button("Öffnen",#selector(openProject)); let save=button("Speichern",#selector(saveProject)); transportCard.addSubview(open); transportCard.addSubview(save); open.identifier=NSUserInterfaceItemIdentifier("open"); save.identifier=NSUserInterfaceItemIdentifier("save")
+
+        selectionChanged()
+    }
+
+    private func rebuildBrowserList() {
+        browserList.subviews.forEach{$0.removeFromSuperview()}
+        let items=[("Pianoteq","Modartt"),("Vital","Spectral Synthesizer"),("Kontakt 7","Native Instruments"),("Valhalla Supermassive","Valhalla DSP"),("FabFilter Pro-Q 3","FabFilter"),("Scaler 2","Plugin Boutique"),("Soothe2","oeksound"),("RX 11","iZotope")]
+        for (i,item) in items.enumerated(){ let b=button("\(item.0)\n\(item.1)",#selector(browserItem(_:))); b.alignment=.left; b.identifier=NSUserInterfaceItemIdentifier("plugin_\(i)"); browserList.addSubview(b) }
     }
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        canvas.frame = view.bounds
-        let W = view.bounds.width
-        let H = view.bounds.height
-        let browserW = max(290, W * 0.225)
-        let chatW = max(300, W * 0.205)
-        let topH: CGFloat = 44
-        let transportH: CGFloat = 56
-
-        modelPopup.frame = NSRect(x: W * 0.49, y: 9, width: 148, height: 26)
-        chatInput.frame = NSRect(x: 20, y: H - transportH - 73, width: chatW - 68, height: 34)
-        let send = view.subviews.compactMap { $0 as? NSButton }.first(where: { $0.identifier?.rawValue == "send" })
-        if send == nil {
-            let b = NSButton(title: "➤", target: self, action: #selector(sendChat))
-            b.identifier = NSUserInterfaceItemIdentifier("send")
-            b.bezelStyle = .rounded
-            view.addSubview(b)
-        }
-        view.subviews.compactMap { $0 as? NSButton }.first(where: { $0.identifier?.rawValue == "send" })?.frame = NSRect(x: chatW - 42, y: H - transportH - 73, width: 30, height: 34)
-
-        search.frame = NSRect(x: W - browserW + 14, y: topH + 48, width: browserW - 34, height: 30)
-
-        let baseX = W * 0.40
-        timeLabel.frame = NSRect(x: baseX - 170, y: H - 40, width: 130, height: 24)
-        stopButton.frame = NSRect(x: baseX + 55, y: H - 45, width: 34, height: 34)
-        playButton.frame = NSRect(x: baseX + 100, y: H - 48, width: 40, height: 40)
-        recordButton.frame = NSRect(x: baseX + 150, y: H - 45, width: 34, height: 34)
-        statusLabel.frame = NSRect(x: 0, y: 0, width: 1, height: 1)
-        browserTitle.frame = NSRect(x: 0, y: 0, width: 1, height: 1)
+        let W=view.bounds.width, H=view.bounds.height
+        let margin:CGFloat=8, gap:CGFloat=7, topH:CGFloat=50, transportH:CGFloat=58
+        let chatW=max(300,min(330,W*0.205)), browserW=max(315,min(350,W*0.225))
+        let contentTop=margin+topH+gap, bottomY=H-margin-transportH
+        topBar.frame=NSRect(x:margin,y:margin,width:W-2*margin,height:topH)
+        chatCard.frame=NSRect(x:margin,y:contentTop,width:chatW,height:bottomY-contentTop-gap)
+        browserCard.frame=NSRect(x:W-margin-browserW,y:contentTop,width:browserW,height:bottomY-contentTop-gap)
+        let centerX=margin+chatW+gap, centerW=W-2*margin-chatW-browserW-2*gap
+        let centerH=bottomY-contentTop-gap, arrH=max(390,centerH*0.58)
+        arrangementCard.frame=NSRect(x:centerX,y:contentTop,width:centerW,height:arrH)
+        inspectorCard.frame=NSRect(x:centerX,y:contentTop+arrH+gap,width:centerW,height:centerH-arrH-gap)
+        transportCard.frame=NSRect(x:margin,y:bottomY,width:W-2*margin,height:transportH)
+        layoutTop(); layoutChat(); layoutArrangement(); layoutBrowser(); layoutInspector(); layoutTransport()
     }
 
-    @objc private func playPressed() { statusLabel.stringValue = "Wiedergabe" }
-    @objc private func stopPressed() { statusLabel.stringValue = "Bereit"; timeLabel.stringValue = "00:00.000" }
-    @objc private func recordPressed() { statusLabel.stringValue = "Aufnahme" }
-    @objc private func sendChat() {
-        let text = chatInput.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        chatInput.stringValue = ""
-        statusLabel.stringValue = "KI-Auftrag übernommen"
-    }
-    func controlTextDidEndEditing(_ obj: Notification) { if obj.object as AnyObject === chatInput { sendChat() } }
+    private func layoutTop(){ guard topControls.count==9 else{return}; let h=topBar.bounds.height; topControls[0].frame=NSRect(x:18,y:13,width:225,height:24); topControls[1].frame=NSRect(x:214,y:17,width:90,height:18); topControls[2].frame=NSRect(x:topBar.bounds.width*0.31,y:17,width:135,height:18); topControls[3].frame=NSRect(x:topBar.bounds.width*0.40,y:17,width:14,height:18); topControls[4].frame=NSRect(x:topBar.bounds.width*0.412,y:17,width:90,height:18); topControls[5].frame=NSRect(x:topBar.bounds.width-535,y:10,width:150,height:28); topControls[6].frame=NSRect(x:topBar.bounds.width-375,y:10,width:62,height:28); topControls[7].frame=NSRect(x:topBar.bounds.width-305,y:10,width:92,height:28); topControls[8].frame=NSRect(x:topBar.bounds.width-205,y:10,width:100,height:28); _=h }
+
+    private func layoutChat(){ let w=chatCard.bounds.width; let tabs=chatCard.subviews.compactMap{$0 as? NSButton}.filter{$0.title=="KI-Dialog"||$0.title=="Verlauf"||$0.title=="Ideen"}; for (i,b) in tabs.enumerated(){b.frame=NSRect(x:12+CGFloat(i)*82,y:10,width:78,height:28)}; chatCard.subviews.first{$0.identifier?.rawValue=="hello"}?.frame=NSRect(x:62,y:58,width:w-78,height:24); chatCard.subviews.first{$0.identifier?.rawValue=="intro"}?.frame=NSRect(x:62,y:85,width:w-78,height:112); if let sc=chatCard.subviews.first(where:{$0.identifier?.rawValue=="chatScroll"}){sc.frame=NSRect(x:14,y:205,width:w-28,height:72)}; var y:CGFloat=286; for b in sectionButtons{b.frame=NSRect(x:14,y:y,width:w-28,height:38); y+=45}; let send=chatCard.subviews.first{$0.identifier?.rawValue=="send"}; chatInput.frame=NSRect(x:14,y:chatCard.bounds.height-48,width:w-58,height:31); send?.frame=NSRect(x:w-39,y:chatCard.bounds.height-48,width:28,height:31) }
+
+    private func layoutArrangement(){ arrangement.frame=NSRect(x:8,y:8,width:arrangementCard.bounds.width-16,height:arrangementCard.bounds.height-16); arrangementCard.subviews.first{$0.identifier?.rawValue=="arrPlus"}?.frame=NSRect(x:arrangementCard.bounds.width-72,y:12,width:27,height:24); arrangementCard.subviews.first{$0.identifier?.rawValue=="arrMinus"}?.frame=NSRect(x:arrangementCard.bounds.width-42,y:12,width:27,height:24) }
+
+    private func layoutBrowser(){ let w=browserCard.bounds.width; let tabs=browserButtons.prefix(4); for (i,b) in tabs.enumerated(){b.frame=NSRect(x:10+CGFloat(i)*(w-20)/4,y:10,width:(w-24)/4,height:28)}; browserTitle.frame=NSRect(x:14,y:48,width:140,height:22); browserCard.subviews.first{$0.identifier?.rawValue=="browserSearch"}?.frame=NSRect(x:12,y:74,width:w-24,height:30); browserList.frame=NSRect(x:12,y:112,width:w-24,height:browserCard.bounds.height-124); let bs=browserList.subviews.compactMap{$0 as? NSButton}; var y:CGFloat=0; for b in bs{b.frame=NSRect(x:0,y:y,width:browserList.bounds.width,height:52); y+=58} }
+
+    private func layoutInspector(){ let w=inspectorCard.bounds.width,h=inspectorCard.bounds.height; let side:CGFloat=170; inspectorTitle.frame=NSRect(x:15,y:12,width:145,height:20); var y:CGFloat=42; for b in inspectorButtons{b.frame=NSRect(x:12,y:y,width:145,height:27); y+=29}; let chain=inspectorCard.subviews.compactMap{$0 as? CardView}.filter{$0.identifier?.rawValue.hasPrefix("chain_")==true}; let chainX=side+8, chainY:CGFloat=14, chainGap:CGFloat=7; let each=(w-chainX-14-chainGap*4)/5; for (i,v) in chain.enumerated(){v.frame=NSRect(x:chainX+CGFloat(i)*(each+chainGap),y:chainY,width:each,height:78); if let l=v.subviews.first as? NSTextField{l.frame=NSRect(x:8,y:8,width:each-16,height:18)}}; let tabs=inspectorCard.subviews.compactMap{$0 as? NSButton}.filter{$0.identifier?.rawValue.hasPrefix("editor_")==true}.sorted{$0.identifier!.rawValue<$1.identifier!.rawValue}; let tabY:CGFloat=101; var x=chainX; for b in tabs{let ww=max(62,CGFloat(b.title.count)*7+20); b.frame=NSRect(x:x,y:tabY,width:ww,height:25); x+=ww+4}; pianoRoll.frame=NSRect(x:chainX,y:132,width:w-chainX-12,height:max(80,h-142)) }
+
+    private func layoutTransport(){ let w=transportCard.bounds.width; let undo=transportCard.subviews.compactMap{$0 as? NSButton}.first{$0.title=="↶"}; let redo=transportCard.subviews.compactMap{$0 as? NSButton}.first{$0.title=="↷"}; undo?.frame=NSRect(x:10,y:15,width:32,height:28); redo?.frame=NSRect(x:45,y:15,width:32,height:28); timeLabel.frame=NSRect(x:w*0.22,y:15,width:110,height:27); transportCard.subviews.first{$0.identifier?.rawValue=="bars"}?.frame=NSRect(x:w*0.31,y:17,width:100,height:23); stopButton.frame=NSRect(x:w*0.46-44,y:12,width:34,height:34); playButton.frame=NSRect(x:w*0.46,y:9,width:40,height:40); recordButton.frame=NSRect(x:w*0.46+48,y:9,width:40,height:40); transportCard.subviews.first{$0.identifier?.rawValue=="tempo"}?.frame=NSRect(x:w*0.62,y:11,width:72,height:37); transportCard.subviews.first{$0.identifier?.rawValue=="meter"}?.frame=NSRect(x:w*0.69,y:11,width:62,height:37); let metro=transportCard.subviews.compactMap{$0 as? NSButton}.first{$0.title.contains("Metronom")}; metro?.frame=NSRect(x:w*0.76,y:14,width:100,height:30); transportCard.subviews.first{$0.identifier?.rawValue=="open"}?.frame=NSRect(x:w-170,y:14,width:72,height:30); transportCard.subviews.first{$0.identifier?.rawValue=="save"}?.frame=NSRect(x:w-92,y:14,width:78,height:30) }
+
+    private func selectionChanged(){ guard model.selectedTrack>=0,model.selectedTrack<model.tracks.count else{return}; let n=model.tracks[model.selectedTrack]; inspectorTitle.stringValue="Spur: \(n)"; pianoRoll.selectedTrackName=n; statusLabel.stringValue="\(n) ausgewählt" }
+    @objc private func addTrack(){ model.tracks.append("Neue Spur \(model.tracks.count+1)"); model.regions.append("Neue Region"); model.selectedTrack=model.tracks.count-1; model.selectedRegion=model.selectedTrack; arrangement.needsDisplay=true; selectionChanged(); statusLabel.stringValue="Spur hinzugefügt" }
+    @objc private func removeTrack(){ guard model.tracks.count>1 else{return}; let i=min(model.selectedTrack,model.tracks.count-1); model.tracks.remove(at:i); if i<model.regions.count{model.regions.remove(at:i)}; model.selectedTrack=max(0,min(i,model.tracks.count-1)); model.selectedRegion=model.selectedTrack; arrangement.needsDisplay=true; selectionChanged(); statusLabel.stringValue="Spur gelöscht" }
+    @objc private func promptPressed(_ s:NSButton){ chatInput.stringValue=s.title; chatInput.window?.makeFirstResponder(chatInput) }
+    @objc private func sendChat(){ let t=chatInput.stringValue.trimmingCharacters(in:.whitespacesAndNewlines); guard !t.isEmpty else{return}; chatText.string += (chatText.string.isEmpty ? "" : "\n\n") + "Du: \(t)\nComposition Studio: Auftrag übernommen. Die gewählte Spur und Region bleiben im aktuellen Arbeitskontext."; chatInput.stringValue=""; statusLabel.stringValue="KI-Auftrag erfasst" }
+    func controlTextDidEndEditing(_ obj:Notification){ sendChat() }
+    @objc private func chatTab(_ s:NSButton){ statusLabel.stringValue=s.title; if s.title=="Verlauf"{chatText.string="Verlauf\n\nNoch keine gespeicherten KI-Schritte."} else if s.title=="Ideen"{chatText.string="Ideen\n\nHier werden musikalische Ideen gesammelt."} }
+    @objc private func focusChat(){ chatInput.window?.makeFirstResponder(chatInput) }
+    @objc private func focusBrowser(){ statusLabel.stringValue="Browser aktiv" }
+    @objc private func displayAction(){ statusLabel.stringValue="Darstellung" }
+    @objc private func browserTab(_ s:NSButton){ browserTitle.stringValue=s.title; statusLabel.stringValue="Browser: \(s.title)" }
+    @objc private func browserItem(_ s:NSButton){ statusLabel.stringValue="\(s.title.components(separatedBy:"\n").first ?? s.title) ausgewählt" }
+    @objc private func inspectorSection(_ s:NSButton){ statusLabel.stringValue="Inspector: \(s.title)" }
+    @objc private func editorTab(_ s:NSButton){ statusLabel.stringValue="Editor: \(s.title)" }
+    @objc private func genericAction(_ s:NSButton){ statusLabel.stringValue=s.title }
+
+    @objc private func saveProject(){ let p=NSSavePanel(); p.allowedContentTypes=[.json]; p.nameFieldStringValue=model.projectName+".json"; guard let w=view.window else{return}; p.beginSheetModal(for:w){[weak self]r in guard r==.OK,let u=p.url,let self else{return}; let d:[String:Any]=["project":self.model.projectName,"tracks":self.model.tracks,"regions":self.model.regions,"selectedTrack":self.model.selectedTrack]; if let data=try? JSONSerialization.data(withJSONObject:d,options:.prettyPrinted){try? data.write(to:u);self.statusLabel.stringValue="Gespeichert"} } }
+    @objc private func openProject(){ let p=NSOpenPanel(); p.allowedContentTypes=[.json]; guard let w=view.window else{return}; p.beginSheetModal(for:w){[weak self]r in guard r==.OK,let u=p.url,let self,let data=try? Data(contentsOf:u),let d=try? JSONSerialization.jsonObject(with:data) as? [String:Any] else{return}; if let t=d["tracks"] as? [String],!t.isEmpty{self.model.tracks=t}; if let rr=d["regions"] as? [String]{self.model.regions=rr}; if let n=d["project"] as? String{self.model.projectName=n;self.projectLabel.stringValue="Projekt: \(n)"}; self.model.selectedTrack=min((d["selectedTrack"] as? Int) ?? 0,self.model.tracks.count-1); self.model.selectedRegion=self.model.selectedTrack; self.arrangement.needsDisplay=true; self.selectionChanged(); self.statusLabel.stringValue="Geladen" } }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    var window: NSWindow?
-    func applicationDidFinishLaunching(_ notification: Notification) {
-        let vc = StudioViewController()
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1600, height: 1000), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        w.title = "Composition Studio"
-        w.center()
-        w.minSize = NSSize(width: 1280, height: 800)
-        w.contentViewController = vc
-        w.makeKeyAndOrderFront(nil)
-        window = w
-        NSApp.activate(ignoringOtherApps: true)
-    }
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    var window:NSWindow?
+    func applicationDidFinishLaunching(_ notification:Notification){ let vc=StudioViewController(); let w=NSWindow(contentRect:NSRect(x:0,y:0,width:1540,height:960),styleMask:[.titled,.closable,.miniaturizable,.resizable],backing:.buffered,defer:false); w.title="Composition Studio"; w.minSize=NSSize(width:1280,height:780); w.center(); w.contentViewController=vc; w.makeKeyAndOrderFront(nil); window=w; NSApp.activate(ignoringOtherApps:true) }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender:NSApplication)->Bool{true}
 }
 
-let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
+let app=NSApplication.shared
+let delegate=AppDelegate()
+app.delegate=delegate
 app.setActivationPolicy(.regular)
 app.run()
