@@ -1,5 +1,6 @@
 #include "magda.hpp"
 #include "engine/AudioEngine.hpp"
+#include "project/ProjectManager.hpp"
 
 #if defined(__GNUC__) || defined(__clang__)
 #define CS_EXPORT __attribute__((visibility("default")))
@@ -10,7 +11,10 @@
 extern "C" {
 
 CS_EXPORT bool cs_engine_initialize() {
-    return magda_initialize();
+    if (!magda_initialize()) return false;
+    auto& projects = magda::ProjectManager::getInstance();
+    if (!projects.hasOpenProject()) projects.newProject();
+    return true;
 }
 
 CS_EXPORT void cs_engine_shutdown() {
@@ -62,11 +66,10 @@ CS_EXPORT double cs_engine_tempo() {
 }
 
 CS_EXPORT void cs_engine_set_tempo(double bpm) {
-    if (auto* e = magda_get_engine()) {
-        if (bpm < 20.0) bpm = 20.0;
-        if (bpm > 400.0) bpm = 400.0;
-        e->setTempo(bpm);
-    }
+    if (bpm < 20.0) bpm = 20.0;
+    if (bpm > 400.0) bpm = 400.0;
+    if (auto* e = magda_get_engine()) e->setTempo(bpm);
+    magda::ProjectManager::getInstance().setTempo(bpm);
 }
 
 CS_EXPORT void cs_engine_set_looping(bool enabled) {
@@ -88,8 +91,28 @@ CS_EXPORT bool cs_engine_metronome_enabled() {
 }
 
 CS_EXPORT int cs_engine_plugin_count() {
-    if (auto* e = magda_get_engine()) return e->getKnownPluginTypes().size();
+    if (auto* e = magda_get_engine()) return static_cast<int>(e->getKnownPluginTypes().size());
     return 0;
+}
+
+CS_EXPORT bool cs_project_save_as(const char* utf8Path) {
+    if (utf8Path == nullptr || *utf8Path == '\0') return false;
+    auto& projects = magda::ProjectManager::getInstance();
+    if (!projects.hasOpenProject() && !projects.newProject()) return false;
+    const juce::File file(juce::String::fromUTF8(utf8Path));
+    return projects.saveProjectAs(file);
+}
+
+CS_EXPORT bool cs_project_load(const char* utf8Path) {
+    if (utf8Path == nullptr || *utf8Path == '\0') return false;
+    const juce::File file(juce::String::fromUTF8(utf8Path));
+    auto& projects = magda::ProjectManager::getInstance();
+    return projects.loadProject(file, [](const magda::ProjectInfo& info) {
+        if (auto* e = magda_get_engine()) {
+            e->setTempo(info.tempo);
+            e->setTimeSignature(info.timeSignatureNumerator, info.timeSignatureDenominator);
+        }
+    });
 }
 
 }
