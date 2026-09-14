@@ -1,0 +1,105 @@
+name: Build Composition Studio Native Intel
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'native/**'
+      - '.github/workflows/build-native-intel.yml'
+
+concurrency:
+  group: composition-studio-native-intel
+  cancel-in-progress: true
+
+jobs:
+  build-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    steps:
+      - name: Checkout Composition Studio
+        uses: actions/checkout@v4
+        with:
+          path: studio
+
+      - name: Read pinned upstream revision
+        id: upstream
+        shell: bash
+        run: |
+          source studio/native/upstream.env
+          echo "repo=$MAGDA_REPOSITORY" >> "$GITHUB_OUTPUT"
+          echo "ref=$MAGDA_REF" >> "$GITHUB_OUTPUT"
+          echo "version=$COMPOSITION_STUDIO_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout MAGDA base
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.upstream.outputs.repo }}
+          ref: ${{ steps.upstream.outputs.ref }}
+          path: upstream
+          submodules: recursive
+          lfs: true
+
+      - name: Apply Composition Studio V0.2 overlay
+        run: python3 studio/native/apply_overlay.py upstream
+
+      - name: Install build dependencies
+        run: |
+          brew install ninja
+          if ! command -v sccache >/dev/null 2>&1; then
+            brew install sccache
+          fi
+
+      - name: Configure Intel build
+        working-directory: upstream
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="11.0" \
+            -DMAGDA_BUILD_TESTS=OFF \
+            -DMAGDA_FULL_VERSION="${{ steps.upstream.outputs.version }}" \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+      - name: Build Composition Studio
+        working-directory: upstream
+        run: cmake --build build --config Release -j $(sysctl -n hw.ncpu)
+
+      - name: Locate and verify app
+        id: app
+        shell: bash
+        run: |
+          APP_PATH=$(find upstream/build -type d -name "Composition Studio.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "Composition Studio.app not found"
+            find upstream/build -type d -name "*.app" -maxdepth 8 -print || true
+            exit 1
+          fi
+          echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
+          echo "Built: $APP_PATH"
+          ls -la "$APP_PATH/Contents/MacOS"
+
+      - name: Ad-hoc sign prototype
+        run: |
+          APP_PATH="${{ steps.app.outputs.app_path }}"
+          codesign --force --deep --sign - "$APP_PATH" || true
+
+      - name: Package Intel prototype
+        shell: bash
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "${{ steps.app.outputs.app_path }}" \
+            "dist/Composition-Studio-V0.2-Intel.zip"
+          shasum -a 256 dist/Composition-Studio-V0.2-Intel.zip > dist/Composition-Studio-V0.2-Intel.zip.sha256
+          ls -lh dist/
+
+      - name: Upload Intel prototype
+        uses: actions/upload-artifact@v4
+        with:
+          name: Composition-Studio-V0.2-Intel
+          path: |
+            dist/Composition-Studio-V0.2-Intel.zip
+            dist/Composition-Studio-V0.2-Intel.zip.sha256
+          retention-days: 30
