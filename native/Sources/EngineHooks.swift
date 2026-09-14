@@ -33,13 +33,13 @@ final class EngineHooks: NSObject {
             play.action = #selector(playPause)
             playButton = play
         }
-        if let stop = buttons.first(where: { $0.title == "■" }) {
-            stop.target = self
-            stop.action = #selector(stop)
+        if let stopButton = buttons.first(where: { $0.title == "■" }) {
+            stopButton.target = self
+            stopButton.action = #selector(stop)
         }
-        if let record = buttons.first(where: { $0.title == "●" }) {
-            record.target = self
-            record.action = #selector(record)
+        if let recordButton = buttons.first(where: { $0.title == "●" }) {
+            recordButton.target = self
+            recordButton.action = #selector(record)
         }
 
         timeLabel = labels.first(where: { $0.stringValue == "00:00.000" })
