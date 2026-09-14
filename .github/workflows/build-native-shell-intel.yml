@@ -35,7 +35,18 @@ jobs:
           echo "ref=$MAGDA_REF" >> "$GITHUB_OUTPUT"
           echo "version=$COMPOSITION_STUDIO_VERSION" >> "$GITHUB_OUTPUT"
 
+      # Cache the complete pinned MAGDA workspace, including submodules and build
+      # outputs. This preserves source/output mtimes and prevents Ninja from
+      # rebuilding hundreds of unchanged Faust/JUCE/Tracktion objects.
+      - name: Restore MAGDA workspace cache
+        id: workspace-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: upstream
+          key: magda-workspace-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v1
+
       - name: Checkout MAGDA engine source
+        if: steps.workspace-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ steps.upstream.outputs.repo }}
@@ -46,12 +57,14 @@ jobs:
           fetch-depth: 1
 
       - name: Ensure MAGDA LFS assets are present
+        if: steps.workspace-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
           git -C upstream lfs pull
 
       - name: Initialise required MAGDA dependencies
+        if: steps.workspace-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -65,9 +78,6 @@ jobs:
             third_party/eurorack \
             third_party/asiosdk
 
-          # MAGDA's Faust DSP compilation needs stdfaust.lib. It lives in the
-          # Faust repository's dedicated libraries submodule. Initialise only
-          # that nested dependency instead of recursing through all Faust tools.
           git -C upstream/third_party/faust submodule sync
           git -C upstream/third_party/faust submodule update --init --depth 1 libraries
 
@@ -78,23 +88,18 @@ jobs:
             brew install ninja
           fi
 
-      # Keep the expensive MAGDA/Tracktion/Faust compilation between runs.
-      # The key changes only when the pinned MAGDA revision or fundamental
-      # engine build settings change.
-      - name: Restore MAGDA engine build cache
+      # Transitional fallback for the first workspace-cache population: reuse the
+      # existing engine-only cache if available. Later runs use the workspace cache.
+      - name: Restore legacy engine cache on workspace miss
         id: engine-cache
+        if: steps.workspace-cache.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v4
         with:
           path: upstream/build
           key: magda-engine-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v2
 
-      # A fresh git checkout gives every source file a new timestamp. Ninja would
-      # then regard all restored object files as stale and rebuild MAGDA anyway.
-      # On a cache hit, move the pinned upstream source timestamps safely into the
-      # past. Composition Studio's EngineBridge is copied afterwards, so bridge
-      # edits still get rebuilt normally.
-      - name: Preserve restored engine objects
-        if: steps.engine-cache.outputs.cache-hit == 'true'
+      - name: Preserve legacy cached engine objects
+        if: steps.workspace-cache.outputs.cache-hit != 'true' && steps.engine-cache.outputs.cache-hit == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -131,12 +136,15 @@ jobs:
         shell: bash
         run: cmake --build build --target CompositionStudioEngineBridge -j $(sysctl -n hw.ncpu)
 
-      - name: Save MAGDA engine build cache
-        if: steps.engine-cache.outputs.cache-hit != 'true'
+      # Save the complete workspace immediately after a successful engine build.
+      # Even if Swift packaging fails later, subsequent runs keep the expensive
+      # MAGDA/JUCE/Tracktion/Faust build products and their matching timestamps.
+      - name: Save MAGDA workspace cache
+        if: steps.workspace-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: upstream/build
-          key: magda-engine-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v2
+          path: upstream
+          key: magda-workspace-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v1
 
       - name: Locate EngineBridge
         id: bridge
@@ -171,6 +179,7 @@ jobs:
             cat studio/native/Sources/EngineHooks.swift
             echo 'installCompositionStudioEngineHooks()'
             cat studio/native/Sources/CompositionStudioApp.swift
+            cat studio/native/Sources/EngineUIBindings.swift
           } > /tmp/CompositionStudioApp.swift
 
           xcrun swiftc \
