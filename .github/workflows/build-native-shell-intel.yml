@@ -42,8 +42,14 @@ jobs:
           ref: ${{ steps.upstream.outputs.ref }}
           path: upstream
           submodules: false
-          lfs: false
+          lfs: true
           fetch-depth: 1
+
+      - name: Ensure MAGDA LFS assets are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C upstream lfs pull
 
       - name: Initialise required MAGDA dependencies
         shell: bash
