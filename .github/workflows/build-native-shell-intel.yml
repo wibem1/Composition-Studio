@@ -1,4 +1,4 @@
-name: Build Composition Studio Native Intel
+name: Build Composition Studio V0.6 Intel
 
 on:
   workflow_dispatch:
@@ -18,6 +18,7 @@ jobs:
   build-intel:
     runs-on: macos-15-intel
     timeout-minutes: 120
+
     steps:
       - name: Checkout Composition Studio
         uses: actions/checkout@v4
@@ -28,9 +29,11 @@ jobs:
         id: upstream
         shell: bash
         run: |
+          set -euo pipefail
           source studio/native/upstream.env
           echo "repo=$MAGDA_REPOSITORY" >> "$GITHUB_OUTPUT"
           echo "ref=$MAGDA_REF" >> "$GITHUB_OUTPUT"
+          echo "version=$COMPOSITION_STUDIO_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Checkout MAGDA engine source
         uses: actions/checkout@v4
@@ -38,13 +41,32 @@ jobs:
           repository: ${{ steps.upstream.outputs.repo }}
           ref: ${{ steps.upstream.outputs.ref }}
           path: upstream
-          submodules: recursive
-          lfs: true
+          submodules: false
+          lfs: false
+          fetch-depth: 1
 
-      - name: Install build dependency
-        run: brew install ninja
+      - name: Initialise required MAGDA dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C upstream submodule sync
+          git -C upstream submodule update --init --depth 1 \
+            third_party/JUCE \
+            third_party/tracktion_engine \
+            third_party/juce-llm \
+            third_party/llama.cpp \
+            third_party/faust \
+            third_party/eurorack \
+            third_party/asiosdk
 
-      - name: Add Composition Studio engine bridge to MAGDA build
+      - name: Install Ninja if needed
+        shell: bash
+        run: |
+          if ! command -v ninja >/dev/null 2>&1; then
+            brew install ninja
+          fi
+
+      - name: Add Composition Studio EngineBridge
         shell: bash
         run: |
           set -euo pipefail
@@ -52,38 +74,45 @@ jobs:
           cp -R studio/native/EngineBridge upstream/composition_studio_bridge
           printf '\nadd_subdirectory(composition_studio_bridge)\n' >> upstream/CMakeLists.txt
 
-      - name: Configure MAGDA engine for Intel
+      - name: Configure engine for Intel
         working-directory: upstream
+        shell: bash
         run: |
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES=x86_64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
             -DMAGDA_BUILD_TESTS=OFF \
-            -DMAGDA_HAVE_CLAP=OFF
+            -DMAGDA_BUILD_EXAMPLES=OFF \
+            -DMAGDA_BUILD_JUCE_ADAPTER=OFF \
+            -DMAGDA_BUILD_FAUST_VEC_BENCH=OFF \
+            -DMAGDA_HAVE_CLAP=OFF \
+            -DMAGDA_FULL_VERSION="${{ steps.upstream.outputs.version }}"
 
-      - name: Build engine bridge
+      - name: Build CompositionStudioCore
         working-directory: upstream
+        shell: bash
         run: cmake --build build --target CompositionStudioEngineBridge -j $(sysctl -n hw.ncpu)
 
-      - name: Locate engine bridge
+      - name: Locate EngineBridge
         id: bridge
         shell: bash
         run: |
           set -euo pipefail
           BRIDGE=$(find upstream/build -type f -name 'libCompositionStudioEngineBridge.dylib' -print -quit)
           if [ -z "$BRIDGE" ]; then
-            echo 'Engine bridge dylib not found'
+            echo 'CompositionStudio EngineBridge dylib not found'
             find upstream/build -type f -name '*CompositionStudioEngineBridge*' -print || true
             exit 1
           fi
           echo "path=$BRIDGE" >> "$GITHUB_OUTPUT"
           file "$BRIDGE"
 
-      - name: Build Composition Studio Intel application
+      - name: Build Composition Studio application
         shell: bash
         run: |
           set -euo pipefail
+          VERSION='${{ steps.upstream.outputs.version }}'
           APP='dist/Composition Studio.app'
           MACOS="$APP/Contents/MacOS"
           FRAMEWORKS="$APP/Contents/Frameworks"
@@ -111,17 +140,17 @@ jobs:
             -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' \
             -o "$MACOS/Composition Studio"
 
-          cat > "$APP/Contents/Info.plist" <<'PLIST'
+          cat > "$APP/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>CFBundleExecutable</key><string>Composition Studio</string>
-            <key>CFBundleIdentifier</key><string>de.klangwerke.compositionstudio</string>
+            <key>CFBundleIdentifier</key><string>net.klangwerke.CompositionStudio</string>
             <key>CFBundleName</key><string>Composition Studio</string>
             <key>CFBundleDisplayName</key><string>Composition Studio</string>
             <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>0.5.0</string>
-            <key>CFBundleVersion</key><string>4</string>
+            <key>CFBundleShortVersionString</key><string>$VERSION</string>
+            <key>CFBundleVersion</key><string>$VERSION</string>
             <key>LSMinimumSystemVersion</key><string>11.0</string>
             <key>NSHighResolutionCapable</key><true/>
             <key>NSMicrophoneUsageDescription</key><string>Composition Studio benötigt Mikrofonzugriff für Audioaufnahmen.</string>
@@ -132,22 +161,30 @@ jobs:
           lipo -info "$MACOS/Composition Studio"
           otool -L "$MACOS/Composition Studio"
 
-      - name: Ad-hoc sign complete app
+      - name: Ad-hoc sign application
+        shell: bash
         run: |
+          set -euo pipefail
           codesign --force --sign - 'dist/Composition Studio.app/Contents/Frameworks/libCompositionStudioEngineBridge.dylib'
           codesign --force --deep --sign - 'dist/Composition Studio.app'
 
-      - name: Package V0.5 Engine build
+      - name: Package Intel build
         shell: bash
         run: |
-          ditto -c -k --sequesterRsrc --keepParent 'dist/Composition Studio.app' 'dist/Composition-Studio-V0.5-Engine-Intel.zip'
-          shasum -a 256 'dist/Composition-Studio-V0.5-Engine-Intel.zip' > 'dist/Composition-Studio-V0.5-Engine-Intel.zip.sha256'
+          set -euo pipefail
+          VERSION='${{ steps.upstream.outputs.version }}'
+          ZIP="dist/Composition-Studio-V${VERSION}-Intel.zip"
+          ditto -c -k --sequesterRsrc --keepParent 'dist/Composition Studio.app' "$ZIP"
+          shasum -a 256 "$ZIP" > "$ZIP.sha256"
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          ls -lh dist/
+        id: package
 
-      - name: Upload artifact
+      - name: Upload Intel build
         uses: actions/upload-artifact@v4
         with:
-          name: Composition-Studio-V0.5-Engine-Intel
+          name: Composition-Studio-V${{ steps.upstream.outputs.version }}-Intel
           path: |
-            dist/Composition-Studio-V0.5-Engine-Intel.zip
-            dist/Composition-Studio-V0.5-Engine-Intel.zip.sha256
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.zip }}.sha256
           retention-days: 30
