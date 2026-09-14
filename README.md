@@ -1,42 +1,49 @@
 # Composition Studio
 
-Composition Studio ist das neue Zielprojekt für eine moderne Musikproduktions- und Kompositionsumgebung.
+Composition Studio ist das eigenständige Zielprojekt für eine moderne Musikproduktions- und Kompositionsumgebung mit eigener Oberfläche und KI-Workflow.
 
 ## Aktueller Stand
 
-**GUI-Prototyp V0.2**
+Die GUI-Richtung ist festgelegt. Die Entwicklung konzentriert sich jetzt auf eine schlanke native Architektur und auf gebrauchsfähige Funktionspakete statt auf reine GUI-Zwischenstände.
 
-Die funktionale Entwicklung ist vorerst eingefroren. Der aktuelle Schwerpunkt liegt auf Interface und visueller Struktur. Der klickfreie Referenzprototyp liegt in `index.html`.
+MAGDA dient als technische Basis für Audio, MIDI, Plugin-Hosting und weitere DAW-Funktionen. Composition Studio bleibt jedoch eine eigene Anwendung mit eigener Oberfläche. Die Verbindung erfolgt ausschließlich über eine definierte EngineBridge.
 
-## Rolle im Gesamtsystem
+Die verbindliche Architektur ist in `docs/ARCHITECTURE.md` beschrieben.
 
-Composition Studio soll bewährte Teile der drei anderen aktiven Projekte zusammenführen, ohne deren historische Architektur vollständig zu übernehmen:
+## Architektur
 
-- **Music Chat Lab** — Dialog- und Workflow-Referenz
-- **Minimal Composer** — Minimalarchitektur und Kompositionsforschung
-- **Composition Lab Native** — macOS, Notation, MusicXML, MIDI-I/O und CLAB
+Composition Studio besteht aus drei klar getrennten Schichten:
 
-Composition Studio bleibt dabei ein eigenständiges, möglichst schlankes Zielsystem.
+1. **MAGDA Engine** – Audio, MIDI, Plugins, Routing, Projektfunktionen
+2. **CompositionStudioCore / EngineBridge** – kleine, kontrollierte Schnittstelle zwischen Engine und App
+3. **Composition Studio App** – eigenes macOS-GUI, Arrangement, Browser, Inspector, Editor/Notation und KI-Dialog
 
-## Zielaufbau
+Frühere parallele Entwicklungswege werden nicht weitergeführt. Insbesondere wird die komplette MAGDA-Oberfläche nicht gleichzeitig als zweite Composition-Studio-Anwendung umgebaut.
+
+## Zielaufbau der Oberfläche
 
 - KI-Chat links
 - großes Arrangement in der Mitte
 - Browser rechts
-- Editor im unteren Bereich
+- Editor/Notation im unteren Bereich
 - zentrierte Transportgruppe
 - helle, freundliche Oberfläche mit klarer Helligkeitsstaffelung
 - kräftige Kontraste ohne unnötige Buntheit
 - deutlich voneinander abgegrenzte Funktionsbereiche
 - dezente Spurfarben und passende Clipfarben
 
+## Entwicklungsstufen
+
+- **V0.6** – technischer Kern: Engine, Transport, Projekt laden/speichern
+- **V0.7** – Tracks, MIDI-Clips, MIDI-Import/Export
+- **V0.8** – Instrumente, Plugins und Routing
+- **V0.9** – Arrangement und Editor
+- **V1.0** – erster vollständig gebrauchsfähiger Studio-Workflow einschließlich erstem sinnvollen KI-Kompositionsworkflow
+
+Ein Build wird nur dann als neuer Benutzer-Teststand behandelt, wenn er ein klar definiertes Nutzungspaket ergänzt.
+
 ## Designrichtung
 
 Die Oberfläche verbindet die klare Gliederung moderner DAWs, kräftige Kontraste und eine eigene Composition-Studio-Identität. Nicht gewünscht sind monotones Einheitsgrau, schwache Weiß-auf-Grau-Kontraste, eine dominierende weiße obere Transportleiste oder ein überladenes Farbschema.
 
-## Versionsprinzip
-
-- `V0.x` — GUI-Prototypen
-- `V1.0` — erster konsolidierter Composition-Studio-Stand
-
-Relevante Zwischenstände werden im Repository gesichert; Wegwerf-Patches und einmalige Migrationshilfen sollen nicht dauerhaft im aktiven Quellbaum verbleiben.
+Der frühere HTML-Prototyp `index.html` bleibt als visuelle Referenz erhalten; die aktive Produktentwicklung findet im nativen Pfad statt.
