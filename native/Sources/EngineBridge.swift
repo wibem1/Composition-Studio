@@ -18,6 +18,8 @@ import Foundation
 @_silgen_name("cs_engine_set_metronome") private func cs_engine_set_metronome(_ enabled: Bool)
 @_silgen_name("cs_engine_metronome_enabled") private func cs_engine_metronome_enabled() -> Bool
 @_silgen_name("cs_engine_plugin_count") private func cs_engine_plugin_count() -> Int32
+@_silgen_name("cs_project_save_as") private func cs_project_save_as(_ path: UnsafePointer<CChar>) -> Bool
+@_silgen_name("cs_project_load") private func cs_project_load(_ path: UnsafePointer<CChar>) -> Bool
 
 final class CompositionStudioEngine {
     static let shared = CompositionStudioEngine()
@@ -55,4 +57,16 @@ final class CompositionStudioEngine {
     func setTempo(_ bpm: Double) { if isReady { cs_engine_set_tempo(bpm) } }
     func setLooping(_ enabled: Bool) { if isReady { cs_engine_set_looping(enabled) } }
     func setMetronome(_ enabled: Bool) { if isReady { cs_engine_set_metronome(enabled) } }
+
+    @discardableResult
+    func saveProject(as path: String) -> Bool {
+        guard isReady else { return false }
+        return path.withCString { cs_project_save_as($0) }
+    }
+
+    @discardableResult
+    func loadProject(from path: String) -> Bool {
+        guard isReady else { return false }
+        return path.withCString { cs_project_load($0) }
+    }
 }
