@@ -102,8 +102,8 @@ jobs:
           cp "$BRIDGE" "$FRAMEWORKS/"
           install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FRAMEWORKS/libCompositionStudioEngineBridge.dylib"
           { cat studio/native/Sources/EngineBridge.swift; cat studio/native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat studio/native/Sources/CompositionStudioApp.swift; cat studio/native/Sources/EngineUIBindings.swift; } > /tmp/CompositionStudioApp.swift
-          # Swift 6 rejects several compressed operator spellings used by the generated UI source.
-          perl -pi -e 's/font=\./font = ./g; s/\.78/0.78/g; s/\.38/0.38/g; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
+          # Normalise shorthand decimal literals for Swift 6 (e.g. .42 -> 0.42), plus legacy generated spellings.
+          perl -pi -e 's/font=\./font = ./g; s/(?<![A-Za-z0-9_])\.(\d+)/0.$1/g; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
           xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit -framework UniformTypeIdentifiers /tmp/CompositionStudioApp.swift -L "$FRAMEWORKS" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/Composition Studio"
           cat > "$APP/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
