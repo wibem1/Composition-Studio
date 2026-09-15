@@ -1,0 +1,29 @@
+name: Typecheck Composition Studio Swift
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [release/v1.0-rc1]
+    paths:
+      - 'native/Sources/**'
+      - '.github/workflows/typecheck-native-swift.yml'
+
+concurrency:
+  group: composition-studio-swift-typecheck-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Composition Studio
+        uses: actions/checkout@v4
+      - name: Assemble consolidated Swift source
+        shell: bash
+        run: |
+          set -euo pipefail
+          { cat native/Sources/EngineBridge.swift; cat native/Sources/V100Engine.swift; cat native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat native/Sources/CompositionStudioApp.swift; cat native/Sources/EngineUIBindings.swift; cat native/Sources/V100ReleaseCandidate.swift; cat native/Sources/V100Compatibility.swift; } > /tmp/CompositionStudioApp.swift
+          perl -pi -e 's/(?<![=!<>+\-*\/%&|^])\s*=\s*(?!=)/ = /g; s/==\./ == ./g; s/([\(,:= ])\.(\d+)/$1 . "0." . $2/ge; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
+      - name: Swift 6 typecheck
+        run: xcrun swiftc -typecheck -target x86_64-apple-macosx11.0 -framework AppKit -framework UniformTypeIdentifiers -framework Security /tmp/CompositionStudioApp.swift
