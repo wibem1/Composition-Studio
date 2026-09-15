@@ -18,13 +18,10 @@ jobs:
   build-intel:
     runs-on: macos-15-intel
     timeout-minutes: 120
-
     steps:
       - name: Checkout Composition Studio
         uses: actions/checkout@v4
-        with:
-          path: studio
-
+        with: { path: studio }
       - name: Read pinned MAGDA revision
         id: upstream
         shell: bash
@@ -34,17 +31,12 @@ jobs:
           echo "repo=$MAGDA_REPOSITORY" >> "$GITHUB_OUTPUT"
           echo "ref=$MAGDA_REF" >> "$GITHUB_OUTPUT"
           echo "version=$COMPOSITION_STUDIO_VERSION" >> "$GITHUB_OUTPUT"
-
-      # Cache the complete pinned MAGDA workspace, including submodules and build
-      # outputs. This preserves source/output mtimes and prevents Ninja from
-      # rebuilding hundreds of unchanged Faust/JUCE/Tracktion objects.
       - name: Restore MAGDA workspace cache
         id: workspace-cache
         uses: actions/cache/restore@v4
         with:
           path: upstream
           key: magda-workspace-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v1
-
       - name: Checkout MAGDA engine source
         if: steps.workspace-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
@@ -55,184 +47,83 @@ jobs:
           submodules: false
           lfs: true
           fetch-depth: 1
-
       - name: Ensure MAGDA LFS assets are present
         if: steps.workspace-cache.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git -C upstream lfs pull
-
+        run: git -C upstream lfs pull
       - name: Initialise required MAGDA dependencies
         if: steps.workspace-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
           git -C upstream submodule sync
-          git -C upstream submodule update --init --depth 1 \
-            third_party/JUCE \
-            third_party/tracktion_engine \
-            third_party/juce-llm \
-            third_party/llama.cpp \
-            third_party/faust \
-            third_party/eurorack \
-            third_party/asiosdk
-
+          git -C upstream submodule update --init --depth 1 third_party/JUCE third_party/tracktion_engine third_party/juce-llm third_party/llama.cpp third_party/faust third_party/eurorack third_party/asiosdk
           git -C upstream/third_party/faust submodule sync
           git -C upstream/third_party/faust submodule update --init --depth 1 libraries
-
       - name: Install Ninja if needed
-        shell: bash
-        run: |
-          if ! command -v ninja >/dev/null 2>&1; then
-            brew install ninja
-          fi
-
-      # Transitional fallback for the first workspace-cache population: reuse the
-      # existing engine-only cache if available. Later runs use the workspace cache.
-      - name: Restore legacy engine cache on workspace miss
-        id: engine-cache
-        if: steps.workspace-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/restore@v4
-        with:
-          path: upstream/build
-          key: magda-engine-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v2
-
-      - name: Preserve legacy cached engine objects
-        if: steps.workspace-cache.outputs.cache-hit != 'true' && steps.engine-cache.outputs.cache-hit == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          touch -t 202001010000 upstream/CMakeLists.txt
-          find upstream/magda upstream/third_party -type f -exec touch -t 202001010000 {} +
-
+        run: command -v ninja >/dev/null 2>&1 || brew install ninja
       - name: Add Composition Studio EngineBridge
         shell: bash
         run: |
           set -euo pipefail
           rm -rf upstream/composition_studio_bridge
           cp -R studio/native/EngineBridge upstream/composition_studio_bridge
-          if ! grep -q '^add_subdirectory(composition_studio_bridge)$' upstream/CMakeLists.txt; then
-            printf '\nadd_subdirectory(composition_studio_bridge)\n' >> upstream/CMakeLists.txt
-          fi
-
+          grep -q '^add_subdirectory(composition_studio_bridge)$' upstream/CMakeLists.txt || printf '\nadd_subdirectory(composition_studio_bridge)\n' >> upstream/CMakeLists.txt
       - name: Configure engine for Intel
         working-directory: upstream
         shell: bash
         run: |
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 \
-            -DMAGDA_BUILD_TESTS=OFF \
-            -DMAGDA_BUILD_EXAMPLES=OFF \
-            -DMAGDA_BUILD_JUCE_ADAPTER=OFF \
-            -DMAGDA_BUILD_FAUST_VEC_BENCH=OFF \
-            -DMAGDA_HAVE_CLAP=OFF \
-            -DMAGDA_FULL_VERSION="${{ steps.upstream.outputs.version }}"
-
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DMAGDA_BUILD_TESTS=OFF -DMAGDA_BUILD_EXAMPLES=OFF -DMAGDA_BUILD_JUCE_ADAPTER=OFF -DMAGDA_BUILD_FAUST_VEC_BENCH=OFF -DMAGDA_HAVE_CLAP=OFF -DMAGDA_FULL_VERSION="${{ steps.upstream.outputs.version }}"
       - name: Build CompositionStudioCore
         working-directory: upstream
-        shell: bash
         run: cmake --build build --target CompositionStudioEngineBridge -j $(sysctl -n hw.ncpu)
-
-      # Save the complete workspace immediately after a successful engine build.
-      # Even if Swift packaging fails later, subsequent runs keep the expensive
-      # MAGDA/JUCE/Tracktion/Faust build products and their matching timestamps.
       - name: Save MAGDA workspace cache
         if: steps.workspace-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: upstream
           key: magda-workspace-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-macos11-release-v1
-
       - name: Locate EngineBridge
         id: bridge
         shell: bash
         run: |
           set -euo pipefail
           BRIDGE=$(find upstream/build -type f -name 'libCompositionStudioEngineBridge.dylib' -print -quit)
-          if [ -z "$BRIDGE" ]; then
-            echo 'CompositionStudio EngineBridge dylib not found'
-            find upstream/build -type f -name '*CompositionStudioEngineBridge*' -print || true
-            exit 1
-          fi
+          test -n "$BRIDGE"
           echo "path=$BRIDGE" >> "$GITHUB_OUTPUT"
           file "$BRIDGE"
-
       - name: Build Composition Studio application
         shell: bash
         run: |
           set -euo pipefail
           VERSION='${{ steps.upstream.outputs.version }}'
-          APP='dist/Composition Studio.app'
-          MACOS="$APP/Contents/MacOS"
-          FRAMEWORKS="$APP/Contents/Frameworks"
+          APP='dist/Composition Studio.app'; MACOS="$APP/Contents/MacOS"; FRAMEWORKS="$APP/Contents/Frameworks"
           mkdir -p "$MACOS" "$FRAMEWORKS"
-
           BRIDGE='${{ steps.bridge.outputs.path }}'
           cp "$BRIDGE" "$FRAMEWORKS/"
           install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FRAMEWORKS/libCompositionStudioEngineBridge.dylib"
-
-          {
-            cat studio/native/Sources/EngineBridge.swift
-            cat studio/native/Sources/EngineHooks.swift
-            echo 'installCompositionStudioEngineHooks()'
-            cat studio/native/Sources/CompositionStudioApp.swift
-            cat studio/native/Sources/EngineUIBindings.swift
-          } > /tmp/CompositionStudioApp.swift
-
-          xcrun swiftc \
-            -target x86_64-apple-macosx11.0 \
-            -O \
-            -framework AppKit \
-            -framework UniformTypeIdentifiers \
-            /tmp/CompositionStudioApp.swift \
-            -L "$FRAMEWORKS" \
-            -lCompositionStudioEngineBridge \
-            -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' \
-            -o "$MACOS/Composition Studio"
-
+          { cat studio/native/Sources/EngineBridge.swift; cat studio/native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat studio/native/Sources/CompositionStudioApp.swift; cat studio/native/Sources/EngineUIBindings.swift; } > /tmp/CompositionStudioApp.swift
+          # Swift 6 rejects several compressed operator spellings used by the generated UI source.
+          perl -pi -e 's/font=\./font = ./g; s/\.78/0.78/g; s/\.38/0.38/g; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
+          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit -framework UniformTypeIdentifiers /tmp/CompositionStudioApp.swift -L "$FRAMEWORKS" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/Composition Studio"
           cat > "$APP/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-            <key>CFBundleExecutable</key><string>Composition Studio</string>
-            <key>CFBundleIdentifier</key><string>net.klangwerke.CompositionStudio</string>
-            <key>CFBundleName</key><string>Composition Studio</string>
-            <key>CFBundleDisplayName</key><string>Composition Studio</string>
-            <key>CFBundlePackageType</key><string>APPL</string>
-            <key>CFBundleShortVersionString</key><string>$VERSION</string>
-            <key>CFBundleVersion</key><string>$VERSION</string>
-            <key>LSMinimumSystemVersion</key><string>11.0</string>
-            <key>NSHighResolutionCapable</key><true/>
-            <key>NSMicrophoneUsageDescription</key><string>Composition Studio benötigt Mikrofonzugriff für Audioaufnahmen.</string>
-          </dict></plist>
+          <plist version="1.0"><dict><key>CFBundleExecutable</key><string>Composition Studio</string><key>CFBundleIdentifier</key><string>net.klangwerke.CompositionStudio</string><key>CFBundleName</key><string>Composition Studio</string><key>CFBundleDisplayName</key><string>Composition Studio</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>$VERSION</string><key>CFBundleVersion</key><string>$VERSION</string><key>LSMinimumSystemVersion</key><string>11.0</string><key>NSHighResolutionCapable</key><true/><key>NSMicrophoneUsageDescription</key><string>Composition Studio benötigt Mikrofonzugriff für Audioaufnahmen.</string></dict></plist>
           PLIST
-
           file "$MACOS/Composition Studio"
-          lipo -info "$MACOS/Composition Studio"
-          otool -L "$MACOS/Composition Studio"
-
       - name: Ad-hoc sign application
-        shell: bash
         run: |
-          set -euo pipefail
           codesign --force --sign - 'dist/Composition Studio.app/Contents/Frameworks/libCompositionStudioEngineBridge.dylib'
           codesign --force --deep --sign - 'dist/Composition Studio.app'
-
       - name: Package Intel build
+        id: package
         shell: bash
         run: |
           set -euo pipefail
-          VERSION='${{ steps.upstream.outputs.version }}'
-          ZIP="dist/Composition-Studio-V${VERSION}-Intel.zip"
+          VERSION='${{ steps.upstream.outputs.version }}'; ZIP="dist/Composition-Studio-V${VERSION}-Intel.zip"
           ditto -c -k --sequesterRsrc --keepParent 'dist/Composition Studio.app' "$ZIP"
           shasum -a 256 "$ZIP" > "$ZIP.sha256"
           echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
-          ls -lh dist/
-        id: package
-
       - name: Upload Intel build
         uses: actions/upload-artifact@v4
         with:
