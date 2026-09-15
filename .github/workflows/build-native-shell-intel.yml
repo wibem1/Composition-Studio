@@ -1,9 +1,9 @@
-name: Build Composition Studio V0.6 Intel
+name: Build Composition Studio Native
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, v0.7.1-functional]
     paths:
       - 'native/Sources/**'
       - 'native/EngineBridge/**'
@@ -11,7 +11,7 @@ on:
       - '.github/workflows/build-native-shell-intel.yml'
 
 concurrency:
-  group: composition-studio-native-intel
+  group: composition-studio-native-intel-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -101,8 +101,7 @@ jobs:
           BRIDGE='${{ steps.bridge.outputs.path }}'
           cp "$BRIDGE" "$FRAMEWORKS/"
           install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FRAMEWORKS/libCompositionStudioEngineBridge.dylib"
-          { cat studio/native/Sources/EngineBridge.swift; cat studio/native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat studio/native/Sources/CompositionStudioApp.swift; cat studio/native/Sources/EngineUIBindings.swift; } > /tmp/CompositionStudioApp.swift
-          # Normalise only shorthand decimal literals; keep tuple access (.0/.1) and ranges (...9) intact.
+          { cat studio/native/Sources/EngineBridge.swift; cat studio/native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat studio/native/Sources/CompositionStudioApp.swift; cat studio/native/Sources/EngineUIBindings.swift; if [ -f studio/native/Sources/V071Functional.swift ]; then cat studio/native/Sources/V071Functional.swift; fi; } > /tmp/CompositionStudioApp.swift
           perl -pi -e 's/font=\./font = ./g; s/([\(,:= ])\.(\d+)/$1 . "0." . $2/ge; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
           xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit -framework UniformTypeIdentifiers /tmp/CompositionStudioApp.swift -L "$FRAMEWORKS" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/Composition Studio"
           cat > "$APP/Contents/Info.plist" <<PLIST
