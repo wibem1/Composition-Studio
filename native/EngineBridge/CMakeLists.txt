@@ -1,5 +1,6 @@
 add_library(CompositionStudioEngineBridge SHARED
     CompositionStudioEngineBridge.cpp
+    CompositionStudioEngineBridgeV100.cpp
 )
 
 target_include_directories(CompositionStudioEngineBridge PRIVATE
