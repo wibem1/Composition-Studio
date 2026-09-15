@@ -1,6 +1,6 @@
 # Composition Studio – verbindlicher Projektstatus
 
-**Stand:** 15. September 2026
+**Stand:** 15. September 2026, nach erfolgreichem MiniDAW-CI-Build
 
 > Diese Datei ist die technische Wahrheit für den aktuellen Entwicklungsstand. Bei Widersprüchen zwischen Chatverläufen, Geräten oder älteren Notizen gilt diese Datei zusammen mit dem aktuellen Repository-Stand.
 
@@ -10,7 +10,7 @@ Die bisherige Composition-Studio-Entwicklung bis einschließlich **V1.0RC** wurd
 
 Der neue Ansatz lautet: **zuerst eine kleine, tatsächlich lauffähige MiniDAW als technisches Fundament bauen.** Erst wenn deren Kernfunktionen zuverlässig funktionieren, wird darauf das vollständige Composition Studio aufgebaut.
 
-Die MiniDAW befindet sich derzeit im Build-/Teststadium. Ein erfolgreicher Build allein gilt ausdrücklich **nicht** als Nachweis der Funktionsfähigkeit.
+Der erste MiniDAW-Funktionsnachweis ist jetzt **erfolgreich kompiliert und technisch paketiert**. Der lokale Praxistest auf dem Intel-MacBook ist der nächste Schritt. Ein erfolgreicher CI-Build allein gilt weiterhin ausdrücklich nicht als Nachweis hörbarer Wiedergabe oder lokaler Plugin-Funktion.
 
 ## 2. Ziel von Composition Studio
 
@@ -37,7 +37,7 @@ Die vereinbarte Grundarchitektur bleibt:
 - **EngineBridge:** klar definierte, möglichst kleine Schnittstelle zwischen Oberfläche und Engine.
 - **MAGDA:** technische Engine für Audio, MIDI, Plugin-Hosting und grundlegende DAW-Funktionen. MAGDA soll möglichst wenig verändert werden.
 
-Die MiniDAW darf diese Architektur vereinfachen, solange sie als belastbares Fundament für die spätere Integration dient.
+Die MiniDAW benutzt genau dieses Prinzip als kleinen Funktionsnachweis: Swift/AppKit-Oberfläche → CompositionStudioEngineBridge → gepinnte MAGDA-Engine.
 
 ## 4. Verbindliches GUI-Ziel
 
@@ -56,30 +56,105 @@ Wesentliche Merkmale:
 - unten Inspector/Routing, Piano-Roll/Notation und Transport
 - Branding: **COMPOSITION STUDIO by Klangwerke**
 
-## 5. MiniDAW – Zweck und Abnahmekriterium
+Die MiniDAW selbst ist ausdrücklich **kein GUI-Entwurf**, sondern ein technischer Prüfstand.
 
-Die MiniDAW ist **kein neues Endprodukt** und keine verkleinerte Zielversion. Sie ist ein technischer Prüfstand.
+## 5. MiniDAW – aktueller Funktionsnachweis
+
+### Branch und Build
+
+- Entwicklungsbranch: `minidaw-proof-v1-final`
+- getesteter CI-Commit: `1b622d0e3dc6c0e9eb0469fdb79253d4f35e9f09`
+- Commit-Titel: `MiniDAW: cache MAGDA dependencies and bridge build`
+- Workflow: `Build MiniDAW Proof`
+- Workflow-Run: `34974631772`
+- Ergebnis: **SUCCESS**
+- Zielarchitektur: **x86_64 / Intel Mac**
+- Deployment Target: macOS 11.0
+- gepinnter MAGDA-Stand: `15e9071d657bf9179432c6a0a3a62f8dd686d8a1`
+
+### Erzeugtes Artefakt
+
+- Name: `MiniDAW-Proof-Intel`
+- Artifact ID: `10400176565`
+- Größe: 26,784,175 Bytes
+- SHA-256: `09f6922d939d6148416b99d81e9d44d6181178a273bda24f0b47c9efd637df71`
+- Aufbewahrung durch GitHub Actions: 30 Tage
+
+Der Workflow hat vor dem Upload automatisch geprüft:
+
+- Bridge-Dylib vorhanden und x86_64
+- Swift-App erfolgreich gebaut
+- Info.plist syntaktisch gültig
+- App-Binary x86_64
+- dynamische Verknüpfung zur CompositionStudioEngineBridge vorhanden
+- Ad-hoc-Codesign der Bridge und App
+- `codesign --verify --deep --strict` erfolgreich
+- ZIP-Paket erfolgreich erzeugt
+
+### Was die MiniDAW tatsächlich implementiert
+
+Die MiniDAW ist bewusst klein. Beim Start initialisiert sie die MAGDA-Engine und erzeugt eine echte Testspur mit einem MIDI-Clip und vier Noten **C–E–G–C**. Das Tempo wird auf 120 BPM gesetzt.
+
+Die Oberfläche bietet genau den vorgesehenen technischen Testpfad:
+
+1. **Plugins suchen** – startet den MAGDA-Plugin-Scan.
+2. **Instrument auswählen/laden** – zeigt gefundene Instrument-Plugins und fügt das ausgewählte Instrument der Testspur hinzu.
+3. **Ton testen** – sendet einen Preview-Ton an das Instrument auf der Spur.
+4. **Play** – setzt die Position auf 0 und startet den echten MAGDA-Transport.
+5. **Stop** – stoppt den MAGDA-Transport.
+
+Zusätzlich zeigt die MiniDAW getrennt:
+
+- Engine-Status
+- Transportstatus und Transportposition
+- Position des Audio-Threads
+- Anzahl gefundener Instrumente
+- eine sichtbar mitlaufende Playhead-Anzeige
+
+Damit ist der Codepfad für **Spur/Clip → MIDI → Instrument → Transport → Audio-Thread/Playposition** vorhanden. Ob das auf dem Ziel-Mac tatsächlich hörbar und synchron funktioniert, muss der lokale Praxistest bestätigen.
+
+## 6. MiniDAW-Build-Cache
+
+Für die MiniDAW ist jetzt ein eigener GitHub-Actions-Cache eingerichtet.
+
+Der Cache speichert die fertig kompilierte `libCompositionStudioEngineBridge.dylib`. Sein Schlüssel hängt ab von:
+
+- Betriebssystem
+- x86_64-Architektur
+- gepinntem MAGDA-Commit
+- SHA-256-artigem Hash des gesamten `native/EngineBridge`-Quellbaums
+
+Aktueller Cache-Key:
+
+`minidaw-engine-macOS-x86_64-15e9071d657bf9179432c6a0a3a62f8dd686d8a1-4d535e8a860385e4ca113eb5ba9ac458cad3c3e6b1d528f4e20a52c8ed25817f`
+
+Beim ersten erfolgreichen Lauf war erwartungsgemäß noch kein Cache vorhanden. Nach erfolgreichem vollständigem MAGDA-/Bridge-Build wurde der Cache unter diesem Schlüssel gespeichert. Bei einem folgenden Build mit unverändertem MAGDA-Stand und unveränderter Bridge können MAGDA-Checkout, Submodule, CMake-Konfiguration und der sehr große C++-Build übersprungen werden. Änderungen nur an `MiniDAW.swift` sollten dadurch erheblich schneller bauen.
+
+Wichtig: Ändert sich die EngineBridge, wird absichtlich ein neuer Cache-Key erzeugt und die Bridge vollständig neu gebaut. Das verhindert, dass ein veralteter Engine-Unterbau unbemerkt verwendet wird.
+
+## 7. Abnahmekriterium auf dem Intel-MacBook
 
 Die erste entscheidende Funktionskette lautet:
 
-**App starten → MIDI/Spur/Clip → Instrument-Plugin → Audio → Transport/Playposition**
+**App starten → Testspur/Clip → Instrument-Plugin → Ton → Play → hörbare MIDI-Wiedergabe → sichtbar/synchron mitlaufende Playposition**
 
-Ein MiniDAW-Stand ist erst dann als belastbare Grundlage anzusehen, wenn auf dem Zielsystem mindestens nachgewiesen ist:
+Für den nächsten Praxistest sind folgende Punkte verbindlich:
 
-1. App startet stabil.
-2. Eine MIDI-Datei bzw. MIDI-Daten können geladen werden.
-3. Spur und Clip werden tatsächlich von der Engine verwaltet.
-4. Ein installiertes Instrument-Plugin (VST3 oder AU; z. B. Pianoteq) wird gefunden.
-5. Das Instrument kann einer MIDI-Spur zugewiesen und instanziiert werden.
-6. Play startet den Transport.
-7. Die MIDI-Noten erreichen das Instrument und sind hörbar.
-8. Die Playposition läuft sichtbar und synchron mit.
-9. Stop/Locate funktionieren reproduzierbar.
-10. Wiederholtes Starten, Laden und Abspielen führt nicht zu Abstürzen oder offensichtlich inkonsistentem Zustand.
+1. App startet stabil und zeigt `Engine: bereit`.
+2. `Testspur + C–E–G–C angelegt` erscheint.
+3. `Plugins suchen` findet installierte Instrumente, insbesondere nach Möglichkeit Pianoteq.
+4. Ein Instrument lässt sich auswählen und laden; es erscheint keine Fehlermeldung.
+5. `Ton testen` erzeugt einen hörbaren Ton über das geladene Instrument.
+6. `Play` startet den Transport und die vier MIDI-Noten C–E–G–C sind hörbar.
+7. Die angezeigte Transportposition läuft vorwärts.
+8. Die Audio-Thread-Position läuft plausibel mit der Transportposition mit.
+9. Der rote Playhead bewegt sich sichtbar.
+10. `Stop` hält Wiedergabe und Transport zuverlässig an.
+11. Der Ablauf wird mindestens ein zweites Mal wiederholt, ohne Absturz oder inkonsistenten Zustand.
 
-Erst danach werden weitere DAW-Funktionen auf dieses Fundament gesetzt.
+**Erst wenn dieser lokale Test bestanden ist, gilt die MiniDAW als belastbares technisches Fundament.**
 
-## 6. Verworfene bzw. historische Stände
+## 8. Verworfene bzw. historische Stände
 
 - Frühere V0.x-Stände waren Entwicklungs- und Integrationsstufen, nicht der aktuelle Ausgangspunkt.
 - **V1.0RC:** auf dem MacBook praktisch getestet und als unbrauchbar verworfen.
@@ -88,7 +163,7 @@ Erst danach werden weitere DAW-Funktionen auf dieses Fundament gesetzt.
 
 Historischer Code darf weiterhin als Quelle für funktionierende Einzelbausteine dienen. Er ist aber nicht automatisch Teil der neuen Basis.
 
-## 7. Entwicklungsregeln
+## 9. Entwicklungsregeln
 
 1. **Keine Klecker-Versionen zur Abnahme.** Zwischenstände dürfen intern gebaut werden, werden aber nicht als neue Version an den Anwender herausgegeben.
 2. **Build-Erfolg ist nicht gleich Funktionsnachweis.** Automatisierbare Tests werden vor Herausgabe durchgeführt; Hardware-, Audio- und lokale Plugin-Tests werden klar als solche ausgewiesen.
@@ -99,7 +174,7 @@ Historischer Code darf weiterhin als Quelle für funktionierende Einzelbausteine
 7. **GitHub ist das Projektgedächtnis.** Relevante Strategieänderungen, getestete Stände und bekannte Blocker werden hier dokumentiert.
 8. **Chats sind nicht verbindlich.** Vor Änderungen am Projekt ist zuerst dieser Status und anschließend der aktuelle Repository-Stand zu prüfen.
 
-## 8. Arbeitsablauf ab jetzt
+## 10. Arbeitsablauf ab jetzt
 
 Vor jeder neuen Entwicklungsarbeit:
 
@@ -114,8 +189,10 @@ Nach jedem wesentlichen Test oder Strategiewechsel:
 3. funktionierende und nicht funktionierende Punkte trennen,
 4. nächsten technischen Schritt festhalten.
 
-## 9. Aktuell nächster Schritt
+## 11. Aktuell nächster Schritt
 
-**MiniDAW kompilieren und auf dem Intel-MacBook praktisch testen.**
+**Das erfolgreiche Artefakt `MiniDAW-Proof-Intel` auf dem Intel-MacBook praktisch testen.**
 
-Danach wird diese Datei mit dem exakten getesteten Build/Commit, dem Testergebnis und den nachgewiesenen Funktionen aktualisiert. Erst auf Basis dieses Ergebnisses wird entschieden, welcher Funktionsblock als Nächstes hinzukommt.
+Der CI-Stand ist technisch sauber gebaut und paketiert. Noch nicht nachgewiesen sind die entscheidenden maschinenspezifischen Punkte: Start auf dem Ziel-Mac, lokaler Plugin-Scan, tatsächliche Plugin-Instanziierung, Audioausgabe und Synchronität zwischen hörbarer Wiedergabe, Transportposition und Audio-Thread.
+
+Nach diesem Praxistest wird diese Datei erneut mit dem tatsächlichen Testergebnis aktualisiert. Erst danach beginnt die Erweiterung in Richtung vollständiges Composition Studio.
