@@ -3,6 +3,7 @@
 #include "project/ProjectManager.hpp"
 #include "core/TrackManager.hpp"
 #include "core/ClipManager.hpp"
+#include "core/DeviceInfo.hpp"
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <cstring>
 
@@ -40,6 +41,16 @@ CS_EXPORT bool cs_engine_is_looping(){ if(auto*e=magda_get_engine())return e->is
 CS_EXPORT void cs_engine_set_metronome(bool b){ if(auto*e=magda_get_engine())e->setMetronomeEnabled(b); }
 CS_EXPORT bool cs_engine_metronome_enabled(){ if(auto*e=magda_get_engine())return e->isMetronomeEnabled(); return false; }
 CS_EXPORT int cs_engine_plugin_count(){ if(auto*e=magda_get_engine())return (int)e->getKnownPluginTypes().size(); return 0; }
+CS_EXPORT int cs_plugin_count(){ if(auto*e=magda_get_engine())return (int)e->getKnownPluginTypes().size(); return 0; }
+CS_EXPORT bool cs_plugin_name_at(int index,char*out,int cap){ if(auto*e=magda_get_engine()){auto p=e->getKnownPluginTypes();if(index<0||index>=p.size())return false;copyUtf8(p.getReference(index).name,out,cap);return true;}return false; }
+CS_EXPORT bool cs_plugin_format_at(int index,char*out,int cap){ if(auto*e=magda_get_engine()){auto p=e->getKnownPluginTypes();if(index<0||index>=p.size())return false;copyUtf8(p.getReference(index).pluginFormatName,out,cap);return true;}return false; }
+CS_EXPORT bool cs_plugin_is_instrument_at(int index){ if(auto*e=magda_get_engine()){auto p=e->getKnownPluginTypes();return index>=0&&index<p.size()&&p.getReference(index).isInstrument;}return false; }
+CS_EXPORT int cs_track_add_plugin_at(int trackId,int index){
+    auto*e=magda_get_engine(); if(!e)return -1; auto plugins=e->getKnownPluginTypes(); if(index<0||index>=plugins.size())return -1;
+    const auto& desc=plugins.getReference(index); magda::DeviceInfo d; d.name=desc.name; d.manufacturer=desc.manufacturerName; d.pluginId=desc.createIdentifierString(); d.uniqueId=desc.createIdentifierString(); d.fileOrIdentifier=desc.fileOrIdentifier; d.isInstrument=desc.isInstrument; d.deviceType=desc.isInstrument?magda::DeviceType::Instrument:magda::DeviceType::Effect;
+    if(desc.pluginFormatName.containsIgnoreCase("VST3"))d.format=magda::PluginFormat::VST3; else if(desc.pluginFormatName.containsIgnoreCase("AudioUnit")||desc.pluginFormatName.equalsIgnoreCase("AU"))d.format=magda::PluginFormat::AU; else if(desc.pluginFormatName.containsIgnoreCase("LV2"))d.format=magda::PluginFormat::LV2; else return -1;
+    return magda::TrackManager::getInstance().addDeviceToTrack(trackId,d);
+}
 CS_EXPORT int cs_track_count(){ return magda::TrackManager::getInstance().getNumTracks(); }
 CS_EXPORT int cs_track_id_at(int index){ const auto& t=magda::TrackManager::getInstance().getTracks(); return index>=0&&index<(int)t.size()?t[(size_t)index].id:-1; }
 CS_EXPORT bool cs_track_name_at(int index,char*out,int cap){ const auto&t=magda::TrackManager::getInstance().getTracks(); if(index<0||index>=(int)t.size())return false; copyUtf8(t[(size_t)index].name,out,cap); return true; }
@@ -63,7 +74,7 @@ CS_EXPORT int cs_midi_import(const char*path,int trackId,double startBeat){
     if(!path)return -1; juce::FileInputStream stream(juce::File(juce::String::fromUTF8(path))); if(!stream.openedOk())return -1;
     juce::MidiFile mf; if(!mf.readFrom(stream))return -1; const int tpq=mf.getTimeFormat(); if(tpq<=0)return -1;
     double maxBeat=0; struct N{int p,v;double s,l;}; std::vector<N> notes;
-    for(int ti=0;ti<mf.getNumTracks();++ti){ const auto*source=mf.getTrack(ti); if(!source)continue; juce::MidiMessageSequence seq(*source); seq.updateMatchedPairs(); for(int i=0;i<seq.getNumEvents();++i){ auto*ev=seq.getEventPointer(i); if(!ev||!ev->message.isNoteOn())continue; double s=ev->message.getTimeStamp()/tpq; double e=s+0.25; if(ev->noteOffObject)e=ev->noteOffObject->message.getTimeStamp()/tpq; double l=juce::jmax(0.01,e-s); notes.push_back({ev->message.getNoteNumber(),(int)ev->message.getVelocity(),s,l}); maxBeat=juce::jmax(maxBeat,e); }}
+    for(int ti=0;ti<mf.getNumTracks();++ti){ const auto*source=mf.getTrack(ti); if(!source)continue; juce::MidiMessageSequence seq(*source); seq.updateMatchedPairs(); for(int i=0;i<seq.getNumEvents();++i){ auto*ev=seq.getEventPointer(i); if(!ev||!ev->message.isNoteOn())continue; double s=ev->message.getTimeStamp()/tpq; double ee=s+0.25; if(ev->noteOffObject)ee=ev->noteOffObject->message.getTimeStamp()/tpq; double l=juce::jmax(0.01,ee-s); notes.push_back({ev->message.getNoteNumber(),(int)ev->message.getVelocity(),s,l}); maxBeat=juce::jmax(maxBeat,ee); }}
     if(trackId<0)trackId=magda::TrackManager::getInstance().createTrack(juce::File(juce::String::fromUTF8(path)).getFileNameWithoutExtension()); if(trackId<0)return -1;
     auto&cm=magda::ClipManager::getInstance(); int clipId=cm.createMidiClipBeats(trackId,startBeat,juce::jmax(1.0,maxBeat)); if(clipId<0)return -1; if(auto*c=cm.getClip(clipId))c->name=juce::File(juce::String::fromUTF8(path)).getFileNameWithoutExtension();
     for(const auto&n:notes)cm.addMidiNote(clipId,{n.p,n.v,n.s,n.l}); return clipId;
