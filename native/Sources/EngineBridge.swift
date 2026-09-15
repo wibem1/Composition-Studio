@@ -18,6 +18,11 @@ import Foundation
 @_silgen_name("cs_engine_set_metronome") private func cs_engine_set_metronome(_ enabled: Bool)
 @_silgen_name("cs_engine_metronome_enabled") private func cs_engine_metronome_enabled() -> Bool
 @_silgen_name("cs_engine_plugin_count") private func cs_engine_plugin_count() -> Int32
+@_silgen_name("cs_plugin_count") private func cs_plugin_count() -> Int32
+@_silgen_name("cs_plugin_name_at") private func cs_plugin_name_at(_ index:Int32,_ out:UnsafeMutablePointer<CChar>,_ cap:Int32) -> Bool
+@_silgen_name("cs_plugin_format_at") private func cs_plugin_format_at(_ index:Int32,_ out:UnsafeMutablePointer<CChar>,_ cap:Int32) -> Bool
+@_silgen_name("cs_plugin_is_instrument_at") private func cs_plugin_is_instrument_at(_ index:Int32) -> Bool
+@_silgen_name("cs_track_add_plugin_at") private func cs_track_add_plugin_at(_ track:Int32,_ index:Int32) -> Int32
 @_silgen_name("cs_project_save_as") private func cs_project_save_as(_ path: UnsafePointer<CChar>) -> Bool
 @_silgen_name("cs_project_load") private func cs_project_load(_ path: UnsafePointer<CChar>) -> Bool
 @_silgen_name("cs_track_count") private func cs_track_count() -> Int32
@@ -44,6 +49,7 @@ import Foundation
 struct EngineTrack { let id:Int; let name:String; let muted:Bool; let soloed:Bool; let recordArmed:Bool }
 struct EngineMidiNote { let note:Int; let velocity:Int; let startBeat:Double; let lengthBeats:Double }
 struct EngineClip { let id:Int; let trackId:Int; let startBeat:Double; let lengthBeats:Double; let notes:[EngineMidiNote] }
+struct EnginePlugin { let index:Int; let name:String; let format:String; let isInstrument:Bool }
 
 final class CompositionStudioEngine {
     static let shared=CompositionStudioEngine(); private(set) var initialized=false; private init(){}
@@ -52,6 +58,8 @@ final class CompositionStudioEngine {
     var isReady:Bool{initialized && cs_engine_is_ready()}; var isPlaying:Bool{isReady && cs_engine_is_playing()}; var isRecording:Bool{isReady && cs_engine_is_recording()}
     var positionSeconds:Double{isReady ? cs_engine_position_seconds():0}; var tempo:Double{isReady ? cs_engine_tempo():120}; var isLooping:Bool{isReady && cs_engine_is_looping()}; var isMetronomeEnabled:Bool{isReady && cs_engine_metronome_enabled()}; var pluginCount:Int{isReady ? Int(cs_engine_plugin_count()):0}
     func play(){if isReady{cs_engine_play()}}; func stop(){if isReady{cs_engine_stop()}}; func pause(){if isReady{cs_engine_pause()}}; func record(){if isReady{cs_engine_record()}}; func locate(seconds:Double){if isReady{cs_engine_locate_seconds(seconds)}}; func setTempo(_ bpm:Double){if isReady{cs_engine_set_tempo(bpm)}}; func setLooping(_ b:Bool){if isReady{cs_engine_set_looping(b)}}; func setMetronome(_ b:Bool){if isReady{cs_engine_set_metronome(b)}}
+    func plugins()->[EnginePlugin]{ guard isReady else{return []}; return (0..<Int(cs_plugin_count())).compactMap{i in var n=[CChar](repeating:0,count:256),f=[CChar](repeating:0,count:64);guard cs_plugin_name_at(Int32(i),&n,256),cs_plugin_format_at(Int32(i),&f,64) else{return nil};return EnginePlugin(index:i,name:String(cString:n),format:String(cString:f),isInstrument:cs_plugin_is_instrument_at(Int32(i)))} }
+    @discardableResult func addPlugin(trackId:Int,pluginIndex:Int)->Int{guard isReady else{return -1};return Int(cs_track_add_plugin_at(Int32(trackId),Int32(pluginIndex)))}
     func tracks()->[EngineTrack]{ guard isReady else{return []}; return (0..<Int(cs_track_count())).compactMap{ i in var b=[CChar](repeating:0,count:256); guard cs_track_name_at(Int32(i),&b,256) else{return nil}; let id=Int(cs_track_id_at(Int32(i))); return EngineTrack(id:id,name:String(cString:b),muted:cs_track_muted(Int32(id)),soloed:cs_track_soloed(Int32(id)),recordArmed:cs_track_record_armed(Int32(id))) } }
     @discardableResult func createTrack(name:String)->Int { guard isReady else{return -1}; return name.withCString{Int(cs_track_create($0))} }
     func deleteTrack(id:Int){if isReady{cs_track_delete(Int32(id))}}; func setTrackName(id:Int,name:String){if isReady{name.withCString{cs_track_set_name(Int32(id),$0)}}}; func setMuted(id:Int,_ b:Bool){if isReady{cs_track_set_muted(Int32(id),b)}}; func setSoloed(id:Int,_ b:Bool){if isReady{cs_track_set_soloed(Int32(id),b)}}; func setRecordArmed(id:Int,_ b:Bool){if isReady{cs_track_set_record_armed(Int32(id),b)}}
