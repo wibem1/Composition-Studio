@@ -43,6 +43,9 @@ CS_EXPORT int cs_engine_plugin_count(){ if(auto*e=magda_get_engine())return (int
 CS_EXPORT int cs_track_count(){ return magda::TrackManager::getInstance().getNumTracks(); }
 CS_EXPORT int cs_track_id_at(int index){ const auto& t=magda::TrackManager::getInstance().getTracks(); return index>=0&&index<(int)t.size()?t[(size_t)index].id:-1; }
 CS_EXPORT bool cs_track_name_at(int index,char*out,int cap){ const auto&t=magda::TrackManager::getInstance().getTracks(); if(index<0||index>=(int)t.size())return false; copyUtf8(t[(size_t)index].name,out,cap); return true; }
+CS_EXPORT bool cs_track_muted(int id){ auto*t=magda::TrackManager::getInstance().getTrack(id); return t?t->muted:false; }
+CS_EXPORT bool cs_track_soloed(int id){ auto*t=magda::TrackManager::getInstance().getTrack(id); return t?t->soloed:false; }
+CS_EXPORT bool cs_track_record_armed(int id){ auto*t=magda::TrackManager::getInstance().getTrack(id); return t?t->recordArmed:false; }
 CS_EXPORT int cs_track_create(const char*name){ return magda::TrackManager::getInstance().createTrack(name?juce::String::fromUTF8(name):juce::String("MIDI")); }
 CS_EXPORT void cs_track_delete(int id){ magda::TrackManager::getInstance().deleteTrack(id); }
 CS_EXPORT void cs_track_set_name(int id,const char*name){ if(name)magda::TrackManager::getInstance().setTrackName(id,juce::String::fromUTF8(name)); }
