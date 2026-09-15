@@ -1,98 +1,80 @@
 # Composition Studio – verbindlicher Projektstatus
 
-**Stand:** 15. September 2026 – Beginn der systematischen MAGDA-Forschungsphase
+**Stand:** 15. September 2026 – MAGDA-Systemkatalog abgeschlossen; Beginn der sequenziellen Modultests
 
-> Diese Datei ist zusammen mit dem aktuellen Repository-Stand die technische Wahrheit. Bei Widersprüchen mit Chats oder älteren Notizen gilt GitHub.
+> GitHub ist die technische Wahrheit. Bei Widersprüchen mit Chats oder älteren Notizen gilt der aktuelle Repository-Stand.
 
 ## 1. Aktive Strategie
 
-Die Entwicklung wird nicht direkt von der MiniDAW zu einer großen DAW erweitert. Zuerst wird MAGDA systematisch zerlegt, verstanden und getestet.
+Die frühere Zielarchitektur `Composition Studio → EngineBridge → MAGDA` ist aufgegeben.
 
-Die frühere langfristige Zielarchitektur
-
-`Composition Studio → EngineBridge → MAGDA`
-
-ist aufgegeben.
-
-Das neue langfristige Ziel lautet:
+Langfristiges Ziel:
 
 `Composition Studio → Composition Studio Core → gezielt gewählte Basistechnologien`
 
-MAGDA dient als **Forschungsobjekt, Referenzimplementierung und technische Anregung**. Langfristig soll möglichst wenig oder kein MAGDA-Code im Composition-Studio-Core verbleiben.
+MAGDA dient als Forschungsobjekt, Referenzimplementierung und technische Anregung. Langfristig soll möglichst wenig oder kein MAGDA-Code im Composition-Studio-Core verbleiben. Die Basis-DAW wird Integrationslabor der eigenen Core-Module.
 
-Die Basis-DAW wird später als Labor und Integrationsnachweis für die eigenen Core-Module aufgebaut. Sie ist kein Wegwerfprodukt.
+## 2. Forschungsbasis und Dokumente
 
-## 2. Verbindliche Forschungsdokumente
+Untersuchter MAGDA-Stand: `15e9071d657bf9179432c6a0a3a62f8dd686d8a1`.
 
-- `AGENTS.md` – dauerhafte Arbeits-/Forschungsregeln und neue Engine-Strategie.
-- `docs/RESEARCH_ROADMAP.md` – abzuarbeitende Forschungs- und Entwicklungs-To-do-Liste.
-- `docs/MAGDA_CATALOG.md` – wachsender systematischer MAGDA-Katalog.
+- `AGENTS.md` – verbindliche Arbeits-/Forschungsregeln.
+- `docs/RESEARCH_ROADMAP.md` – Forschungs-/Entwicklungs-To-do.
+- `docs/MAGDA_CATALOG.md` – abgeschlossene System-/Modullandkarte, anschließend fortlaufende Implementierungsdetails.
 - `docs/RESEARCH_JOURNAL.md` – chronologisches Laborbuch inklusive Fehlversuchen.
 
-Forschungsbasis ist exakt der bisher von Composition Studio gepinnte MAGDA-Commit:
+## 3. MAGDA-Katalog – Abschluss der breiten Inventur
 
-`15e9071d657bf9179432c6a0a3a62f8dd686d8a1`
+Die vollständige funktionale Systemlandkarte ist erstellt. Erfasst sind:
 
-## 3. Qualitätskriterium „Modul beherrscht“
+- produktive Tracktion-DAW: Interfaces, Engine/Wrapper, Audio-/MIDI-Bridges, Core/Domain, API, Project, CLI, Device Packs;
+- native Engine: `analysis`, `clip`, `exec`, `io`, `param`, `plan`, `tap`, `transport`;
+- Agentensystem;
+- Lua/Scripting;
+- MCP Bridge;
+- Audio-/Playback-, Steuer-, Publish- und Beobachtungsdatenwege;
+- Ownership-/Lifetime- und wesentliche Threadgrenzen;
+- Trennung MAGDA-eigener Architektur von JUCE-/Tracktion-Funktionalität;
+- Ableitung der Composition-Studio-Core-Module.
 
-Ein Modul gilt erst als beherrscht, wenn äußere API, innere Implementierung, Zustände/Lebenszeiten, Abhängigkeiten, Daten-/Kontrollfluss und Thread-/Realtime-Anforderungen verstanden sind, ein reproduzierbarer isolierter Test existiert und wir einen Fehler im betreffenden Originalcode lokalisieren und nötigenfalls gezielt korrigieren könnten.
+Wesentliche Architekturdiagnose: MAGDA besitzt am gepinnten Stand zwei Engine-Generationen. Die produktive Tracktion-Architektur arbeitet mit gekoppelt synchronisierten Zuständen (MAGDA-Modell, Tracktion Edit, PlaybackContext, DeviceManager). Die native Engine arbeitet dagegen mit immutable RenderPlan sowie getrennten PlanValues-, Transport- und Clip-Snapshots, Runtime-Bindings und Realtime-Publish.
 
-Danach wird entschieden: Referenz / vorübergehend kapseln / vereinfachen / selbst neu implementieren / nicht benötigt.
+Die **breite Katalogisierung ist abgeschlossen**. „Abgeschlossen“ bedeutet nicht, dass jede Methode jeder großen Managerdatei bereits einzeln getestet wurde. Diese Tiefenprüfung erfolgt jetzt modulweise und wird jeweils in Katalog und Journal ergänzt.
 
-## 4. MAGDA – Inventurstand
+Katalog-Abschlusscommit: `13b2ec08ad08627cb297fdfd57a0524b5fafdcf0`.
+Forschungsjournal dazu: `7e822d3e58a48efa68ce2efbcacbd4de83216c1a`.
 
-Erste Systemkartierung abgeschlossen:
+## 4. Qualitätskriterium „Modul beherrscht“
 
-- `magda/agents` – Agent-/KI-System.
-- `magda/daw` – bestehende DAW und Tracktion-basierte Engine-Schicht.
-- `magda/engine` – neue native MAGDA-Engine, laut Root-Build derzeit gebaut/getestet, aber nicht in die App gelinkt.
-- `magda/mcp_bridge` – MCP.
-- `magda/scripting` – Lua/Scripting.
+Ein Modul gilt erst als beherrscht, wenn API, innere Implementierung, Zustände/Lebenszeiten, Abhängigkeiten, Daten-/Kontrollfluss und Thread-/Realtime-Anforderungen verstanden sind, ein reproduzierbarer isolierter Test existiert und Fehler im betreffenden Code lokalisierbar sind.
 
-Für Composition Studio besonders relevante Bereiche sind bereits identifiziert:
+Build-Erfolg, technisches Verständnis und praktischer Funktionsnachweis bleiben getrennte Kategorien.
 
-- `daw/interfaces`: Clip, Track, Transport, Mixer, DAW-Mode.
-- `daw/engine`: `TracktionEngineWrapper` plus getrennte Init-, Transport-, Track-, Clip-, Device-, Plugin- und Recording-Implementierungen; Plugin-Scan, Plugin-Metadaten/-Fenster, Tempo und Offline-Render.
-- `daw/audio`: AudioBridge, MidiBridge, Metering, TrackController, PluginWindowBridge, Waveform/Peak, Warp, Comping und ClipCommands.
-- `daw/core`: umfangreiche Clip-, Automation-, Routing-, Command- und Managerlogik.
-- `magda/engine`: eigenständige native Clip-/MIDI-/Voice-/Warp-/EngineSession-Komponenten; für die eigene Core-Entwicklung besonders wichtige Referenz.
+## 5. MiniDAW – Referenzstand und negativer Praxistest
 
-Root-Abhängigkeiten umfassen u. a. JUCE, Tracktion Engine, SoundTouch, Signalsmith Stretch, juce-llm, llama.cpp, Lua, SQLite und optional ONNX Runtime. Die Forschung trennt deshalb konsequent MAGDA-eigene Logik von Fremdbibliotheksfunktionalität.
+Branch: `minidaw-proof-v1-final`.
+Commit: `6719a88dedb7f67f9db8cd14320b901353a12832`.
+Workflow Run 6: `34984103280` – **SUCCESS**.
+Artefakt: `MiniDAW-Proof-Intel`, Artifact ID `10403543590`, 26,788,915 Bytes, SHA-256 `84471dbceef3d2a12a36070c5252d53051139bb80828190a5b76e52d7cf32e01`.
 
-Die Inventur ist **begonnen, aber noch nicht vollständig bis auf Klassen-/Implementierungsebene abgeschlossen**.
+**Lokaler Praxistest:** negativ – kein Ton. Damit ist MiniDAW trotz erfolgreichem Build **nicht funktional nachgewiesen**. Dieser Fehler wird nicht durch blindes Weiterpatchen der MAGDA-Integration verfolgt, sondern durch isolierte Prüfung der Audiokette.
 
-## 5. MiniDAW – letzter technischer Stand
+Die MAGDA-Analyse hat dazu einen wichtigen möglichen Fehlerraum identifiziert: MAGDAs Produktivengine kann Initialisierung fortsetzen, obwohl kein aktuelles AudioDevice geöffnet ist; außerdem müssen JUCE-Gerät, Tracktion WaveDevices und PlaybackContext konsistent sein. Das ist noch keine bewiesene Einzelursache des MiniDAW-Fehlers.
 
-Aktiver MiniDAW-Branch: `minidaw-proof-v1-final`.
+## 6. Abgeleitete Composition-Studio-Core-Module
 
-Nach zwei fehlgeschlagenen Audio-Auswahl-Builds wurde der konkrete Compilefehler in `MiniDAWBridge.cpp` lokalisiert: JUCE-Audio-Device-Typen waren nur unvollständig deklariert. Korrektur: vollständigen JUCE-Audio-Devices-Header einbinden.
+`AudioDeviceCore`, `TransportCore`, `ProjectModel`, `MidiCore`, `MediaIOCore`, `PluginHost`, `AudioGraphCore`, `MixerCore`, `ParameterCore`, `ProjectCore`, `RecordingCore`, `RenderCore`, `MonitoringCore`, `AnalysisCore`, `MusicChat/Domain API`.
 
-- Korrekturcommit: `6719a88dedb7f67f9db8cd14320b901353a12832`
-- Workflow: `Build MiniDAW Proof`
-- Run: `34984103280` / Run 6
-- Ergebnis: **SUCCESS**
-- Artefakt: `MiniDAW-Proof-Intel`
-- Artifact ID: `10403543590`
-- Größe: 26,788,915 Bytes
-- SHA-256: `84471dbceef3d2a12a36070c5252d53051139bb80828190a5b76e52d7cf32e01`
+Grundregel: kleine explizite Module statt eines `AudioEngine`-God-Interfaces; keine dauerhafte Doppelhaltung eines eigenen Modells und einer Tracktion-Edit.
 
-Der Build beweist Kompilierung/Paketierung des korrigierten Stands. Er beweist **nicht** die tatsächliche lokale Audio-/Plugin-Funktion auf dem Intel-Mac.
+## 7. Verbindliches GUI-Ziel
 
-Der MiniDAW-Strang bleibt als technischer Referenzstand erhalten, ist aber nicht mehr der unmittelbare Ausbaupfad zu einer großen DAW.
+Der freigegebene helle Composition-Studio-GUI-Entwurf bleibt unverändert das visuelle Ziel: hell, freundlich, kontrastreich, klar gegliedert; Branding **COMPOSITION STUDIO by Klangwerke**. Forschungs-/Testoberflächen sind keine GUI-Neuentwürfe.
 
-## 6. Verbindliches GUI-Ziel
+## 8. Aktuelle Phase
 
-Der freigegebene helle Composition-Studio-GUI-Entwurf bleibt unverändert das visuelle Ziel: hell, freundlich, kontrastreich, klar gegliedert, Arrangement deutlich abgesetzt, dezente Farben, links MusicChat, Mitte Arrangement, rechts Browser, unten Inspector/Routing/Piano-Roll/Notation/Transport; Branding **COMPOSITION STUDIO by Klangwerke**.
+Die breite MAGDA-Inventur ist beendet. Jetzt beginnt die sequenzielle Tiefenprüfung:
 
-Die Forschungs- und Basis-DAW-Oberflächen sind keine neuen GUI-Entwürfe.
+`AudioDevice → Transport → MIDI → Track/Clip → PluginHost → AudioGraph → Mixer/Routing → Project → Parameter/Automation → Recording/Render → Monitoring/Analysis → MusicChat`.
 
-## 7. Nächste Arbeitsschritte
-
-1. MAGDA-Inventur bis auf relevante Klassen-/Implementierungsebene vervollständigen.
-2. Fremdabhängigkeiten/Lizenzgrenzen und Modul-Abhängigkeitsgraph erfassen.
-3. Initialisierung, Lebenszyklus, Zustandsverwaltung und Threadmodell kartieren.
-4. danach **Audio-I/O als erstes isoliertes Forschungsmodul** vollständig analysieren und testen.
-5. daraus den ersten eigenen Composition-Studio-Core-Baustein ableiten.
-6. anschließend Transport, MIDI, Tracks/Clips, Plugin-Hosting, Mixer/Routing und Projektverwaltung in derselben Weise abarbeiten.
-
-Die vollständige Reihenfolge steht in `docs/RESEARCH_ROADMAP.md`.
+Erstes Ziel ist ein isolierter `AudioDeviceCore`-Prüfstand ohne MAGDA, Tracktion, Tracks, Clips oder Plugins: CoreAudio/JUCE-Gerät tatsächlich öffnen, Deviceparameter und aktive Kanäle melden, Callbackaktivität messen, begrenzten Testton direkt ausgeben, Sampleenergie diagnostizieren, sauber stoppen und Fehler strukturiert melden. Erst ein hörbarer Intel-Mac-Test schließt dieses Modul praktisch ab.
