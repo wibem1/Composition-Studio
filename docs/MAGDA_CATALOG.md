@@ -1,229 +1,441 @@
 # MAGDA-Katalog für Composition Studio
 
-**Untersuchter Referenzstand:** `Conceptual-Machines/magda-core` commit `15e9071d657bf9179432c6a0a3a62f8dd686d8a1` (27.08.2026)
+**Referenz:** `Conceptual-Machines/magda-core` @ `15e9071d657bf9179432c6a0a3a62f8dd686d8a1` (27.08.2026)
 
-**Zweck:** MAGDA wird als Forschungs- und Referenzsystem untersucht. Dieser Katalog zerlegt das System so weit, dass jeder für Composition Studio relevante Baustein verstanden, isoliert getestet und anschließend bewusst ersetzt, vereinfacht oder nur als Referenz verwendet werden kann.
+**Ziel dieses Dokuments:** vollständige funktionale Katalogisierung der für MAGDAs Arbeitsweise relevanten Module, ihrer Grenzen, Abhängigkeiten und Datenwege. „Vollständig“ bedeutet hier: alle Hauptsysteme und Engine-Module sind erfasst und in ihrer Rolle eingeordnet. Einzelne Hilfsfunktionen werden bei den späteren Modultests weiter bis auf Implementierungsdetails vertieft.
 
-## 1. Gesamtarchitektur
+## 1. Systembild
 
-Der MAGDA-Quellbaum gliedert sich auf oberster Ebene in fünf eigene Bereiche: `magda/agents`, `magda/daw`, `magda/engine`, `magda/mcp_bridge`, `magda/scripting`.
+MAGDA besteht am gepinnten Stand aus fünf großen eigenen Systemen:
 
-Wichtige Basistechnologien sind JUCE, Tracktion Engine, SoundTouch, Signalsmith Stretch, juce-llm, llama.cpp, Lua und SQLite. Für Composition Studio wird deshalb bei jedem Baustein getrennt: MAGDA-eigene Produktlogik, Fremdbibliotheksfunktion und reine Adapter-/Orchestrierungslogik.
+1. `magda/daw` – produktive, Tracktion-basierte DAW.
+2. `magda/engine` – parallel entwickelte native Audioengine, am gepinnten Stand noch nicht die Produktivengine.
+3. `magda/agents` – KI-/Agenten- und Automationssystem.
+4. `magda/scripting` – Lua-Laufzeit, Sandbox und MAGDA-API-Bindings.
+5. `magda/mcp_bridge` – externer MCP/SSE-Kommunikationsprozess.
 
-## 2. `magda/daw` – bestehendes DAW-System
+Basistechnologien: C++20, JUCE, Tracktion Engine, farbot-Realtime-Primitiven, SoundTouch/Signalsmith für Zeit-/Pitchbearbeitung, Lua, SQLite, juce-llm/llama.cpp sowie weitere optionale Plugin-/ML-Bausteine.
 
-### 2.1 Fachliche Interfaces
+### 1.1 Zwei Engine-Generationen
 
-`daw/interfaces` definiert Clip-, Track-, Transport-, Mixer-, DAW-Mode- und Prompt-Grenzen. Sie zeigen MAGDAs gedachte fachliche Grenzen, werden aber nicht automatisch zur Composition-Studio-Core-API.
+Der wichtigste Architekturpunkt ist die Koexistenz zweier sehr verschiedener Engines:
 
-### 2.2 `AudioEngine` – verifizierte Produktionsengine-Grenze
+**Produktivpfad:**
+`MAGDA Modell/Commands → AudioEngine/TracktionEngineWrapper → tracktion::Edit/PlaybackContext → Tracktion DeviceManager → JUCE AudioDeviceManager → CoreAudio`
 
-`AudioEngine` bündelt Lifecycle, Transport, Session-Clips, Tempo/Takt, Loop, Metronom, Device Management, AudioBridge, MidiBridge, Plugin Discovery, Pluginparameter, Offline Rendering, Projektmedien, MIDI Preview und Recording Preview.
+**Native Neuentwicklung:**
+`Modell → RenderPlan/ClipSnapshot/PlanValues/TransportSnapshot → EngineSession → PlanExecutor/EngineDevice → AudioBuffer → Host/AudioDevice`
 
-**Diagnose:** faktisch ein DAW-Service-Facade/God-Interface. JUCE-Typen (`AudioDeviceManager`, `BigInteger`, `PluginDescription`, `File`, `String`) treten direkt in der öffentlichen API auf. Tracktion wird teilweise abstrahiert, JUCE nicht.
+Die native Engine ist nicht bloß ein anderer Wrapper. Sie trennt Modell, unveränderlichen Renderplan, Runtime-Zustand, Transport, Clipdaten und Realtime-Ausführung systematisch.
 
-**Composition-Studio-Regel:** AudioDevice, Transport, Session, PluginHost, Render und Projektservices werden getrennte Core-Module.
+---
 
-### 2.3 `TracktionEngineWrapper` – verifizierte Mehrfachrolle
+# TEIL A – PRODUKTIVE TRACKTION-DAW
 
-Der Wrapper erbt gleichzeitig von `AudioEngine`, `TransportInterface`, `TrackInterface`, `ClipInterface`, `MixerInterface`, `tracktion::TransportControl::Listener` und `juce::ChangeListener`. Zusätzlich exponiert er direkt `tracktion::Engine*` und `tracktion::Edit*`.
+## 2. `magda/daw/interfaces`
 
-**Diagnose:** Die Interface-Grenzen verhindern keine starke konkrete Kopplung. Für Composition Studio entsteht kein vergleichbares Zentralobjekt.
+Fachliche Interfaces für `track`, `clip`, `transport`, `mixer`, DAW-Modus und Prompt. Sie sollen die Produktlogik vom Backend trennen, verhindern aber die konkrete Tracktion-/JUCE-Kopplung des zentralen Wrappers nicht.
 
-## 3. Audio-I/O Deep Dive
+**Composition Studio:** fachliche Schnittstellen sind sinnvoll; keine Übernahme der konkreten MAGDA-Interfaces.
 
-### 3.1 Tatsächliche Ownership-Kette
+## 3. `magda/daw/engine`
 
-Die physische Audio-Hardware gehört **nicht** dem `AudioBridge`. Die verifizierte Kette lautet:
+### 3.1 `AudioEngine`
 
-`TracktionEngineWrapper` → besitzt `tracktion::Engine` → dessen `tracktion::DeviceManager` → dessen `juce::AudioDeviceManager` → CoreAudio-Gerät auf macOS.
+Zentrale virtuelle Fassade. Verantwortet bzw. exponiert Lifecycle, Edit, Transport, Tempo/Takt, Loop, Metronom, Session-Clips, Audio-/MIDI-Devices, Bridges, Plugin Discovery/Scan, Parameteranalyse, Preview, Recording, Offline Render, Projektmedien und weitere Dienste.
 
-Erst nach Engine-, Device- und Edit-Erzeugung wird `AudioBridge` konstruiert. Er synchronisiert MAGDA-Zustand mit Tracktion und ist keine Hardware-Abstraktion.
+**Befund:** God-Interface. JUCE-Typen sind Bestandteil der öffentlichen API. Es ist keine reine Audio-Hardware-Abstraktion.
 
-### 3.2 Verifizierte Initialisierungsreihenfolge
+### 3.2 `TracktionEngineWrapper`
 
-`TracktionEngineWrapper::initialize()` arbeitet in dieser Reihenfolge:
+Konkrete Produktivimplementierung. Erbt gleichzeitig von `AudioEngine`, Track-, Clip-, Transport- und Mixer-Interfaces sowie Tracktion-/JUCE-Listenern. Exponiert `tracktion::Engine*` und `tracktion::Edit*`.
 
-1. `MagdaUIBehaviour` und `MagdaEngineBehaviour` erzeugen.
-2. `tracktion::Engine` erzeugen.
-3. MAGDA `Config` laden.
-4. Controllerprofile laden.
-5. Pluginformate initialisieren und gespeicherte Pluginliste laden/bereinigen.
-6. Im Nicht-Headless-Betrieb `initializeDeviceManager()`.
-7. Danach `configureAudioDevices()`.
-8. Danach `setupMidiDevices()`.
-9. `createEditAndBridges()`.
-10. Falls der asynchrone Device-Callback nicht kam, `devicesLoading_` zwangsweise auf false setzen.
-11. Erfolg wird ausschließlich daran gemessen, ob `currentEdit_ != nullptr` ist.
+**Rolle:** Orchestrator/Fassade für fast die gesamte DAW. Das erklärt, warum externe Integration schnell zu Trial-and-Error führt: viele scheinbar unabhängige Funktionen hängen am Lebenszyklus desselben Zentralobjekts.
 
-**Kritischer Befund:** `initialize()` kann `true` liefern, obwohl kein Audio-Gerät geöffnet wurde. `initializeDeviceManager()` loggt ein fehlendes Gerät nur als Warnung. Damit bedeutet **Engine initialisiert nicht Audio funktionsfähig**. Das ist für unseren fehlgeschlagenen MiniDAW-Test besonders relevant: ein erfolgreicher Build und sogar ein erfolgreiches `initialize()` beweisen keine hörbare Audiokette.
+### 3.3 Initialisierung und Ownership
 
-### 3.3 Device-Initialisierung
+Verifizierte Reihenfolge:
 
-`initializeDeviceManager()`:
+`Behaviour → tracktion::Engine → Config → Controllerprofile → Pluginformate/-liste → DeviceManager → Audio-Konfiguration → MIDI-Geräte → Edit + PlaybackContext → AudioBridge/TempoSync/Session-Dienste → MidiBridge → TransportListener`
 
-- fragt alle JUCE AudioDeviceTypes und Geräte ab;
-- validiert Tracktions persistierten Device-Zustand;
-- entfernt einen halb gesetzten Input-/Output-Zustand, weil dieser laut MAGDA-Kommentar CoreAudio beim Öffnen eines unvollständigen Aggregate-Setups blockieren kann;
-- fordert bei Tracktion bis zu 256 Input- und 256 Output-Kanäle an; JUCE begrenzt auf Hardware;
-- akzeptiert anschließend ausdrücklich den Zustand `getCurrentAudioDevice() == nullptr` und loggt nur eine Warnung.
+Physische Hardware gehört nicht `AudioBridge`, sondern:
 
-### 3.4 Bevorzugtes Gerät / Kanalaktivierung
+`TracktionEngineWrapper → tracktion::Engine → tracktion::DeviceManager → juce::AudioDeviceManager → CoreAudio`.
 
-`configureAudioDevices()` liest MAGDAs gespeicherte Input-/Output-Präferenzen. Es verwendet den ersten verfügbaren JUCE DeviceType (auf macOS erwartbar CoreAudio), scannt Geräte und setzt gefundene Namen über `juce::AudioDeviceManager::setAudioDeviceSetup()`.
+Ein kritischer Fehler im Design: `initialize()` kann erfolgreich sein, obwohl `getCurrentAudioDevice()` null ist; Erfolg wird im Wesentlichen an einer vorhandenen Edit festgemacht. Daher beweist „Engine initialisiert“ keine funktionsfähige Audiokette.
 
-Danach wird der JUCE Message Loop mit `runDispatchLoopUntil(0)` geflusht. Anschließend aktiviert MAGDA explizit alle Hardwarekanäle auf JUCE-Ebene und danach gespeicherte Kanalzahlen auf Tracktions WaveInput-/WaveOutputDevices.
+### 3.4 Device Management
 
-**Threadregel:** Device-Konfiguration und Rescan hängen am JUCE Message/Control Thread und dürfen nicht als Realtime-Audio-Operation behandelt werden.
+MAGDA validiert persistierten Tracktion-Audiozustand, initialisiert Tracktion mit großzügigen Kanalzahlen, setzt bevorzugte JUCE-Gerätenamen, flusht den JUCE Message Loop, aktiviert Hardwarekanäle und synchronisiert danach Tracktion WaveInput/WaveOutputDevices.
 
-### 3.5 Device-Wechsel und Rescan
+Es existieren damit mehrere Zustandsstufen:
 
-`TracktionEngineWrapperDevices.cpp` bestätigt einen zweiten Synchronisationslayer:
+`CoreAudio-Gerät ↔ JUCE Device Setup ↔ Tracktion WaveDevices ↔ PlaybackContext ↔ Edit-Graph`.
 
-- JUCE meldet Device-Änderungen über Tracktions DeviceManager/ChangeBroadcaster.
-- MAGDA vergleicht Gerätename und Anzahl der MIDI-/Wave-Geräte.
-- Bei Hardwarewechsel werden JUCE Input-/Output-Kanäle neu gesetzt.
-- Danach wird der Tracktion Playback Context mit `ctx->reallocate()` neu aufgebaut.
-- `rescanWaveDevices()` ruft Tracktions `rescanWaveDeviceList()`, flusht erneut den JUCE Message Loop und aktiviert anschließend Tracktion WaveDevices.
+Ein Fehler in einer Stufe kann eine scheinbar initialisierte, aber stumme Engine erzeugen.
 
-Damit existieren mindestens drei Zustände, die konsistent gehalten werden müssen: physisches/JUCE-Gerät, Tracktion WaveDevices und Edit Playback Context.
+### 3.5 Shutdown
 
-### 3.6 Semantik von `setEnabledWaveChannels`
+Abbau in umgekehrter Abhängigkeitsrichtung: Listener/Discovery/Testton → Plugin-/Session-Dienste → MidiBridge-Verknüpfung → AudioBridge → Transport/PlaybackContext → Edit → MIDI-Router/-Inputs → MidiBridge/API → DeviceManager close → Tracktion Engine.
 
-Die Methode arbeitet nicht kanalgenau auf Tracktion-Ebene: Ein Tracktion WaveDevice wird aktiviert, sobald **mindestens einer** seiner Kanäle in der übergebenen Bitmaske gesetzt ist. `getEnabledWaveChannels()` liefert umgekehrt alle Kanäle eines aktivierten WaveDevice als gesetzt.
+**Lehre:** MAGDA besitzt reale Lifetime-Abhängigkeiten, die durch manuelle Reihenfolge abgesichert werden. Composition Studio soll diese in kleineren RAII-Komponenten ausdrücken.
 
-**Konsequenz:** Diese API ist eher eine WaveDevice-Aktivierungsfassade mit Kanalmaske als ein präziser per-channel Router. Für Composition Studio müssen physische Kanalwahl und logisches Routing getrennt modelliert werden.
+## 4. `magda/daw/audio`
 
-### 3.7 Edit und Playback Context
+Kein einzelnes Audio-I/O-Modul, sondern Sammelbereich für mehrere Schichten:
 
-`createEditAndBridges()`:
+- `AudioBridge` – Synchronisation MAGDA-Modell ↔ Tracktion-Edit.
+- `MidiBridge` – MIDI-bezogene Brücke zwischen Modell/Engine.
+- `AudioBridgeMixer` – Mixer-bezogene Synchronisation.
+- `AudioDriverUtils` – Geräte-/Treiberhilfen.
+- `AudioEngineOptimizer` – Engine-/Performance-Hilfen.
+- Metering – Pegel-/Messdaten.
+- `TrackController` – Track-bezogene Steuerung.
+- `PluginWindowBridge` – Plugin-GUI-Brücke.
+- Thumbnail/Waveform-Peaks – Darstellungsvorbereitung von Audiodateien.
+- Warp/Comping – Audio-Editing-Funktionen.
+- ClipCommands – Clipoperationen.
 
-- erzeugt eine temporäre `.tracktionedit`;
-- setzt 120 BPM;
-- ruft `ensureContextAllocated()` für Live-MIDI/Playback auf;
-- akzeptiert auch hier einen weiterhin nullen Playback Context zunächst nur mit Warnlog;
-- erzeugt anschließend `AudioBridge`, TempoLaneSync sowie im GUI-Betrieb SessionScheduler, SessionRecorder, PluginWindowManager und InsertRenderCapture;
-- erzeugt danach `MidiBridge` und registriert den Wrapper als TransportListener.
+**Befund:** Hardware, Model-Sync, Editing und UI-Hilfen liegen im selben Verzeichnis. Für Composition Studio werden sie getrennt.
 
-Damit hängt die hörbare Wiedergabe nicht nur am geöffneten Hardwaregerät, sondern zusätzlich an einem gültigen Tracktion Playback Context und dessen Graph/Routing.
+## 5. `magda/daw/core`
 
-### 3.8 Verifizierte Shutdown-Reihenfolge
+Große fachliche Domänenschicht. Enthält insbesondere:
 
-Der Shutdown ist auffallend streng und zeigt die tatsächlichen Lebenszeitabhängigkeiten:
+- App-/Pfad-/Konfigurationshilfen.
+- Automation: Commands, Curve, Info, Manager.
+- Clip-Modell und umfangreiche Clip-Verwaltung.
+- Chain-/Routing-Strukturen.
+- Chord-/musikalische Daten.
+- Commands und Manager für DAW-Operationen.
+- weitere fachliche Zustände, die nicht direkt Audio-Hardware sind.
 
-1. `aliveFlag_` deaktivieren und Plugin-Discovery-Thread joinen.
-2. Testton-Plugin freigeben.
-3. TransportListener und DeviceManager-Listener entfernen.
-4. Pluginfenster schließen und Raw-Pointer im AudioBridge lösen.
-5. InsertRenderCapture und TempoLaneSync zerstören.
-6. SessionScheduler zerstören.
-7. ProjectManager-Callbacks entfernen.
-8. MidiBridge vom AudioBridge lösen.
-9. **AudioBridge zerstören, solange Edit und Engine noch leben.**
-10. Transport stoppen und **Playback Context freigeben**.
-11. Edit zerstören.
-12. MIDI Learn/ControllerRouter stoppen; MIDI-Inputs stoppen; MidiBridge zerstören.
-13. MagdaApi zerstören.
-14. Tracktion DeviceManager `closeDevices()`.
-15. Tracktion Engine zerstören.
+**Arbeitsweise:** Die Core-Manager verändern das MAGDA-Modell; Bridges/Wrapper übertragen relevante Änderungen in die Tracktion-Edit. Das Modell und Tracktions Edit sind damit zwei gekoppelte Zustandswelten.
 
-**Ownership-Regel:** Bridge/Session/Plugin-Dienste referenzieren langlebigere Engine-/Edit-Objekte. Playback Context muss vor Edit und Hardware-Devices freigegeben werden. MIDI-Callbacks müssen beendet werden, solange die MIDI-Geräte noch existieren.
+**Risiko:** Synchronisationsfehler sind strukturell möglich. Die native Engine reagiert darauf mit Snapshots/Plans statt fortlaufender Objektspiegelung.
 
-**Composition-Studio-Regel:** Diese Abhängigkeiten sollen in RAII-Komponenten mit kleinerem Scope und expliziten Start/Stop-Zuständen abgebildet werden, nicht in einem langen manuellen Zentral-Shutdown.
+## 6. `magda/daw/api`
 
-### 3.9 Fehlerbild der MiniDAW – neue Hypothesen, noch nicht als Ursache bewiesen
+Öffentliche/fachliche API-Schicht mit getrennten Headern und `*_live`-Implementierungen, u. a. Alias-, Automation- und Clip-API sowie weitere DAW-Funktionsgruppen.
 
-Der Praxistest „App startet, kein Ton“ passt zu mehreren vom MAGDA-Code zugelassenen Zuständen:
+**Arbeitsweise:** API-Vertrag und Live-Backend sind getrennt. Die Live-Implementierungen vermitteln in das laufende MAGDA-System. Das ist ein brauchbares Muster für Composition Studio: externe KI-/Scripting-Funktionen sollen eine fachliche API sehen, nicht Audio-Engine-Objekte.
 
-- kein `currentAudioDevice`, aber `initialize()` trotzdem erfolgreich;
-- JUCE-Gerät offen, Tracktion WaveOutputDevice aber nicht wirksam aktiviert;
-- WaveDevices vorhanden, Playback Context jedoch nicht korrekt/allokiert;
-- Playback Context vorhanden, aber Instrument-/Track-Graph liefert kein Audio;
-- Plugin/MIDI-Seite funktioniert nicht, obwohl Hardwareseite offen ist.
+## 7. `magda/daw/project`
 
-Diese Punkte sind **Diagnosehypothesen**, keine nachträgliche Behauptung über die konkrete Ursache. Der neue AudioDeviceCore-Test muss sie einzeln messbar machen.
+- `ProjectManager` – Projektlebenszyklus und Koordination.
+- `ProjectInfo` – Metadaten.
+- `MediaCollector` – Projektmedien sammeln/konsolidieren.
+- `serialization/` – Persistenz.
 
-## 4. `daw/audio`
+**Composition Studio:** eigenes `ProjectCore`; Projektdatei soll Modellzustand, Pluginzustände, Tempo, Routing und Medienreferenzen speichern, aber Hardwarezustand nicht mit Projektmodell vermischen.
 
-Enthält u. a. `AudioBridge`, `MidiBridge`, `AudioBridgeMixer`, `AudioDriverUtils`, `AudioEngineOptimizer`, Metering, TrackController, PluginWindowBridge, Waveform/Thumbnail, Warp, Comping und ClipCommands.
+## 8. `magda/daw/cli`
 
-**Bewertung:** Der Bereich mischt Hardware-nahe Hilfen, Engine-Brücken, fachliche Controller und UI-nahe Daten. Composition Studio trennt diese Verantwortlichkeiten.
+CLI-Frontend (`magda_cli_main.cpp`) als alternativer Zugang zum DAW-System. Für Forschung wichtig, weil Funktionen ohne GUI ansprechbar/testbar werden können.
 
-## 5. `daw/project`
+## 9. `magda/daw/device_packs`
 
-Hauptbausteine: `ProjectManager`, `ProjectInfo`, `MediaCollector`, `serialization/`. Projekt/Persistenz bleibt ein eigenes Core-Modul.
+Am gepinnten Stand im Wesentlichen `pro_stub`. Kein Fundament der Audioarchitektur; für Composition Studio zunächst ohne Priorität.
 
-## 6. `daw/core`
+---
 
-Großer fachlicher Bereich mit Automation-, Clip-, Routing-, Command- und Managerlogik. Vollständige Klassengruppierung folgt nach den fundamentalen Enginepfaden.
+# TEIL B – NATIVE MAGDA ENGINE
 
-## 7. `magda/engine` – native Engine als getrenntes Forschungsobjekt
+## 10. Grundprinzip
 
-Top-Level: `analysis`, `clip`, `exec`, `io`, `param`, `plan`, `tap`, `transport`.
+Die native Engine löst die Kopplungsprobleme des alten Wrappers durch drei Ebenen:
 
-### 7.1 `engine/io`
+1. **Modell-/Publish-Seite (nicht realtime):** strukturelle Änderungen werden in unveränderliche Renderpläne kompiliert; Clips, Werte und Transport werden als getrennte Snapshots veröffentlicht.
+2. **Runtime-Bindings:** langlebige Geräte/Quellen werden über IDs/Keys an Plan-Ops gebunden und können Planwechsel überleben.
+3. **Audio-Thread:** verarbeitet nur vorbereitete Daten. Kein Lock, keine Allokation, kein Free im Callback.
 
-Verifizierte Bausteine umfassen `AudioFileReader`, `FileAudioSource`, `ClipPlacement`, `PrefetchStream`, `PrefetchThread`, `SourceLoopInfo`. Dieses Modul ist Datei-/Streaming-I/O, nicht Hardware-Device-I/O.
+Das ist der wichtigste technische Lernstoff für unseren eigenen Core.
 
-### 7.2 `engine/exec`
+## 11. `engine/plan`
 
-Verifizierte Bausteine: `EngineDevice`, `EngineSession`, `OfflineRender`, `PlanExecutor`, `ParallelPlanExecutor`, `PlanBindings`.
+Zentrale Bausteine: `PlanCompiler`, Renderplan-/Dump-Strukturen, `PlanDiff`, `PlanCrossfade` und Hilfen.
 
-Die native Engine trennt Ausführungsplanung und Session deutlich stärker von Datei-I/O und Clip-Modell. Diese Trennung wird als Architekturreferenz untersucht, nicht übernommen.
+`PlanCompiler.cpp` ist ein großer Compiler: Das veränderliche DAW-Modell wird in eine ausführbare, immutable Topologie übersetzt. Ein struktureller Edit verändert nicht den laufenden Graphen; er erzeugt einen neuen Plan.
 
-## 8. Composition-Studio-Core – Modulkarte
+`PlanDiff` identifiziert Unterschiede zwischen alter und neuer Topologie. `PlanCrossfade` unterstützt Übergänge, damit strukturelle Änderungen nicht zwangsläufig klicken.
 
-| Zielmodul | MAGDA-Referenz | Fremdbasis | Entscheidung |
-|---|---|---|---|
-| `AudioDeviceCore` | Wrapper Init/Devices | JUCE/CoreAudio | **direkt klein selbst entwickeln; MAGDA nur Referenz** |
-| `AudioGraphCore` | native `engine/exec`, Tracktion Playback Context | JUCE/eigene Logik | unabhängig entwerfen |
-| `TransportCore` | alter Wrapper + `engine/transport` | eigene Timinglogik/JUCE | separat neu entwerfen |
-| `MidiCore` | MidiBridge + native MIDI | JUCE | unabhängig entwerfen |
-| `TrackCore` | daw/core + WrapperTracks | möglichst wenig Tracktion | eigenes Datenmodell |
-| `ClipCore` | daw/core/Clip + native engine/clip | JUCE/Stretch | eigenes Modell |
-| `PluginHost` | PluginManager/Scanner/Devices/Window | JUCE AudioProcessor | JUCE-direkten Weg prüfen |
-| `MixerCore` | MixerInterface/ChainRouting | eigene Graphlogik | eigenes Modul |
-| `ProjectCore` | daw/project | JUCE/Standardformate | eigenes Format |
-| `AutomationCore` | Automation* + engine/param | eigene Logik | später eigenständig |
-| `RecordingCore` | WrapperRecording/SessionRecorder | JUCE | später eigenständig |
-| `RenderCore` | OfflineRender alt/native | JUCE | getrennt von Live Device Core |
-| `AI/MusicChat` | agents/scripting/MCP | LLM APIs | außerhalb Realtime-Core |
+**Composition Studio:** sehr wertvolles Muster. Nicht MAGDA-Code kopieren, aber „mutable project model → compiled immutable render graph“ als Architekturprinzip prüfen.
 
-## 9. Spezifikation des ersten isolierten `AudioDeviceCore`-Tests
+## 12. `engine/exec`
 
-Der Test darf noch keine Tracks, Clips, Plugins, MAGDA oder Tracktion benötigen. Er muss auf dem Intel-Mac einzeln nachweisen:
+### 12.1 `EngineSession`
 
-1. JUCE/CoreAudio initialisiert.
-2. verfügbare Output-Geräte werden aufgelistet.
-3. Default/gewähltes Output-Gerät wird tatsächlich geöffnet.
-4. Name, Sample-Rate, Buffergröße und aktive Outputkanäle werden angezeigt.
-5. ein eigener minimaler Audio-Callback läuft und zählt Callback-Blöcke.
-6. Callback schreibt einen einfachen, pegelbegrenzten Testton direkt auf Output 1/2.
-7. Peak/RMS bzw. erzeugte Sample-Energie wird diagnostisch gemessen.
-8. Stop entfernt Callback und schließt Gerät sauber.
-9. jeder Fehler liefert einen strukturierten Status statt nur Logtext.
+Die Live-Engine. Sie hält den laufenden vorbereiteten Render-Epoch und tauscht ihn über `farbot::RealtimeObject` aus. Vertrag: ein Audio-Thread, ein Publishing-Thread; parallele Publisher wären ein Race.
 
-**Abnahmekriterium:** Build-Erfolg reicht nicht. Der Test gilt erst als bestanden, wenn der Intel-Mac ein reales Gerät meldet, Callback-Aktivität nachweist und der Testton hörbar ist. Erst danach darf Plugin-/Track-/Transportlogik auf diese Schicht gesetzt werden.
+Der Audio-Thread darf weder warten noch zerstören. Der Publishing-Thread bereitet einen neuen Epoch vor, veröffentlicht ihn blockgrenzensicher und räumt den alten Epoch außerhalb des Callbacks auf.
 
-## 10. Architekturregeln
+Vier Datenarten reisen bewusst getrennt:
 
-1. Kein God-Interface nach Art von `AudioEngine`.
-2. Physische Audio-Hardware ist ein eigenes Modul.
-3. Message/Control Thread und Realtime Audio Thread haben explizite Grenzen.
-4. Track/Clip-Projektzustand gehört nicht dem Hardwareobjekt.
-5. Plugin-Scan/Fenster gehören nicht in AudioDeviceCore.
-6. Fehler werden strukturiert zurückgegeben.
-7. Fremdtypen werden nur bewusst Teil öffentlicher Core-APIs.
-8. Hardware-unabhängige und Hardware-Mac-Tests werden getrennt dokumentiert.
-9. Ein erfolgreicher Engine-Init darf niemals stillschweigend „Audio funktioniert“ bedeuten.
+- **RenderPlan** – Struktur/Topologie, langsam/human-speed.
+- **PlanValues** – Mixer-/Parameterwerte, schneller aktualisierbar.
+- **TransportSnapshot** – Tempo, Loop, Metronom, Locate/Play-State.
+- **ClipSnapshot** – welche Clips wo spielen; Clipbewegung ist keine Topologieänderung.
 
-## 11. Nächste Deep Dives
+`EngineSession::process(numSamples, output)` bekommt vom Host nur die verlangte Blockgröße. Die Session bestimmt anhand des Transports, welche Timeline-Segmente gerendert werden. Ohne Plan liefert sie Stille.
 
-1. Callback-/Audio-Graph-Weg Tracktion Playback Context → Hardware verfolgen.
-2. Native `EngineSession`/`EngineDevice` vollständig lesen und mit Tracktion vergleichen.
-3. Transport alt vs. native kartieren.
-4. Track/Clip-Modell und Ownership kartieren.
-5. Plugin-Hosting getrennt von Plugin-Scanning analysieren.
-6. Danach isolierten `AudioDeviceCore`-Test implementieren.
+### 12.2 `EngineDevice`
 
-Aussagen werden als inventarisiert, verifiziert oder offen behandelt; Dateinamen allein gelten nicht als Verständnisnachweis.
+Abstraktion eines vorbereiteten Laufzeitgeräts. `prepare()`/`reset()` laufen off-audio-thread; `process(DeviceBlock&)` läuft realtime.
+
+`DeviceBlock` enthält:
+
+- In-place AudioBlock.
+- optional MIDI input/output.
+- Sidechain.
+- Extra-Ausgänge für Multi-Out-Instrumente.
+- bereits aufgelöste Parameterströme.
+- Block-/Timeline-Info.
+
+MIDI-Speicher wird vorab budgetiert (`kMaxMidiBytesPerPort`), um Realtime-Allokationen zu vermeiden.
+
+### 12.3 Quellen
+
+`EngineAudioSource` und `EngineMidiSource` sind getrennte Laufzeitquellen hinter Plan-Ops. Der Plan besitzt die konkrete Plugin-/Reader-Instanz nicht; der Host bindet langlebige Runtime-Objekte. Dadurch kann z. B. ein Instrument einen strukturellen Planwechsel überleben.
+
+### 12.4 Executor
+
+`PlanExecutor`, `ParallelPlanExecutor`, `PlanBindings`, `RenderThreadPool`, `RuntimeStateStore` bilden Ausführung und Runtime-Bindings. Parallelisierung ist eine Ausführungsoption, nicht ein anderes Datenmodell.
+
+**Composition Studio:** Graphplanung und Runtime-Geräte strikt trennen; zunächst seriellen Executor bauen, Parallelisierung erst nach funktionaler Korrektheit.
+
+## 13. `engine/transport`
+
+Module: `TransportState`, `TransportClock`, `TempoMap`, `ClickGenerator`.
+
+### 13.1 TransportClock
+
+Der zentrale Taktgeber verbindet Samplezeit und musikalische Beatzeit. Er summiert nicht einfach Blockdauern, sondern verwendet einen Anchor aus Timeline-Position und Samplezähler. Dadurch soll die Position unabhängig von Blockteilung driftfrei bleiben.
+
+Loop-Wraps teilen einen Callback in kontinuierliche Segmente; kein Render-Op sieht einen Block, der mitten drin auf eine andere Timelineposition springt. Die öffentliche Playheadposition wird atomar publiziert.
+
+### 13.2 TempoMap
+
+Verantwortet Beat↔Sekunden-Beziehung über Tempoänderungen. TransportClock erkennt Änderungen über Fingerprint und verankert die Samplezeit neu, ohne den musikalischen Beat zu verlieren.
+
+### 13.3 ClickGenerator
+
+Metronom/Count-in ist ein eigener Renderbaustein und nicht Transportzustand selbst.
+
+**Composition Studio:** TransportCore kann sehr ähnlich getrennt werden: `TempoMap + TransportState + sample-accurate Clock`; Metronom als Consumer.
+
+## 14. `engine/clip`
+
+Verifizierte Kernbausteine:
+
+- `ClipSnapshot` – immutable/resolved Clipzustand für Playback.
+- `ClipSnapshotCompiler` – Modell → Playback-Snapshot.
+- `ClipSnapshotFeed` – Veröffentlichung an laufende Quellen.
+- `ClipAudioSource` – Audio-Clip-Rendering.
+- `ClipMidiSource` – MIDI-Clip-Rendering.
+- `ActiveNoteList` – MIDI-Notenlebensdauer/aktive Noten.
+- weitere Dump-/Hilfs- und Voice-Pool-Komponenten.
+
+**Arbeitsweise:** Clipverschieben ist bewusst keine Graph-/Topologieänderung. Ein neuer ClipSnapshot wird publiziert. Audio-/MIDI-Quellen lesen daraus die für ihren Block relevanten Ereignisse/Placements.
+
+**Composition Studio:** Track/Clip-Modell vom Rendergraph trennen; Clippositionen als leichtgewichtigen Playback-Snapshot behandeln.
+
+## 15. `engine/io`
+
+Bausteine: `AudioFileReader`, `FileAudioSource`, `ClipPlacement`, `PrefetchStream`, `PrefetchThread`, `SourceLoopInfo`.
+
+**Rolle:** Datei-/Streaming-I/O, nicht Audio-Hardware. Prefetch verlagert langsames Dateilesen aus dem Realtime-Pfad. ClipPlacement/LoopInfo übersetzen Arrangementplatzierung in Dateiquellenzugriff.
+
+**Composition Studio:** eigener `MediaIOCore`; Disk-I/O niemals im Audio-Callback.
+
+## 16. `engine/param`
+
+Umfangreiches Parameter-/Modulationssystem. Verifiziert sind u. a. `ModAdsr`, `ModFollower`, `ModLfo`, `ModRandom`, `ModRuntime` sowie Parameterblock-/Resolve-Strukturen.
+
+**Arbeitsweise:** Device-Code erhält nicht Rohmodell + Automation + Modulatoren, sondern bereits aufgelöste Parameterwerte/Streams im `DeviceBlock`. Damit liegen Priorität, Clamp, Quantisierung und Modulationskombination zentral in der Parameterebene.
+
+**Composition Studio:** zunächst einfacher ParameterCore (statischer Wert + Automation), Modulatoren später. Wichtig ist die zentrale Auflösung vor dem Device-Prozess.
+
+## 17. `engine/tap`
+
+- `LevelTap` – Pegelbeobachtung.
+- `MidiTap` – MIDI-Beobachtung.
+- `SampleRing` – lock-/realtime-taugliche Samplehistorie.
+- `ValueTap` – Parameter-/Wertbeobachtung.
+
+**Rolle:** Realtime-Daten kontrolliert für UI/Analyse sichtbar machen, ohne den Audio-Thread an GUI/Model zu koppeln. Pointer-Lifetimes bleiben kritisch; EngineSession dokumentiert, dass ValueTap-Pointer durch Publish invalidiert werden können.
+
+**Composition Studio:** Metering/Monitoring über explizite lockfreie Taps/Snapshots, niemals GUI-Zugriff aus Audio-Callback.
+
+## 18. `engine/analysis`
+
+Am gepinnten Stand `TransientDetector`. Separater Analysebaustein, kein Bestandteil des grundlegenden Live-Audiopfads.
+
+**Composition Studio:** späteres `AnalysisCore`; keine Priorität für Basis-DAW.
+
+---
+
+# TEIL C – KI, SCRIPTING UND EXTERNE STEUERUNG
+
+## 19. `magda/agents`
+
+Großes Agentensystem mit `agent_runtime` sowie spezialisierten Agenten/Executors/Parsern, darunter Automation und Chord-Funktionen. Die Agenten sitzen oberhalb der DAW-Fachfunktionen; sie sind keine Realtime-Audio-Komponenten.
+
+**Architekturlehre:** KI sollte über fachliche Operationen/Commands arbeiten, nicht über direkte Pointer in Tracks, Plugins oder Audioengine. Das passt zum MusicChat-Ziel von Composition Studio.
+
+## 20. `magda/scripting`
+
+- `LuaRuntime` – Lua-Laufzeit.
+- `LuaController` – Steuerung/Integration.
+- `LuaSandbox` – eingeschränkte Ausführungsumgebung.
+- `LuaScriptStore` – Skriptverwaltung.
+- `MagdaApiLuaBindings` – umfangreiche Bindings der fachlichen MAGDA-API an Lua.
+
+**Arbeitsweise:** Scripting greift über API-Bindings auf DAW-Funktionen zu. Das bestätigt die sinnvolle Trennung `Automation/Scripting → Domain API → Core`, statt Scripting direkt in Audioobjekte greifen zu lassen.
+
+## 21. `magda/mcp_bridge`
+
+Kleiner separater Prozess/Bereich aus `main.cpp`, `sse_parser.hpp`, CMake. Vermittelt MCP-/SSE-Kommunikation nach außen.
+
+**Composition Studio:** nur Referenz für externe Tool-/Agentenanbindung. MusicChat braucht keine Abhängigkeit des Audio-Cores von MCP.
+
+---
+
+# TEIL D – GESAMTARBEITSWEISE UND ABHÄNGIGKEITEN
+
+## 22. Produktive MAGDA-Arbeitsweise
+
+### Steuerweg
+`GUI / CLI / Agent / Lua → DAW API / Commands / Manager → MAGDA Model → AudioBridge/Wrapper → Tracktion Edit`
+
+### Playbackweg
+`Tracktion Edit → PlaybackContext/Graph → Plugins/Clips/Mixer → Tracktion DeviceManager → JUCE AudioDeviceManager → CoreAudio`
+
+### Rückmeldeweg
+`Tracktion/JUCE Listener + Meter/Bridge → MAGDA State/API → GUI/Agent/Scripting`
+
+**Schwachstelle:** Modell und Tracktion-Edit müssen fortlaufend synchron gehalten werden. Devicezustand und PlaybackContext bilden weitere gekoppelte Zustände.
+
+## 23. Native Arbeitsweise
+
+### Steuerweg
+`mutable Model → Compiler → immutable RenderPlan / ClipSnapshot / PlanValues / TransportSnapshot`
+
+### Publishweg
+`non-RT publishing thread → prepare/bind → farbot realtime swap`
+
+### Playbackweg
+`Audio callback → EngineSession.process → TransportClock segments → Executor → Sources/Devices/Params → output buffer → Host device`
+
+### Beobachtung
+`Audio thread → Taps/atomare Zustände → UI/Analyse`
+
+**Stärke:** Realtime-Pfad arbeitet auf vorbereiteten immutable Daten und langlebigen Runtime-Objekten; strukturelle Änderungen werden außerhalb des Callbacks kompiliert.
+
+## 24. Threadmodell
+
+Mindestens folgende Klassen von Threads sind architektonisch relevant:
+
+- JUCE Message/Control Thread für Device-/GUI-nahe Operationen.
+- Audio callback thread: keine Locks, Allokationen, Datei- oder GUI-Arbeit.
+- Publishing/Model thread der nativen Engine: Plan/Snapshot vorbereiten und austauschen.
+- RenderThreadPool für optionale parallele Graphausführung.
+- PrefetchThread für Datei-I/O.
+- Plugin-Discovery/Scan-Prozess bzw. Thread.
+- Agent-/LLM-/Scripting-Arbeit außerhalb Realtime.
+
+**Composition Studio:** diese Grenzen werden explizit Teil der Core-Verträge.
+
+## 25. Fremdbibliothek oder MAGDA-Idee?
+
+| Funktion | primäre Herkunft im Produktivsystem | unsere Richtung |
+|---|---|---|
+| Audio-Hardware/CoreAudio | JUCE über Tracktion | JUCE direkt |
+| Track-/Plugin-Playbackgraph | Tracktion | eigener kleiner Graph, JUCE Devices |
+| Pluginformate/Instantiation | JUCE/Tracktion-Wrapper | JUCE direkt prüfen |
+| DAW Edit-Modell | Tracktion + MAGDA Sync | eigenes Modell |
+| Commands/Domain API | MAGDA | eigene API |
+| Projektverwaltung | MAGDA + Tracktion | eigenes Format |
+| Native RenderPlan | MAGDA-eigene Architektur | Prinzip studieren, unabhängig implementieren |
+| TransportClock | MAGDA-eigene native Architektur | Prinzip studieren, unabhängig implementieren |
+| ClipSnapshot | MAGDA-eigene native Architektur | Prinzip studieren, unabhängig implementieren |
+| Parameter/Modulation | MAGDA-eigene native Architektur | vereinfachtes eigenes System |
+| Agenten | MAGDA | eigenes MusicChat-Konzept |
+| Lua/MCP | MAGDA + Fremdlibs | optional/später |
+
+---
+
+# TEIL E – COMPOSITION STUDIO CORE
+
+## 26. Zielmodule
+
+1. `AudioDeviceCore` – JUCE/CoreAudio, Geräte, Callback, Kanalsetup, Status/Fehler.
+2. `TransportCore` – TempoMap, Play/Stop/Locate/Loop, samplegenaue Clock.
+3. `ProjectModel` – Tracks, Clips, Routing, Tempo, Metadaten; keine Hardwareobjekte.
+4. `MidiCore` – Events, Import/Export, realtime MIDI, aktive Noten.
+5. `MediaIOCore` – Audiofile lesen, Prefetch, später Warp.
+6. `PluginHost` – Scan/Registry getrennt von Instantiation/Processing/Editor.
+7. `AudioGraphCore` – vorbereiteter Rendergraph; zuerst seriell.
+8. `MixerCore` – Gain/Pan/Mute/Solo/Inserts/Routing.
+9. `ParameterCore` – Werte/Automation, später Modulation.
+10. `ProjectCore` – Laden/Speichern/Medien/Pluginstate.
+11. `RecordingCore` – Audio/MIDI Recording.
+12. `RenderCore` – Offline Export.
+13. `MonitoringCore` – Meter/Taps/Diagnose.
+14. `AnalysisCore` – Transienten und spätere Analyse.
+15. `MusicChat/Domain API` – KI greift ausschließlich über fachliche Commands auf das Modell zu.
+
+## 27. Was wir ausdrücklich nicht übernehmen
+
+- keinen `AudioEngine`-God-Wrapper;
+- keine dauerhafte MAGDA-Abhängigkeit;
+- keine zwingende Tracktion-Abhängigkeit;
+- keine Doppelhaltung MAGDA-Modell ↔ Tracktion-Edit;
+- keine stille Initialisierung bei fehlendem Audiogerät;
+- keine Plugin-Discovery oder GUI im DeviceCore;
+- keine Datei-/LLM-Arbeit im Realtime-Pfad;
+- keine unstrukturierten Fehler nur als DBG-Log.
+
+## 28. Testreihenfolge
+
+Jedes Modul wird isoliert verstanden und getestet, bevor Integration erfolgt:
+
+`AudioDevice → Transport → MIDI → Track/Clip Model → PluginHost → AudioGraph → Mixer/Routing → Project → Automation/Params → Recording/Render → Monitoring/Analysis → MusicChat`.
+
+Für Hardware-/Pluginfunktionen gilt zusätzlich ein realer Intel-Mac-Test. Build-Erfolg ist nur Build-Nachweis.
+
+## 29. Erster Prüfstand: AudioDeviceCore
+
+Muss ohne MAGDA, Tracktion, Track, Clip und Plugin nachweisen: Geräteauflistung → tatsächliches Öffnen → Name/Samplerate/Buffer/Kanäle → Callbackzähler → direkt erzeugter begrenzter Testton → gemessene Sampleenergie → hörbarer Ausgang → sauberer Stop → strukturierte Fehler.
+
+Erst danach wird der nächste Layer aufgesetzt.
+
+---
+
+# TEIL F – KATALOGSTATUS
+
+## 30. Abdeckung
+
+**Vollständig auf System-/Modulebene katalogisiert:**
+
+- produktive DAW-Gesamtarchitektur;
+- Engine-/Device-/Edit-Lifecycle;
+- Audio-/MIDI-Brücken als Rolle;
+- Core/Domain, API, Project, CLI, Device Packs;
+- native Engine mit `analysis`, `clip`, `exec`, `io`, `param`, `plan`, `tap`, `transport`;
+- Agenten;
+- Lua/Scripting;
+- MCP Bridge;
+- wesentliche Daten-, Ownership- und Threadwege;
+- Trennung MAGDA-eigen / JUCE / Tracktion;
+- Ableitung der Composition-Studio-Core-Module.
+
+**Bewusst noch nicht als „implementierungsverifiziert“ markiert:** jede einzelne Methode jeder großen Manager-/Compilerdatei. Das ist Gegenstand der nun folgenden Modultests. Der Katalog ist damit als Landkarte abgeschlossen; die nächste Forschungsphase ist die sequenzielle Tiefenprüfung der einzelnen Bausteine.
+
+## 31. Zentrale Schlussfolgerung
+
+MAGDA ist für uns vor allem in zwei Hinsichten wertvoll:
+
+1. Die produktive Tracktion-Architektur zeigt sehr deutlich, **welche Kopplungen wir vermeiden sollten**.
+2. Die native Engine zeigt mehrere starke Lösungsprinzipien – immutable Renderpläne, getrennte Snapshots, Runtime-Bindings, samplegenauen Transport, Realtime-Publish und Taps –, die wir verstehen und anschließend **eigenständig und kleiner** für Composition Studio umsetzen können.
+
+Das langfristige Ziel bleibt deshalb: MAGDA als Referenz und Testvergleich, nicht als Fundament. Composition Studio soll auf einem eigenen, modularen Core stehen.
