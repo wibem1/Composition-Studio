@@ -2,6 +2,7 @@
 #include "engine/AudioEngine.hpp"
 #include "core/TrackManager.hpp"
 #include "core/ClipManager.hpp"
+#include <juce_audio_devices/juce_audio_devices.h>
 #include <cstring>
 
 #if defined(__GNUC__) || defined(__clang__)
