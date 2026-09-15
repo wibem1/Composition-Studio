@@ -26,8 +26,7 @@ final class EngineHooks: NSObject {
         guard let vc = NSApp.windows.first?.contentViewController as? StudioViewController else { return }
         controller = vc
         vc.installEngineBindings(engineReady: ok)
-        vc.installV071FunctionalBindings()
-        vc.installV080PlayableBindings()
+        vc.installV100ReleaseCandidate()
         timer?.invalidate()
         timer = Timer.scheduledTimer(timeInterval: 0.05, target: self, selector: #selector(refreshTransport), userInfo: nil, repeats: true)
         refreshTransport()
@@ -35,7 +34,7 @@ final class EngineHooks: NSObject {
 
     @objc private func refreshTransport() {
         controller?.refreshEngineUI()
-        controller?.refreshV071FunctionalUI()
+        controller?.refreshV100UI()
     }
 }
 
