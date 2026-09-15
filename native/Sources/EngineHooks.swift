@@ -27,6 +27,7 @@ final class EngineHooks: NSObject {
         controller = vc
         vc.installEngineBindings(engineReady: ok)
         vc.installV071FunctionalBindings()
+        vc.installV080PlayableBindings()
         timer?.invalidate()
         timer = Timer.scheduledTimer(timeInterval: 0.05, target: self, selector: #selector(refreshTransport), userInfo: nil, repeats: true)
         refreshTransport()
