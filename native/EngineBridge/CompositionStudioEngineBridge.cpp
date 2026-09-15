@@ -40,7 +40,6 @@ CS_EXPORT bool cs_engine_is_looping(){ if(auto*e=magda_get_engine())return e->is
 CS_EXPORT void cs_engine_set_metronome(bool b){ if(auto*e=magda_get_engine())e->setMetronomeEnabled(b); }
 CS_EXPORT bool cs_engine_metronome_enabled(){ if(auto*e=magda_get_engine())return e->isMetronomeEnabled(); return false; }
 CS_EXPORT int cs_engine_plugin_count(){ if(auto*e=magda_get_engine())return (int)e->getKnownPluginTypes().size(); return 0; }
-
 CS_EXPORT int cs_track_count(){ return magda::TrackManager::getInstance().getNumTracks(); }
 CS_EXPORT int cs_track_id_at(int index){ const auto& t=magda::TrackManager::getInstance().getTracks(); return index>=0&&index<(int)t.size()?t[(size_t)index].id:-1; }
 CS_EXPORT bool cs_track_name_at(int index,char*out,int cap){ const auto&t=magda::TrackManager::getInstance().getTracks(); if(index<0||index>=(int)t.size())return false; copyUtf8(t[(size_t)index].name,out,cap); return true; }
@@ -50,7 +49,6 @@ CS_EXPORT void cs_track_set_name(int id,const char*name){ if(name)magda::TrackMa
 CS_EXPORT void cs_track_set_muted(int id,bool b){ magda::TrackManager::getInstance().setTrackMuted(id,b); }
 CS_EXPORT void cs_track_set_soloed(int id,bool b){ magda::TrackManager::getInstance().setTrackSoloed(id,b); }
 CS_EXPORT void cs_track_set_record_armed(int id,bool b){ magda::TrackManager::getInstance().setTrackRecordArmed(id,b); }
-
 CS_EXPORT int cs_clip_count(){ return (int)magda::ClipManager::getInstance().getArrangementClips().size(); }
 CS_EXPORT int cs_clip_id_at(int index){ auto c=magda::ClipManager::getInstance().getArrangementClips(); return index>=0&&index<(int)c.size()?c[(size_t)index].id:-1; }
 CS_EXPORT int cs_clip_track_id(int id){ auto*c=magda::ClipManager::getInstance().getClip(id); return c?c->trackId:-1; }
@@ -62,12 +60,11 @@ CS_EXPORT int cs_midi_import(const char*path,int trackId,double startBeat){
     if(!path)return -1; juce::FileInputStream stream(juce::File(juce::String::fromUTF8(path))); if(!stream.openedOk())return -1;
     juce::MidiFile mf; if(!mf.readFrom(stream))return -1; const int tpq=mf.getTimeFormat(); if(tpq<=0)return -1;
     double maxBeat=0; struct N{int p,v;double s,l;}; std::vector<N> notes;
-    for(int ti=0;ti<mf.getNumTracks();++ti){ auto*seq=mf.getTrack(ti); if(!seq)continue; seq->updateMatchedPairs(); for(int i=0;i<seq->getNumEvents();++i){ auto*ev=seq->getEventPointer(i); if(!ev||!ev->message.isNoteOn())continue; double s=ev->message.getTimeStamp()/tpq; double e=s+0.25; if(ev->noteOffObject)e=ev->noteOffObject->message.getTimeStamp()/tpq; double l=juce::jmax(0.01,e-s); notes.push_back({ev->message.getNoteNumber(),(int)ev->message.getVelocity(),s,l}); maxBeat=juce::jmax(maxBeat,e); }}
+    for(int ti=0;ti<mf.getNumTracks();++ti){ const auto*source=mf.getTrack(ti); if(!source)continue; juce::MidiMessageSequence seq(*source); seq.updateMatchedPairs(); for(int i=0;i<seq.getNumEvents();++i){ auto*ev=seq.getEventPointer(i); if(!ev||!ev->message.isNoteOn())continue; double s=ev->message.getTimeStamp()/tpq; double e=s+0.25; if(ev->noteOffObject)e=ev->noteOffObject->message.getTimeStamp()/tpq; double l=juce::jmax(0.01,e-s); notes.push_back({ev->message.getNoteNumber(),(int)ev->message.getVelocity(),s,l}); maxBeat=juce::jmax(maxBeat,e); }}
     if(trackId<0)trackId=magda::TrackManager::getInstance().createTrack(juce::File(juce::String::fromUTF8(path)).getFileNameWithoutExtension()); if(trackId<0)return -1;
     auto&cm=magda::ClipManager::getInstance(); int clipId=cm.createMidiClipBeats(trackId,startBeat,juce::jmax(1.0,maxBeat)); if(clipId<0)return -1; if(auto*c=cm.getClip(clipId))c->name=juce::File(juce::String::fromUTF8(path)).getFileNameWithoutExtension();
     for(const auto&n:notes)cm.addMidiNote(clipId,{n.p,n.v,n.s,n.l}); return clipId;
 }
-
 CS_EXPORT bool cs_project_save_as(const char*path){ if(!path||!*path)return false; auto&p=magda::ProjectManager::getInstance(); if(!p.hasOpenProject()&&!p.newProject())return false; return p.saveProjectAs(juce::File(juce::String::fromUTF8(path))); }
 CS_EXPORT bool cs_project_load(const char*path){ if(!path||!*path)return false; auto&p=magda::ProjectManager::getInstance(); return p.loadProject(juce::File(juce::String::fromUTF8(path)),[](const magda::ProjectInfo&i){if(auto*e=magda_get_engine()){e->setTempo(i.tempo);e->setTimeSignature(i.timeSignatureNumerator,i.timeSignatureDenominator);}}); }
 }
