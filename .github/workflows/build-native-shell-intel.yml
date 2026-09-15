@@ -3,7 +3,7 @@ name: Build Composition Studio Native
 on:
   workflow_dispatch:
   push:
-    branches: [main, v0.7.1-functional]
+    branches: [main, v0.7.1-functional, v0.8-playable]
     paths:
       - 'native/Sources/**'
       - 'native/EngineBridge/**'
