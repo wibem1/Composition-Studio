@@ -3,7 +3,7 @@ name: Build Composition Studio Native
 on:
   workflow_dispatch:
   push:
-    branches: [main, v0.7.1-functional, v0.8-playable]
+    branches: [main, v0.7.1-functional, v0.8-playable, release/v1.0-rc1]
     paths:
       - 'native/Sources/**'
       - 'native/EngineBridge/**'
@@ -101,19 +101,29 @@ jobs:
           BRIDGE='${{ steps.bridge.outputs.path }}'
           cp "$BRIDGE" "$FRAMEWORKS/"
           install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FRAMEWORKS/libCompositionStudioEngineBridge.dylib"
-          { cat studio/native/Sources/EngineBridge.swift; cat studio/native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat studio/native/Sources/CompositionStudioApp.swift; cat studio/native/Sources/EngineUIBindings.swift; if [ -f studio/native/Sources/V071Functional.swift ]; then cat studio/native/Sources/V071Functional.swift; fi; if [ -f studio/native/Sources/V080Playable.swift ]; then cat studio/native/Sources/V080Playable.swift; fi; } > /tmp/CompositionStudioApp.swift
+          { cat studio/native/Sources/EngineBridge.swift; cat studio/native/Sources/V100Engine.swift; cat studio/native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat studio/native/Sources/CompositionStudioApp.swift; cat studio/native/Sources/EngineUIBindings.swift; cat studio/native/Sources/V100ReleaseCandidate.swift; } > /tmp/CompositionStudioApp.swift
           perl -pi -e 's/font=\./font = ./g; s/([\(,:= ])\.(\d+)/$1 . "0." . $2/ge; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
-          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit -framework UniformTypeIdentifiers /tmp/CompositionStudioApp.swift -L "$FRAMEWORKS" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/Composition Studio"
+          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit -framework UniformTypeIdentifiers -framework Security /tmp/CompositionStudioApp.swift -L "$FRAMEWORKS" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/Composition Studio"
           cat > "$APP/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict><key>CFBundleExecutable</key><string>Composition Studio</string><key>CFBundleIdentifier</key><string>net.klangwerke.CompositionStudio</string><key>CFBundleName</key><string>Composition Studio</string><key>CFBundleDisplayName</key><string>Composition Studio</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>$VERSION</string><key>CFBundleVersion</key><string>$VERSION</string><key>LSMinimumSystemVersion</key><string>11.0</string><key>NSHighResolutionCapable</key><true/><key>NSMicrophoneUsageDescription</key><string>Composition Studio benötigt Mikrofonzugriff für Audioaufnahmen.</string></dict></plist>
+          <plist version="1.0"><dict><key>CFBundleExecutable</key><string>Composition Studio</string><key>CFBundleIdentifier</key><string>net.klangwerke.CompositionStudio</string><key>CFBundleName</key><string>Composition Studio</string><key>CFBundleDisplayName</key><string>Composition Studio</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>$VERSION</string><key>CFBundleVersion</key><string>10001</string><key>LSMinimumSystemVersion</key><string>11.0</string><key>NSHighResolutionCapable</key><true/><key>NSMicrophoneUsageDescription</key><string>Composition Studio benötigt Mikrofonzugriff für Audioaufnahmen.</string></dict></plist>
           PLIST
           file "$MACOS/Composition Studio"
       - name: Ad-hoc sign application
         run: |
           codesign --force --sign - 'dist/Composition Studio.app/Contents/Frameworks/libCompositionStudioEngineBridge.dylib'
           codesign --force --deep --sign - 'dist/Composition Studio.app'
+      - name: Verify Intel application bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP='dist/Composition Studio.app'
+          plutil -lint "$APP/Contents/Info.plist"
+          file "$APP/Contents/MacOS/Composition Studio" | grep -q 'x86_64'
+          file "$APP/Contents/Frameworks/libCompositionStudioEngineBridge.dylib" | grep -q 'x86_64'
+          otool -L "$APP/Contents/MacOS/Composition Studio" | grep -q 'libCompositionStudioEngineBridge.dylib'
+          codesign --verify --deep --strict "$APP"
       - name: Package Intel build
         id: package
         shell: bash
