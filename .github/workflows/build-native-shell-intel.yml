@@ -102,8 +102,8 @@ jobs:
           cp "$BRIDGE" "$FRAMEWORKS/"
           install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FRAMEWORKS/libCompositionStudioEngineBridge.dylib"
           { cat studio/native/Sources/EngineBridge.swift; cat studio/native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat studio/native/Sources/CompositionStudioApp.swift; cat studio/native/Sources/EngineUIBindings.swift; } > /tmp/CompositionStudioApp.swift
-          # Only normalise genuine shorthand decimal literals. Do not touch tuple access (.0/.1) or closed ranges (...9).
-          perl -pi -e 's/font=\./font = ./g; s/([\(,:= ])\.(\d+)/$1"0.".$2/ge; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
+          # Normalise only shorthand decimal literals; keep tuple access (.0/.1) and ranges (...9) intact.
+          perl -pi -e 's/font=\./font = ./g; s/([\(,:= ])\.(\d+)/$1 . "0." . $2/ge; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
           xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit -framework UniformTypeIdentifiers /tmp/CompositionStudioApp.swift -L "$FRAMEWORKS" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/Composition Studio"
           cat > "$APP/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
