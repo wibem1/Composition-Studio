@@ -101,8 +101,8 @@ jobs:
           BRIDGE='${{ steps.bridge.outputs.path }}'
           cp "$BRIDGE" "$FRAMEWORKS/"
           install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FRAMEWORKS/libCompositionStudioEngineBridge.dylib"
-          { cat studio/native/Sources/EngineBridge.swift; cat studio/native/Sources/V100Engine.swift; cat studio/native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat studio/native/Sources/CompositionStudioApp.swift; cat studio/native/Sources/EngineUIBindings.swift; cat studio/native/Sources/V100ReleaseCandidate.swift; } > /tmp/CompositionStudioApp.swift
-          perl -pi -e 's/font=\./font = ./g; s/([\(,:= ])\.(\d+)/$1 . "0." . $2/ge; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
+          { cat studio/native/Sources/EngineBridge.swift; cat studio/native/Sources/V100Engine.swift; cat studio/native/Sources/EngineHooks.swift; echo 'installCompositionStudioEngineHooks()'; cat studio/native/Sources/CompositionStudioApp.swift; cat studio/native/Sources/EngineUIBindings.swift; cat studio/native/Sources/V100ReleaseCandidate.swift; cat studio/native/Sources/V100Compatibility.swift; } > /tmp/CompositionStudioApp.swift
+          perl -pi -e 's/font=\./font = ./g; s/==\./ == ./g; s/=\./= ./g; s/([\(,:= ])\.(\d+)/$1 . "0." . $2/ge; s/\*\./*0./g' /tmp/CompositionStudioApp.swift
           xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit -framework UniformTypeIdentifiers -framework Security /tmp/CompositionStudioApp.swift -L "$FRAMEWORKS" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/Composition Studio"
           cat > "$APP/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
