@@ -1,0 +1,84 @@
+name: Build MiniDAW Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [minidaw-proof-v1-final]
+    paths:
+      - 'native/Sources/MiniDAW.swift'
+      - 'native/EngineBridge/**'
+      - 'native/upstream.env'
+      - '.github/workflows/build-minidaw-proof.yml'
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: studio }
+      - name: Read MAGDA revision
+        id: upstream
+        shell: bash
+        run: |
+          source studio/native/upstream.env
+          echo "repo=$MAGDA_REPOSITORY" >> "$GITHUB_OUTPUT"
+          echo "ref=$MAGDA_REF" >> "$GITHUB_OUTPUT"
+      - name: Checkout MAGDA
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.upstream.outputs.repo }}
+          ref: ${{ steps.upstream.outputs.ref }}
+          path: upstream
+          submodules: false
+          lfs: true
+          fetch-depth: 1
+      - run: git -C upstream lfs pull
+      - name: Dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C upstream submodule sync
+          git -C upstream submodule update --init --depth 1 third_party/JUCE third_party/tracktion_engine third_party/juce-llm third_party/llama.cpp third_party/faust third_party/eurorack third_party/asiosdk
+          git -C upstream/third_party/faust submodule sync
+          git -C upstream/third_party/faust submodule update --init --depth 1 libraries
+      - run: command -v ninja >/dev/null 2>&1 || brew install ninja
+      - name: Add MiniDAW bridge
+        shell: bash
+        run: |
+          cp -R studio/native/EngineBridge upstream/composition_studio_bridge
+          printf '\nadd_subdirectory(composition_studio_bridge)\n' >> upstream/CMakeLists.txt
+      - name: Configure
+        working-directory: upstream
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DMAGDA_BUILD_TESTS=OFF -DMAGDA_BUILD_EXAMPLES=OFF -DMAGDA_BUILD_JUCE_ADAPTER=OFF -DMAGDA_BUILD_FAUST_VEC_BENCH=OFF -DMAGDA_HAVE_CLAP=OFF
+      - name: Build bridge
+        working-directory: upstream
+        run: cmake --build build --target CompositionStudioEngineBridge -j $(sysctl -n hw.ncpu)
+      - name: Build MiniDAW app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP='dist/MiniDAW Proof.app'; MACOS="$APP/Contents/MacOS"; FW="$APP/Contents/Frameworks"; mkdir -p "$MACOS" "$FW"
+          BRIDGE=$(find upstream/build -type f -name 'libCompositionStudioEngineBridge.dylib' -print -quit); test -n "$BRIDGE"; cp "$BRIDGE" "$FW/"
+          install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FW/libCompositionStudioEngineBridge.dylib"
+          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit studio/native/Sources/MiniDAW.swift -L "$FW" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/MiniDAW Proof"
+          cat > "$APP/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>CFBundleExecutable</key><string>MiniDAW Proof</string><key>CFBundleIdentifier</key><string>net.klangwerke.MiniDAWProof</string><key>CFBundleName</key><string>MiniDAW Proof</string><key>CFBundlePackageType</key><string>APPL</string><key>LSMinimumSystemVersion</key><string>11.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
+          PLIST
+      - name: Verify and package
+        shell: bash
+        run: |
+          codesign --force --sign - 'dist/MiniDAW Proof.app/Contents/Frameworks/libCompositionStudioEngineBridge.dylib'
+          codesign --force --deep --sign - 'dist/MiniDAW Proof.app'
+          plutil -lint 'dist/MiniDAW Proof.app/Contents/Info.plist'
+          file 'dist/MiniDAW Proof.app/Contents/MacOS/MiniDAW Proof' | grep -q x86_64
+          otool -L 'dist/MiniDAW Proof.app/Contents/MacOS/MiniDAW Proof' | grep -q libCompositionStudioEngineBridge
+          codesign --verify --deep --strict 'dist/MiniDAW Proof.app'
+          ditto -c -k --sequesterRsrc --keepParent 'dist/MiniDAW Proof.app' 'dist/MiniDAW-Proof-Intel.zip'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MiniDAW-Proof-Intel
+          path: dist/MiniDAW-Proof-Intel.zip
+          retention-days: 30
