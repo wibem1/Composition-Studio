@@ -17,7 +17,7 @@ extension StudioViewController {
         let load = NSButton(title: "Instrument laden", target: self, action: #selector(v080LoadInstrument))
         load.bezelStyle = .rounded
         load.font = .systemFont(ofSize: 12, weight: .semibold)
-        let info = NSTextField(labelWithString: "Plugins werden aus der MAGDA-Engine gelesen")
+        let info = NSTextField(labelWithString: "Instrumente werden aus der MAGDA-Engine gelesen")
         info.font = .systemFont(ofSize: 11)
         info.textColor = .secondaryLabelColor
         browserCard.addSubview(popup)
@@ -28,15 +28,16 @@ extension StudioViewController {
         info.frame = NSRect(x: 14, y: 184, width: max(180, browserCard.bounds.width - 28), height: 20)
         popup.autoresizingMask = [.width]
         info.autoresizingMask = [.width]
-        state.popup = popup; state.loadButton = load; state.info = info
+        state.popup = popup
+        state.loadButton = load
+        state.info = info
         refreshV080Plugins()
     }
 
     func refreshV080Plugins() {
         let state = V080State.shared
         guard let popup = state.popup else { return }
-        let all = CompositionStudioEngine.shared.plugins()
-        state.plugins = all.filter { $0.isInstrument }
+        state.plugins = CompositionStudioEngine.shared.plugins().filter { $0.isInstrument }
         let old = popup.indexOfSelectedItem
         popup.removeAllItems()
         if state.plugins.isEmpty {
@@ -45,7 +46,7 @@ extension StudioViewController {
             state.loadButton?.isEnabled = false
             state.info?.stringValue = "Keine gescannten VST3/AU-Instrumente verfügbar"
         } else {
-            for p in state.plugins { popup.addItem(withTitle: "\(p.name)  [\(p.format)]") }
+            state.plugins.forEach { popup.addItem(withTitle: "\($0.name)  [\($0.format)]") }
             popup.isEnabled = true
             state.loadButton?.isEnabled = LiveStudioState.shared.selectedTrackID != nil
             if old >= 0 && old < popup.numberOfItems { popup.selectItem(at: old) }
@@ -58,11 +59,14 @@ extension StudioViewController {
         guard let track = LiveStudioState.shared.selectedTrackID,
               let popup = state.popup,
               popup.indexOfSelectedItem >= 0,
-              popup.indexOfSelectedItem < state.plugins.count else { return }
+              popup.indexOfSelectedItem < state.plugins.count else {
+            state.info?.stringValue = "Bitte zuerst eine MIDI-Spur auswählen"
+            return
+        }
         let plugin = state.plugins[popup.indexOfSelectedItem]
         let device = CompositionStudioEngine.shared.addPlugin(trackId: track, pluginIndex: plugin.index)
         if device >= 0 {
-            statusLabel.stringValue = "\(plugin.name) geladen – Play startet den MIDI-Clip"
+            statusLabel.stringValue = "\(plugin.name) geladen – bereit zum Abspielen"
             state.info?.stringValue = "Geladen: \(plugin.name) auf aktueller Spur"
         } else {
             statusLabel.stringValue = "Instrument konnte nicht geladen werden"
