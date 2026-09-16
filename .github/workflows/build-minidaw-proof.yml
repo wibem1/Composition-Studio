@@ -1,9 +1,9 @@
-name: Build MiniDAW Proof
+name: Build MiniDAW Functional Test
 
 on:
   workflow_dispatch:
   push:
-    branches: [minidaw-proof-v1-final]
+    branches: [minidaw-functional-test]
     paths:
       - 'native/Sources/MiniDAW.swift'
       - 'native/EngineBridge/**'
@@ -106,29 +106,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APP='dist/MiniDAW Proof.app'; MACOS="$APP/Contents/MacOS"; FW="$APP/Contents/Frameworks"; mkdir -p "$MACOS" "$FW"
+          APP='dist/MiniDAW Functional Test.app'; MACOS="$APP/Contents/MacOS"; FW="$APP/Contents/Frameworks"; mkdir -p "$MACOS" "$FW"
           cp engine-cache/libCompositionStudioEngineBridge.dylib "$FW/"
           install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FW/libCompositionStudioEngineBridge.dylib"
-          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit studio/native/Sources/MiniDAW.swift -L "$FW" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/MiniDAW Proof"
+          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit studio/native/Sources/MiniDAW.swift -L "$FW" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/MiniDAW Functional Test"
           cat > "$APP/Contents/Info.plist" <<'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict><key>CFBundleExecutable</key><string>MiniDAW Proof</string><key>CFBundleIdentifier</key><string>net.klangwerke.MiniDAWProof</string><key>CFBundleName</key><string>MiniDAW Proof</string><key>CFBundlePackageType</key><string>APPL</string><key>LSMinimumSystemVersion</key><string>11.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
+          <plist version="1.0"><dict><key>CFBundleExecutable</key><string>MiniDAW Functional Test</string><key>CFBundleIdentifier</key><string>net.klangwerke.MiniDAWFunctionalTest</string><key>CFBundleName</key><string>MiniDAW Functional Test</string><key>CFBundlePackageType</key><string>APPL</string><key>LSMinimumSystemVersion</key><string>11.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
           PLIST
 
       - name: Verify and package
         shell: bash
         run: |
-          codesign --force --sign - 'dist/MiniDAW Proof.app/Contents/Frameworks/libCompositionStudioEngineBridge.dylib'
-          codesign --force --deep --sign - 'dist/MiniDAW Proof.app'
-          plutil -lint 'dist/MiniDAW Proof.app/Contents/Info.plist'
-          file 'dist/MiniDAW Proof.app/Contents/MacOS/MiniDAW Proof' | grep -q x86_64
-          otool -L 'dist/MiniDAW Proof.app/Contents/MacOS/MiniDAW Proof' | grep -q libCompositionStudioEngineBridge
-          codesign --verify --deep --strict 'dist/MiniDAW Proof.app'
-          ditto -c -k --sequesterRsrc --keepParent 'dist/MiniDAW Proof.app' 'dist/MiniDAW-Proof-Intel.zip'
+          codesign --force --sign - 'dist/MiniDAW Functional Test.app/Contents/Frameworks/libCompositionStudioEngineBridge.dylib'
+          codesign --force --deep --sign - 'dist/MiniDAW Functional Test.app'
+          plutil -lint 'dist/MiniDAW Functional Test.app/Contents/Info.plist'
+          file 'dist/MiniDAW Functional Test.app/Contents/MacOS/MiniDAW Functional Test' | grep -q x86_64
+          otool -L 'dist/MiniDAW Functional Test.app/Contents/MacOS/MiniDAW Functional Test' | grep -q libCompositionStudioEngineBridge
+          codesign --verify --deep --strict 'dist/MiniDAW Functional Test.app'
+          ditto -c -k --sequesterRsrc --keepParent 'dist/MiniDAW Functional Test.app' 'dist/MiniDAW-Functional-Test-Intel.zip'
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MiniDAW-Proof-Intel
-          path: dist/MiniDAW-Proof-Intel.zip
+          name: MiniDAW-Functional-Test-Intel
+          path: dist/MiniDAW-Functional-Test-Intel.zip
           retention-days: 30
