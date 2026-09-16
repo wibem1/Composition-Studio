@@ -95,6 +95,29 @@ Für jede Entwicklungsstufe gelten drei Gates:
 2. **Technisches Gate:** Die begrenzte Funktion wird implementiert und mit reproduzierbaren Tests geprüft. Build-Erfolg allein ist kein Funktionsnachweis. Bestehende bestandene Tests werden als Regressionstests erneut ausgeführt.
 3. **Release-Gate:** Eine Testversion für den Anwender gibt es erst, wenn die neue Funktion intern nachgewiesen ist und die bereits nachgewiesenen Funktionen weiterhin bestehen. Nicht automatisierbare Hardware-/Audio-/Plugin-Prüfungen werden ausdrücklich als solche ausgewiesen.
 
+### Verbindliche Laufzeit-Vorprüfung vor jeder Herausgabe
+
+Ein erfolgreicher Compile-/Link-/Codesign-Lauf ist **keine Freigabe**. Jeder herauszugebende Testbuild muss vorher soweit technisch möglich als echte Anwendung gestartet und funktional vorgeprüft werden.
+
+Die Vorprüfung umfasst mindestens:
+
+- App startet und bleibt stabil genug für den Testablauf.
+- Die für den Build relevanten Buttons/Aktionen reagieren tatsächlich.
+- Engine und benötigte Subsysteme werden zur Laufzeit initialisiert.
+- Bei Plugin-/Audio-Builds wird nicht nur Plugin-Erkennung geprüft, sondern die vollständige intern prüfbare Signalkette: Plugin laden → MIDI/Testnote einspeisen → Audio-Callback/Audio-Thread läuft → nichtstilles bzw. messbares Audiosignal wird erzeugt → Engine bleibt stabil.
+- Bereits zuvor nachgewiesene Kernfunktionen werden als Regressionstest erneut geprüft.
+- Nur der Teil, der zwingend reale Anwenderhardware oder lokal installierte Drittanbieter-Plugins benötigt und in CI nicht reproduzierbar ist, darf als ausdrücklich benannter offener Praxistest beim Anwender verbleiben.
+
+Scheitert die Vorprüfung, wird der Build **nicht** an den Anwender herausgegeben. Der Anwender erhält keine Serie ungeprüfter Builds zum Debuggen.
+
+### Verbindliche Buildnummern
+
+- Jeder erzeugte Testbuild erhält eine neue fortlaufende Buildnummer.
+- Nach einer Quell- oder Buildänderung wird keine bereits verwendete Buildnummer wiederverwendet.
+- Die Buildnummer ist sichtbar in App/Fenstertitel, in den Paketmetadaten und im Artefaktnamen zu führen.
+- Die Nummer muss eindeutig an GitHub-Workflow-Run und Commit gebunden sein; für den MiniDAW-Functional-Test ist `github.run_number` die maßgebliche fortlaufende Nummer.
+- Nur ein Build, der die Laufzeit-Vorprüfung bestanden hat, darf als Testkandidat/Freigabekandidat bezeichnet und an den Anwender ausgegeben werden.
+
 Fehlschläge bleiben in der Entwicklungswerkstatt. Keine Serie von Zwischenbuilds zur Fehlersuche durch den Anwender und kein Weiterbauen über einen ungeklärten Fehler hinweg.
 
 ## Verbindliches Zeitmanagement
@@ -107,6 +130,7 @@ Entwicklungsgeschwindigkeit ist ein Qualitätsmerkmal. Unnötige Vollbuilds, Neu
 - Unveränderte Komponenten werden nicht ohne technischen Grund erneut analysiert oder vollständig gebaut.
 - Der Cache ersetzt niemals Verständnis oder Validierung: geändert/unklar = neu prüfen; verstanden/verifiziert/unverändert = wiederverwenden.
 - Cache-Schlüssel müssen mindestens Quellstand/Commit und relevante Abhängigkeits- bzw. Buildparameter eindeutig machen, damit keine veralteten Ergebnisse als aktuell gelten.
+- Der unveränderte MAGDA/JUCE/Tracktion-Unterbau ist für schnelle MiniDAW-Iterationen als vorkompilierter Unterbau wiederzuverwenden; Änderungen an Swift oder der Composition-Studio-Bridge dürfen keinen unnötigen Vollbau unveränderter Fremdkomponenten auslösen.
 
 ### Web-first-Entwicklung
 
