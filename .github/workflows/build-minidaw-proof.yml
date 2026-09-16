@@ -90,8 +90,9 @@ jobs:
           APP='dist/MiniDAW Functional Test.app'; MACOS="$APP/Contents/MacOS"; FW="$APP/Contents/Frameworks"; mkdir -p "$MACOS" "$FW"
           cp engine-out/libCompositionStudioEngineBridge.dylib "$FW/"
           install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FW/libCompositionStudioEngineBridge.dylib"
-          printf 'let miniDAWBuildNumber = "%s"\n' "$BUILD_NO" > /tmp/MiniDAWBuildInfo.swift
-          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit studio/native/Sources/MiniDAW.swift /tmp/MiniDAWBuildInfo.swift -L "$FW" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/MiniDAW Functional Test"
+          cp studio/native/Sources/MiniDAW.swift /tmp/main.swift
+          printf '\nlet miniDAWBuildNumber = "%s"\n' "$BUILD_NO" >> /tmp/main.swift
+          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit /tmp/main.swift -L "$FW" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/MiniDAW Functional Test"
           cat > "$APP/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
