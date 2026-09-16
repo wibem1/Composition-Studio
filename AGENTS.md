@@ -85,9 +85,42 @@ Keine undokumentierten Patches im Fremdcode.
 
 Die Basis-DAW ist kein Wegwerfprodukt. Sie dient als Testbank für die schrittweise entstehenden Composition-Studio-Core-Module. Ein Modul wird dort erst integriert, nachdem sein isolierter Test verstanden und bestanden ist.
 
+## Verbindliches Qualitätsmanagement für MiniDAW und Composition Studio
+
+Der Anwender ist **Abnehmer**, nicht primärer Fehlersucher. Ein neuer Stand wird nicht zur manuellen Abnahme vorgelegt, solange die automatisierbaren und intern reproduzierbaren Prüfungen nicht bestanden sind.
+
+Für jede Entwicklungsstufe gelten drei Gates:
+
+1. **Architektur-Gate:** Vor der Implementierung müssen die betroffenen MAGDA-/JUCE-/Tracktion-Module, ihre Zustände, Ownership/Lifetimes, Abhängigkeiten, Threadgrenzen sowie Daten- und Kontrollflüsse konkret verstanden und im Katalog/Journaleintrag nachvollziehbar sein. Keine Integration nach Klassenname, Vermutung oder Hoffnung.
+2. **Technisches Gate:** Die begrenzte Funktion wird implementiert und mit reproduzierbaren Tests geprüft. Build-Erfolg allein ist kein Funktionsnachweis. Bestehende bestandene Tests werden als Regressionstests erneut ausgeführt.
+3. **Release-Gate:** Eine Testversion für den Anwender gibt es erst, wenn die neue Funktion intern nachgewiesen ist und die bereits nachgewiesenen Funktionen weiterhin bestehen. Nicht automatisierbare Hardware-/Audio-/Plugin-Prüfungen werden ausdrücklich als solche ausgewiesen.
+
+Fehlschläge bleiben in der Entwicklungswerkstatt. Keine Serie von Zwischenbuilds zur Fehlersuche durch den Anwender und kein Weiterbauen über einen ungeklärten Fehler hinweg.
+
+## Verbindliches Zeitmanagement
+
+Entwicklungsgeschwindigkeit ist ein Qualitätsmerkmal. Unnötige Vollbuilds, Neuinstallationen und Wiederholungsanalysen sind zu vermeiden.
+
+### Cache-Prinzip
+
+- Bereits verifizierte, unveränderte Analyseergebnisse, Abhängigkeitsstände und geeignete Build-Artefakte werden wiederverwendet.
+- Unveränderte Komponenten werden nicht ohne technischen Grund erneut analysiert oder vollständig gebaut.
+- Der Cache ersetzt niemals Verständnis oder Validierung: geändert/unklar = neu prüfen; verstanden/verifiziert/unverändert = wiederverwenden.
+- Cache-Schlüssel müssen mindestens Quellstand/Commit und relevante Abhängigkeits- bzw. Buildparameter eindeutig machen, damit keine veralteten Ergebnisse als aktuell gelten.
+
+### Web-first-Entwicklung
+
+Soweit technisch sinnvoll wird während der Entwicklungsphase zuerst die vorhandene WebApp/Testoberfläche verwendet, um schnelle Iterationen ohne Intel-Mac-Kompilation und Installation zu ermöglichen. Dazu gehören insbesondere UI-/Arrangementlogik, Tracks/Clips als Modell und Darstellung, Timeline/Playhead-Darstellung, Projektmodell, Piano-Roll und andere plattformunabhängige Bedien- und Datenlogik.
+
+Native Tests sind zwingend, sobald die zu prüfende Funktion von CoreAudio, JUCE-/Tracktion-Audiogeräten, nativer MIDI-I/O, VST3/AU-Hosting, Echtzeit-Audiographen oder anderen nicht realistisch im Browser prüfbaren Komponenten abhängt. Die WebApp darf native Funktionalität nicht vortäuschen.
+
+### Selbstständiger Entwicklungsauftrag
+
+Innerhalb einer ausdrücklich beauftragten Entwicklungsstufe wird selbstständig über Analyse-, Implementierungs-, Build-, Diagnose- und Korrekturschritte hinweg gearbeitet. Es ist keine Zwischenfreigabe des Anwenders erforderlich. Vorgelegt wird erst ein in sich geschlossener Testkandidat, der die oben genannten Gates bestanden hat.
+
 ## Forschungsdokumentation
 
-- `AGENTS.md` = dauerhafte Arbeits-, Forschungs- und Synchronisationsregeln.
+- `AGENTS.md` = dauerhafte Arbeits-, Forschungs-, Qualitäts-, Zeitmanagement- und Synchronisationsregeln.
 - `PROJECT_STATUS.md` = aktueller technischer Projektstand und nächster Schritt.
 - `docs/RESEARCH_ROADMAP.md` = verbindliche Forschungs- und Entwicklungs-To-do-Liste.
 - `docs/MAGDA_CATALOG.md` = systematischer Katalog des untersuchten MAGDA-Systems.
