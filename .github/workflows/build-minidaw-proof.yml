@@ -54,7 +54,10 @@ jobs:
           git -C upstream submodule update --init --depth 1 third_party/JUCE third_party/tracktion_engine third_party/juce-llm third_party/llama.cpp third_party/faust third_party/eurorack third_party/asiosdk
           git -C upstream/third_party/faust submodule sync
           git -C upstream/third_party/faust submodule update --init --depth 1 libraries
-          command -v ninja >/dev/null 2>&1 || brew install ninja
+
+      - name: Ensure build tools
+        shell: bash
+        run: command -v ninja >/dev/null 2>&1 || brew install ninja
 
       - name: Install current MiniDAW bridge source
         shell: bash
@@ -99,9 +102,84 @@ jobs:
           <plist version="1.0"><dict><key>CFBundleExecutable</key><string>MiniDAW Functional Test</string><key>CFBundleIdentifier</key><string>net.klangwerke.MiniDAWFunctionalTest</string><key>CFBundleName</key><string>MiniDAW Functional Test</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>${BUILD_NO}</string><key>CFBundleShortVersionString</key><string>0.1.${BUILD_NO}</string><key>LSMinimumSystemVersion</key><string>11.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
           PLIST
 
+      - name: Runtime preflight - engine and audio core
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/minidaw_preflight.cpp <<'CPP'
+          #include <chrono>
+          #include <iostream>
+          #include <thread>
+          extern "C" {
+          bool cs_engine_initialize();
+          void cs_engine_shutdown();
+          int md_create_test_session();
+          bool md_direct_audio_start();
+          void md_direct_audio_stop();
+          void md_direct_audio_test_tone(double);
+          unsigned long long md_direct_audio_callbacks();
+          double md_direct_audio_peak();
+          double md_direct_audio_energy();
+          int md_direct_audio_active_outputs();
+          }
+          int main() {
+              if (!cs_engine_initialize()) { std::cerr << "FAIL engine initialization\n"; return 10; }
+              const int track = md_create_test_session();
+              if (track < 0) { std::cerr << "FAIL test session creation\n"; cs_engine_shutdown(); return 11; }
+              std::cout << "PASS engine initialized; test track=" << track << "\n";
+              // Hosted macOS runners may expose no physical CoreAudio output. If one is
+              // available, exercise the complete direct JUCE callback path and require
+              // measurable non-silent samples. If none is available, report this explicitly;
+              // the physical-device check remains the only manual acceptance item.
+              if (md_direct_audio_start()) {
+                  const auto before = md_direct_audio_callbacks();
+                  md_direct_audio_test_tone(0.35);
+                  std::this_thread::sleep_for(std::chrono::milliseconds(700));
+                  const auto after = md_direct_audio_callbacks();
+                  const auto peak = md_direct_audio_peak();
+                  const auto energy = md_direct_audio_energy();
+                  const auto outputs = md_direct_audio_active_outputs();
+                  md_direct_audio_stop();
+                  std::cout << "Audio callbacks=" << after << " outputs=" << outputs << " peak=" << peak << " energy=" << energy << "\n";
+                  if (outputs <= 0 || after <= before || peak <= 0.001 || energy <= 0.0) {
+                      std::cerr << "FAIL direct audio callback/signal preflight\n"; cs_engine_shutdown(); return 12;
+                  }
+                  std::cout << "PASS direct audio callback and non-silent signal\n";
+              } else {
+                  std::cout << "SKIP physical CoreAudio signal: hosted runner has no usable output device\n";
+              }
+              cs_engine_shutdown();
+              std::cout << "PASS clean engine shutdown\n";
+              return 0;
+          }
+          CPP
+          clang++ -std=c++17 -arch x86_64 -mmacosx-version-min=11.0 /tmp/minidaw_preflight.cpp -L engine-out -lCompositionStudioEngineBridge -Wl,-rpath,"$PWD/engine-out" -o /tmp/minidaw_preflight
+          /tmp/minidaw_preflight | tee /tmp/minidaw-preflight.txt
+          grep -q 'PASS engine initialized' /tmp/minidaw-preflight.txt
+          grep -q 'PASS clean engine shutdown' /tmp/minidaw-preflight.txt
+
+      - name: Runtime preflight - packaged app launches
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXE='dist/MiniDAW Functional Test.app/Contents/MacOS/MiniDAW Functional Test'
+          "$EXE" >/tmp/minidaw-app.log 2>&1 &
+          PID=$!
+          sleep 4
+          if ! kill -0 "$PID" 2>/dev/null; then
+            echo 'FAIL packaged app terminated during launch preflight'
+            cat /tmp/minidaw-app.log
+            wait "$PID" || true
+            exit 20
+          fi
+          kill "$PID"
+          wait "$PID" || true
+          echo 'PASS packaged app remained alive after launch'
+
       - name: Verify and package
         shell: bash
         run: |
+          set -euo pipefail
           codesign --force --sign - 'dist/MiniDAW Functional Test.app/Contents/Frameworks/libCompositionStudioEngineBridge.dylib'
           codesign --force --deep --sign - 'dist/MiniDAW Functional Test.app'
           plutil -lint 'dist/MiniDAW Functional Test.app/Contents/Info.plist'
