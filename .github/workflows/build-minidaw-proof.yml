@@ -26,22 +26,15 @@ jobs:
           echo "repo=$MAGDA_REPOSITORY" >> "$GITHUB_OUTPUT"
           echo "ref=$MAGDA_REF" >> "$GITHUB_OUTPUT"
 
-      - name: Compute engine cache key
-        id: cachekey
-        shell: bash
-        run: |
-          BRIDGE_HASH=$(find studio/native/EngineBridge -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256 | awk '{print $1}')
-          echo "key=minidaw-engine-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-$BRIDGE_HASH" >> "$GITHUB_OUTPUT"
-
-      - name: Restore compiled MAGDA bridge
-        id: engine-cache
+      - name: Restore MAGDA build workspace
+        id: magda-cache
         uses: actions/cache@v4
         with:
-          path: engine-cache
-          key: ${{ steps.cachekey.outputs.key }}
+          path: upstream
+          key: minidaw-magda-workspace-${{ runner.os }}-x86_64-${{ steps.upstream.outputs.ref }}-v1
 
       - name: Checkout MAGDA
-        if: steps.engine-cache.outputs.cache-hit != 'true'
+        if: steps.magda-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ steps.upstream.outputs.repo }}
@@ -51,69 +44,58 @@ jobs:
           lfs: true
           fetch-depth: 1
 
-      - name: Fetch MAGDA LFS
-        if: steps.engine-cache.outputs.cache-hit != 'true'
-        run: git -C upstream lfs pull
-
-      - name: Dependencies
-        if: steps.engine-cache.outputs.cache-hit != 'true'
+      - name: Prepare MAGDA dependencies
+        if: steps.magda-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           set -euo pipefail
+          git -C upstream lfs pull
           git -C upstream submodule sync
           git -C upstream submodule update --init --depth 1 third_party/JUCE third_party/tracktion_engine third_party/juce-llm third_party/llama.cpp third_party/faust third_party/eurorack third_party/asiosdk
           git -C upstream/third_party/faust submodule sync
           git -C upstream/third_party/faust submodule update --init --depth 1 libraries
+          command -v ninja >/dev/null 2>&1 || brew install ninja
 
-      - name: Install Ninja
-        if: steps.engine-cache.outputs.cache-hit != 'true'
-        run: command -v ninja >/dev/null 2>&1 || brew install ninja
-
-      - name: Add MiniDAW bridge
-        if: steps.engine-cache.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          cp -R studio/native/EngineBridge upstream/composition_studio_bridge
-          printf '\nadd_subdirectory(composition_studio_bridge)\n' >> upstream/CMakeLists.txt
-
-      - name: Configure
-        if: steps.engine-cache.outputs.cache-hit != 'true'
-        working-directory: upstream
-        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DMAGDA_BUILD_TESTS=OFF -DMAGDA_BUILD_EXAMPLES=OFF -DMAGDA_BUILD_JUCE_ADAPTER=OFF -DMAGDA_BUILD_FAUST_VEC_BENCH=OFF -DMAGDA_HAVE_CLAP=OFF
-
-      - name: Build bridge
-        if: steps.engine-cache.outputs.cache-hit != 'true'
-        working-directory: upstream
-        run: cmake --build build --target CompositionStudioEngineBridge -j $(sysctl -n hw.ncpu)
-
-      - name: Store compiled bridge for cache
-        if: steps.engine-cache.outputs.cache-hit != 'true'
+      - name: Install current MiniDAW bridge source
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p engine-cache
-          BRIDGE=$(find upstream/build -type f -name 'libCompositionStudioEngineBridge.dylib' -print -quit)
-          test -n "$BRIDGE"
-          cp "$BRIDGE" engine-cache/libCompositionStudioEngineBridge.dylib
+          rm -rf upstream/composition_studio_bridge
+          cp -R studio/native/EngineBridge upstream/composition_studio_bridge
+          grep -q 'add_subdirectory(composition_studio_bridge)' upstream/CMakeLists.txt || printf '\nadd_subdirectory(composition_studio_bridge)\n' >> upstream/CMakeLists.txt
 
-      - name: Verify cached bridge
+      - name: Configure
+        working-directory: upstream
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DMAGDA_BUILD_TESTS=OFF -DMAGDA_BUILD_EXAMPLES=OFF -DMAGDA_BUILD_JUCE_ADAPTER=OFF -DMAGDA_BUILD_FAUST_VEC_BENCH=OFF -DMAGDA_HAVE_CLAP=OFF
+
+      - name: Build bridge incrementally
+        working-directory: upstream
+        run: cmake --build build --target CompositionStudioEngineBridge -j $(sysctl -n hw.ncpu)
+
+      - name: Verify bridge
         shell: bash
         run: |
-          test -f engine-cache/libCompositionStudioEngineBridge.dylib
-          file engine-cache/libCompositionStudioEngineBridge.dylib | grep -q x86_64
+          set -euo pipefail
+          BRIDGE=$(find upstream/build -type f -name 'libCompositionStudioEngineBridge.dylib' -print -quit)
+          test -n "$BRIDGE"
+          file "$BRIDGE" | grep -q x86_64
+          mkdir -p engine-out
+          cp "$BRIDGE" engine-out/libCompositionStudioEngineBridge.dylib
 
       - name: Build MiniDAW app
         shell: bash
         run: |
           set -euo pipefail
+          BUILD_NO="$GITHUB_RUN_NUMBER"
           APP='dist/MiniDAW Functional Test.app'; MACOS="$APP/Contents/MacOS"; FW="$APP/Contents/Frameworks"; mkdir -p "$MACOS" "$FW"
-          cp engine-cache/libCompositionStudioEngineBridge.dylib "$FW/"
+          cp engine-out/libCompositionStudioEngineBridge.dylib "$FW/"
           install_name_tool -id '@rpath/libCompositionStudioEngineBridge.dylib' "$FW/libCompositionStudioEngineBridge.dylib"
-          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit studio/native/Sources/MiniDAW.swift -L "$FW" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/MiniDAW Functional Test"
-          cat > "$APP/Contents/Info.plist" <<'PLIST'
+          printf 'let miniDAWBuildNumber = "%s"\n' "$BUILD_NO" > /tmp/MiniDAWBuildInfo.swift
+          xcrun swiftc -target x86_64-apple-macosx11.0 -O -framework AppKit studio/native/Sources/MiniDAW.swift /tmp/MiniDAWBuildInfo.swift -L "$FW" -lCompositionStudioEngineBridge -Xlinker -rpath -Xlinker '@executable_path/../Frameworks' -o "$MACOS/MiniDAW Functional Test"
+          cat > "$APP/Contents/Info.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict><key>CFBundleExecutable</key><string>MiniDAW Functional Test</string><key>CFBundleIdentifier</key><string>net.klangwerke.MiniDAWFunctionalTest</string><key>CFBundleName</key><string>MiniDAW Functional Test</string><key>CFBundlePackageType</key><string>APPL</string><key>LSMinimumSystemVersion</key><string>11.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
+          <plist version="1.0"><dict><key>CFBundleExecutable</key><string>MiniDAW Functional Test</string><key>CFBundleIdentifier</key><string>net.klangwerke.MiniDAWFunctionalTest</string><key>CFBundleName</key><string>MiniDAW Functional Test</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>${BUILD_NO}</string><key>CFBundleShortVersionString</key><string>0.1.${BUILD_NO}</string><key>LSMinimumSystemVersion</key><string>11.0</string><key>NSHighResolutionCapable</key><true/></dict></plist>
           PLIST
 
       - name: Verify and package
@@ -125,10 +107,10 @@ jobs:
           file 'dist/MiniDAW Functional Test.app/Contents/MacOS/MiniDAW Functional Test' | grep -q x86_64
           otool -L 'dist/MiniDAW Functional Test.app/Contents/MacOS/MiniDAW Functional Test' | grep -q libCompositionStudioEngineBridge
           codesign --verify --deep --strict 'dist/MiniDAW Functional Test.app'
-          ditto -c -k --sequesterRsrc --keepParent 'dist/MiniDAW Functional Test.app' 'dist/MiniDAW-Functional-Test-Intel.zip'
+          ditto -c -k --sequesterRsrc --keepParent 'dist/MiniDAW Functional Test.app' "dist/MiniDAW-Functional-Test-B${GITHUB_RUN_NUMBER}-Intel.zip"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MiniDAW-Functional-Test-Intel
-          path: dist/MiniDAW-Functional-Test-Intel.zip
+          name: MiniDAW-Functional-Test-B${{ github.run_number }}-Intel
+          path: dist/MiniDAW-Functional-Test-B${{ github.run_number }}-Intel.zip
           retention-days: 30
