@@ -35,6 +35,7 @@ bool copyString(const juce::String& s, char* out, int cap) {
 
 class AudioDeviceCore final : public juce::AudioIODeviceCallback {
 public:
+    ~AudioDeviceCore() override { stop(); }
     bool start() {
         stop(); callbacks.store(0); peak.store(0.0f); energy.store(0.0); phase = 0.0; remainingSamples.store(0); lastError.clear();
         auto result = deviceManager.initialise(0, 2, nullptr, true);
@@ -46,7 +47,12 @@ public:
         if (sampleRate.load() <= 0.0 || activeOutputs.load() <= 0) { lastError = "Audio device has no active output channel or sample rate"; deviceManager.closeAudioDevice(); return false; }
         deviceManager.addAudioCallback(this); running.store(true); return true;
     }
-    void stop() { if (running.exchange(false)) deviceManager.removeAudioCallback(this); deviceManager.closeAudioDevice(); remainingSamples.store(0); }
+    void stop() {
+        running.store(false);
+        deviceManager.removeAudioCallback(this);
+        deviceManager.closeAudioDevice();
+        remainingSamples.store(0);
+    }
     void testTone(double seconds) { if (!running.load()) return; auto sr=sampleRate.load(); remainingSamples.store(static_cast<int64_t>(std::max(0.05,std::min(seconds,3.0))*sr)); }
     void audioDeviceIOCallbackWithContext(const float* const*, int, float* const* outputs, int numOutputs, int numSamples, const juce::AudioIODeviceCallbackContext&) override {
         callbacks.fetch_add(1,std::memory_order_relaxed); const double sr=sampleRate.load(std::memory_order_relaxed); const double step=sr>0.0?juce::MathConstants<double>::twoPi*440.0/sr:0.0;
@@ -66,7 +72,7 @@ juce::String pluginAudioError;
 
 extern "C" {
 MD_EXPORT bool md_direct_audio_start(){ if(!directAudio) directAudio=std::make_unique<AudioDeviceCore>(); return directAudio->start(); }
-MD_EXPORT void md_direct_audio_stop(){ if(directAudio) directAudio->stop(); }
+MD_EXPORT void md_direct_audio_stop(){ if(directAudio){ directAudio->stop(); directAudio.reset(); } }
 MD_EXPORT void md_direct_audio_test_tone(double seconds){ if(directAudio) directAudio->testTone(seconds); }
 MD_EXPORT bool md_direct_audio_running(){ return directAudio&&directAudio->running.load(); }
 MD_EXPORT unsigned long long md_direct_audio_callbacks(){ return directAudio?directAudio->callbacks.load():0; }
