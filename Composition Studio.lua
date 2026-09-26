@@ -95,13 +95,13 @@ local diag_json
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","musical_draft","translation_prompt","composition_answer","apply_result","halion_result"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
  local raw=read_file(DIAG_CACHE_PATH) or reaper.GetExtState(EXT_SECTION,DIAG_STATE_KEY)
  if not raw or raw=="" then return end
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","musical_draft","translation_prompt","composition_answer","apply_result","halion_result"}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result"}
  for _,k in ipairs(keys) do
   local pat='"'..k..'"%s*:%s*"'
   local _,e=raw:find(pat)
@@ -198,7 +198,7 @@ local function swam_source_context()
  return table.concat(rows,"\\n"),nil
 end
 local function swam_interpretation_prompt(source)
- return [[Du bist ausschließlich musikalischer Interpret für SWAM Solo Strings. Die Komposition ist fertig und darf nicht umkomponiert werden. Entwickle aus dem musikalischen Entwurf und den vorhandenen Noten eine ausdrucksstarke, natürlich wirkende Streicheraufführung. Denke wie ein sehr guter Geiger bzw. Cellist: Phrasierung, Bogenführung, Ansatz und Loslassen, Vibrato-Verlauf innerhalb längerer Töne, Bogendruck, Klangposition, Legato/Portamento, dynamische Übergänge und sinnvolle Bogenwechsel. Nutze Tremolo, Harmonics, Sordino oder andere Sondertechniken nur, wenn sie musikalisch aus dem Entwurf hervorgehen. Verändere keine Tonhöhen und erfinde keine neuen Noten. Denke noch NICHT in CC-Nummern oder MIDI-Codierung. Schreibe stattdessen eine konkrete Aufführungsanweisung für jede Stimme und ihre Phrasen.]].."\\n\\nMUSIKALISCHER ENTWURF:\\n"..tostring(last_diag.musical_draft or "").."\\n\\nVORHANDENE MIDI-NOTEN:\\n"..source
+ return [[Du bist ausschließlich musikalischer Interpret für SWAM Solo Strings. Die Komposition ist fertig und darf nicht umkomponiert werden. Entwickle aus dem musikalischen Entwurf und den vorhandenen Noten eine ausdrucksstarke, natürlich wirkende Streicheraufführung. Denke wie ein sehr guter Geiger bzw. Cellist: Phrasierung, Bogenführung, Ansatz und Loslassen, Vibrato-Verlauf innerhalb längerer Töne, Bogendruck, Klangposition, Legato/Portamento, dynamische Übergänge und sinnvolle Bogenwechsel. Nutze Tremolo, Harmonics, Sordino oder andere Sondertechniken nur, wenn sie musikalisch aus dem Entwurf hervorgehen. Verändere keine Tonhöhen und erfinde keine neuen Noten. Denke noch NICHT in CC-Nummern oder MIDI-Codierung. Schreibe stattdessen eine konkrete Aufführungsanweisung für jede Stimme und ihre Phrasen.]].."\\n\\nFERTIGE KOMPOSITION:\\n"..tostring(last_diag.composition_music or "").."\\n\\nVORHANDENE MIDI-NOTEN:\\n"..source
 end
 local function swam_translation_prompt(source,performance)
  return [[Du bist ausschließlich technischer SWAM-Performance-Übersetzer. Übertrage die fertige Aufführungsanweisung in Composition-Studios CS/CSCTRL-Format. Komponiere NICHT neu. Alle vorhandenen Tonhöhen und Note-On-Zeitpunkte müssen erhalten bleiben. Notendauern dürfen nur behutsam verändert werden, wenn dies für Legato, Trennung oder Artikulation erforderlich ist. Erzeuge für jede vorhandene Stimme eine neue CS-Zeile und danach die nötigen CSCTRL-Zeilen. Verwende dieses verbindliche Profil "Composition Studio SWAM Strings v1": CC11 Expression, CC1 Vibrato Depth, CC19 Vibrato Rate, CC20 Portamento Time, CC21 Bow Pressure, CC22 Dynamic Transitions, CC23 Bow/Pizz Position, CC24 Bow Lift, CC25 Bow Start, CC26 Bow Noise, CC27 Attack Ramp Speed, CC28 Alternate Fingering, CC29 Harmonics, CC30 Tremolo, CC31 Sordino, CC32 Play Mode, CC33 Staccato Interval Time, CC34 Bowing Sensitivity. Main Volume CC7, Pan CC10, Reverb CC90 und Sustain CC64 nicht für musikalische Expression verwenden. Kontinuierliche Parameter dürfen fein abgestufte Verläufe erhalten; Ereignisparameter nur gezielt setzen. Vibrato soll bei längeren Tönen musikalisch innerhalb des Tons entstehen und sich entwickeln, nicht bloß statisch gesetzt werden. Bow Lift/Bow Start nur an sinnvollen Bogenwechseln. Verwende Sondertechniken nur, wenn die Aufführungsanweisung sie verlangt.
@@ -337,12 +337,12 @@ local function begin_process(request)
  local items=selected_items(false); local tracks=selected_tracks(); diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); launch("controller",prompt,key,{request=request,items=items,tracks=tracks})
 end
 local function title_prompt()
- local draft=last_diag.musical_draft or ""; local req=last_diag.request or ""
- return [[Gib dieser vorhandenen Komposition einen kurzen, eigenständigen Werktitel. Antworte ausschließlich mit dem Titel, ohne Anführungszeichen, ohne „Titel:“ und ohne Erläuterung. Der Titel soll musikalisch passend sein und nicht bloß Instrumente oder den Auftrag wiederholen.]].."\n\nAUFTRAG:\n"..req.."\n\nMUSIKALISCHER ENTWURF:\n"..draft
+ local draft=last_diag.composition_music or ""; local req=last_diag.request or ""
+ return [[Gib dieser vorhandenen Komposition einen kurzen, eigenständigen Werktitel. Antworte ausschließlich mit dem Titel, ohne Anführungszeichen, ohne „Titel:“ und ohne Erläuterung. Der Titel soll musikalisch passend sein und nicht bloß Instrumente oder den Auftrag wiederholen.]].."\n\nAUFTRAG:\n"..req.."\n\nFERTIGE KOMPOSITION:\n"..draft
 end
 ensure_title_then=function(kind)
  if safe_work_title(work_title)~="" then return false end
- local recovered=title_from_draft(last_diag.musical_draft or "",last_diag.request or "")
+ local recovered=title_from_draft(last_diag.composition_music or "",last_diag.request or "")
  if recovered~="" then work_title=recovered; reaper.SetProjExtState(0,EXT_SECTION,TITLE_KEY,work_title); diag_set("work_title",work_title); return false end
  local key=get_key(); if not key then update_status="Für die Titelermittlung fehlt der API-Key."; return true end
  update_status="KI findet einen Werktitel …"; launch("work_title",title_prompt(),key,{save_kind=kind}); return true
@@ -371,7 +371,7 @@ local function poll_job()
   swam_last_made=made; add("KI","SWAM-Interpretation erzeugt: "..tostring(#made).." neue Stimme(n). Die ursprüngliche Komposition blieb unverändert."); update_status="SWAM-Interpretation fertig – Original unverändert."; busy=false; return
  elseif stage=="analysis" then add("KI",text); busy=false; return
  elseif stage=="composition_music" then
-  diag_set("musical_draft",text); data.draft=text; work_title=title_from_draft(text,data.request); if work_title~="" then reaper.SetProjExtState(0,EXT_SECTION,TITLE_KEY,work_title); diag_set("work_title",work_title) end; local tp=midi_translation_prompt(data.request,text); diag_set("translation_prompt",tp); launch("composition",tp,key,data); return
+  diag_set("composition_music",text); data.draft=text; work_title=title_from_draft(text,data.request); if work_title~="" then reaper.SetProjExtState(0,EXT_SECTION,TITLE_KEY,work_title); diag_set("work_title",work_title) end; local tp=midi_translation_prompt(data.request,text); diag_set("translation_prompt",tp); launch("composition",tp,key,data); return
  elseif stage=="composition" then
   diag_set("composition_answer",text); local made,ae=apply_composition(text,data.full,data.music_tracks); diag_set("apply_result",made and ("created_items="..tostring(#made)) or ("ERROR: "..tostring(ae))); if not made then add("KI","Die musikalische Antwort konnte nicht sicher angewendet werden: "..tostring(ae)); busy=false; return end; local htr,hsl=initialize_halion_project(); diag_set("halion_result",string.format("auto_initialized_tracks=%d slots=%d",htr,hsl)); data.comp=text; data.made=made; last_made=made; local gs={}; for _,it in ipairs(made) do gs[#gs+1]=item_guid(it) end; reaper.SetProjExtState(0,EXT_SECTION,"LastMadeGUIDs",table.concat(gs,"\n")); persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); launch("summary",summary_prompt(data.request,text,made),key,data); return
  elseif stage=="summary" then add("KI",text); busy=false; return end
