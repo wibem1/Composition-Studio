@@ -1,9 +1,11 @@
 # Composition Studio
 
-Aktives REAPER-Kompositionssystem.
+Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
-CURRENT: Composition Studio 1.0.4. Lokale Composition Engine 2.3.1, Build 231. Runtime-Datei: Composition Studio.lua.
+Aktueller Stand: **v1.0.5**.
 
-Der Runtime-Stand wurde aus dem bisherigen Reaper-Composition Repository, Branch composition-studio, uebernommen. Das fruehere MiniDAW-Projekt liegt separat im MiniDAW-Archiv.
+Neu in v1.0.5: erster integrierter **Notation-Prototyp 0.1**. Er kann die angezeigten Notenlängen ausgewählter MIDI-Noten auf Auto, 1/8, 1/16 oder 1/32 quantisieren, ohne die zugrunde liegende MIDI-Performance zu verändern. Die originale Darstellung kann wiederhergestellt werden.
 
-Die aktive Update-Linie liegt auf main; es gibt keine parallele Nutzerinstallation. Technische Tests ersetzen keine praktische musikalische Freigabe.
+Die langfristige Zielsetzung des Notationsmoduls ist in [NOTATION-MODULE.md](NOTATION-MODULE.md) dokumentiert.
+
+Die bestehende Updatefunktion bleibt der normale Installationsweg: **Studio-Menü → Update**.
