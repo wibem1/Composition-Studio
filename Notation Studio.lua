@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.9
+-- @version 0.1.10
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.9"
+local VERSION="0.1.10"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -237,43 +237,29 @@ local function apply_readable_scale(ed)
 
  local first_measure=reaper.TimeMap_QNToMeasures(0,first_qn)
  local last_measure=reaper.TimeMap_QNToMeasures(0,last_qn)
- local span_measures=math.max(1,last_measure-first_measure+1)
- local density=count/span_measures
+ local measures=math.max(1,last_measure-first_measure+1)
+ local density=count/measures
 
- local target_measures=4
- if density>=24 then target_measures=2
- elseif density>=12 then target_measures=3 end
+ -- Direct REAPER MIDI-editor scaling. No zoom actions, no time-selection tricks.
+ -- Target: roughly 2–4 readable measures on a normal desktop editor.
+ local px_per_qn=80
+ if density>=28 then px_per_qn=120
+ elseif density>=18 then px_per_qn=105
+ elseif density>=10 then px_per_qn=90 end
 
- local cursor_qn=reaper.TimeMap2_timeToQN(0,reaper.GetCursorPosition())
- local anchor_qn=(cursor_qn>=first_qn and cursor_qn<=last_qn) and cursor_qn or first_qn
- local anchor_measure=reaper.TimeMap_QNToMeasures(0,anchor_qn)
-
- -- Keep the anchor roughly centered where possible.
- local start_measure=math.max(first_measure,anchor_measure-math.floor(target_measures/2))
- if start_measure+target_measures-1>last_measure then
-  start_measure=math.max(first_measure,last_measure-target_measures+1)
+ local unit=reaper.MIDIEditor_GetSetting_int(ed,"timebase_unit")
+ local px_per_unit=px_per_qn
+ if unit==0 then
+  local bpm=reaper.Master_GetTempo()
+  px_per_unit=px_per_qn*(bpm/60.0)
  end
 
- local start_time=reaper.TimeMap_GetMeasureInfo(0,start_measure)
- local end_time=reaper.TimeMap_GetMeasureInfo(0,start_measure+target_measures)
- if not start_time or not end_time or end_time<=start_time then return false,"Taktbereich konnte nicht bestimmt werden" end
+ local setting=math.floor(px_per_unit*1024+0.5)
+ local ok=reaper.MIDIEditor_SetSetting_int(ed,"pixels_per_timebase_unit",setting)
+ if not ok then return false,"REAPER hat pixels_per_timebase_unit nicht übernommen" end
 
- local old_start,old_end=reaper.GetSet_LoopTimeRange2(0,false,false,0,0,false)
- reaper.GetSet_LoopTimeRange2(0,true,false,start_time,end_time,false)
-
- local cmd,txt=find_action_variants({
-  {"view","zoom to time selection"},
-  {"zoom","time selection"},
-  {"zoom","zeitauswahl"}
- })
- if not cmd then
-  reaper.GetSet_LoopTimeRange2(0,true,false,old_start,old_end,false)
-  return false,"REAPER-Aktion „Zoom to time selection“ nicht gefunden"
- end
-
- reaper.MIDIEditor_OnCommand(ed,cmd)
- reaper.GetSet_LoopTimeRange2(0,true,false,old_start,old_end,false)
- return true,string.format("%d Takte · %.1f markierte Noten/Takt · %s",target_measures,density,txt)
+ local actual=reaper.MIDIEditor_GetSetting_int(ed,"pixels_per_timebase_unit")
+ return true,string.format("%.0f px/Viertelnote · %.1f markierte Noten/Takt · REAPER-Wert %d",px_per_qn,density,actual or -1)
 end
 
 local function cleanup_notation()
@@ -457,7 +443,7 @@ local function draw()
 
   if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
-   reaper.ImGui_TextWrapped(ctx,"Verbessert Notationsdarstellung und erzeugt eine gut lesbare Zielskalierung von etwa 2–4 Takten. Die Breite wird an die Notendichte angepasst.")
+   reaper.ImGui_TextWrapped(ctx,"Verbessert Notationsdarstellung und setzt die MIDI-Editor-Skalierung direkt in Pixeln pro Viertelnote. Keine Zoom-Action, keine Zeitauswahl.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
