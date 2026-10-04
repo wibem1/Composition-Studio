@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.27
+-- @version 1.0.28
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.27"
+local VERSION="1.0.28"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -291,7 +291,7 @@ local function score_capture_selection()
     if ok and not muted then
      local st=reaper.MIDI_GetProjTimeFromPPQPos(it.take,sp)
      local et=reaper.MIDI_GetProjTimeFromPPQPos(it.take,ep)
-     notes[#notes+1]={take=it.take,item=it.item,item_guid=it.guid,take_name=it.take_name,track_name=it.track_name,note_idx=n,start_ppq=sp,end_ppq=ep,start_qn=reaper.TimeMap2_timeToQN(0,st),duration_qn=reaper.TimeMap2_timeToQN(0,et)-reaper.TimeMap2_timeToQN(0,st),pitch=p,velocity=v,channel=ch}
+     notes[#notes+1]={take=it.take,item=it.item,item_guid=it.guid,track_guid=it.track_guid,take_name=it.take_name,track_name=it.track_name,note_idx=n,start_ppq=sp,end_ppq=ep,start_qn=reaper.TimeMap2_timeToQN(0,st),duration_qn=reaper.TimeMap2_timeToQN(0,et)-reaper.TimeMap2_timeToQN(0,st),pitch=p,velocity=v,channel=ch}
     end
    end
   end
@@ -863,9 +863,9 @@ local function scoreflow_append_rests(out,gap,grid)
   gap=scoreflow_quant(gap-chosen[1],grid)
  end
 end
-local function scoreflow_staff_mode(notes)
+local function scoreflow_staff_mode(notes,items)
  local names={}
- for _,it in ipairs(score_state.items or {}) do
+ for _,it in ipairs(items or score_state.items or {}) do
   names[#names+1]=string.lower(tostring(it.track_name or "").." "..tostring(it.take_name or ""))
  end
  local n=table.concat(names," ")
@@ -933,38 +933,80 @@ local function scoreflow_voice_json(notes,mstart,mend,staff,mode,grid)
  if cursor<mend-grid/2 then scoreflow_append_rests(out,mend-cursor,grid) end
  return "["..table.concat(out,",").."]"
 end
-local function scoreflow_score_json()
- local notes=score_state.notes or {}
- if #notes==0 then return nil,"Keine Noten in der aktuellen REAPER-Auswahl." end
- local grid=scoreflow_grid(notes)
- local minq,maxq=notes[1].start_qn,notes[1].start_qn+notes[1].duration_qn
- for _,n in ipairs(notes) do
-  minq=math.min(minq,n.start_qn)
-  maxq=math.max(maxq,n.start_qn+n.duration_qn)
- end
- local m0=select(1,reaper.TimeMap_QNToMeasures(0,minq))
- local m1=select(1,reaper.TimeMap_QNToMeasures(0,math.max(minq,maxq-1e-7)))
- m0=math.max(0,tonumber(m0) or 0); m1=math.max(m0,tonumber(m1) or m0)
- local mode=scoreflow_staff_mode(notes)
+local function scoreflow_part_json(part_notes,part_items,m0,m1)
+ local grid=scoreflow_grid(part_notes)
+ local mode=scoreflow_staff_mode(part_notes,part_items)
  local measures={}
- local first_num,first_den,first_tempo=nil,nil,nil
  local prev_ts=nil
  for mi=m0,m1 do
-  local _,ms,me,num,den,tempo=reaper.TimeMap_GetMeasureInfo(0,mi)
+  local _,ms,me,num,den=reaper.TimeMap_GetMeasureInfo(0,mi)
   ms=tonumber(ms) or (mi*4); me=tonumber(me) or (ms+4)
-  num=tonumber(num) or 4; den=tonumber(den) or 4; tempo=tonumber(tempo) or reaper.Master_GetTempo()
-  if not first_num then first_num,first_den,first_tempo=num,den,tempo end
+  num=tonumber(num) or 4; den=tonumber(den) or 4
   local ts=tostring(num).."/"..tostring(den)
   local extra=""
   if prev_ts and ts~=prev_ts then extra=',"_ts":"'..ts..'"' end
   prev_ts=ts
-  local tre=scoreflow_voice_json(notes,ms,me,"treble",mode,grid)
-  local bas=scoreflow_voice_json(notes,ms,me,"bass",mode,grid)
+  local tre=scoreflow_voice_json(part_notes,ms,me,"treble",mode,grid)
+  local bas=scoreflow_voice_json(part_notes,ms,me,"bass",mode,grid)
   measures[#measures+1]='{"treble":'..tre..',"bass":'..bas..extra..'}'
  end
- local timesig=tostring(first_num or 4).."/"..tostring(first_den or 4)
  local staffMode=(mode=="treble" and "single-treble") or (mode=="bass" and "single-bass") or "grand"
- return '{"title":"Composition Studio","instrument":"piano","staffMode":"'..staffMode..'","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo or reaper.Master_GetTempo())..',"measures":['..table.concat(measures,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
+ local name=(part_items[1] and part_items[1].track_name) or "Part"
+ return '{"name":"'..json_escape(name)..'","staffMode":"'..staffMode..'","measures":['..table.concat(measures,",")..']}'
+end
+local function scoreflow_score_json()
+ local notes=score_state.notes or {}
+ if #notes==0 then return nil,"Keine Noten in der aktuellen REAPER-Auswahl." end
+
+ local minq,maxq=notes[1].start_qn,notes[1].start_qn+notes[1].duration_qn
+ for _,n in ipairs(notes) do minq=math.min(minq,n.start_qn); maxq=math.max(maxq,n.start_qn+n.duration_qn) end
+ local m0=select(1,reaper.TimeMap_QNToMeasures(0,minq))
+ local m1=select(1,reaper.TimeMap_QNToMeasures(0,math.max(minq,maxq-1e-7)))
+ m0=math.max(0,tonumber(m0) or 0); m1=math.max(m0,tonumber(m1) or m0)
+
+ local _,_,_,first_num,first_den,first_tempo=reaper.TimeMap_GetMeasureInfo(0,m0)
+ first_num=tonumber(first_num) or 4; first_den=tonumber(first_den) or 4
+ first_tempo=tonumber(first_tempo) or reaper.Master_GetTempo()
+ local timesig=tostring(first_num).."/"..tostring(first_den)
+
+ local byTrack,order={},{}
+ for _,it in ipairs(score_state.items or {}) do
+  local g=it.track_guid or it.track_name
+  if not byTrack[g] then byTrack[g]={notes={},items={}}; order[#order+1]=g end
+  byTrack[g].items[#byTrack[g].items+1]=it
+ end
+ for _,n in ipairs(notes) do
+  local g=n.track_guid or n.track_name
+  if not byTrack[g] then byTrack[g]={notes={},items={}}; order[#order+1]=g end
+  byTrack[g].notes[#byTrack[g].notes+1]=n
+ end
+
+ if #order<=1 then
+  local p=byTrack[order[1]]
+  local mode=scoreflow_staff_mode(p.notes,p.items)
+  local grid=scoreflow_grid(p.notes)
+  local measures={}; local prev_ts=nil
+  for mi=m0,m1 do
+   local _,ms,me,num,den=reaper.TimeMap_GetMeasureInfo(0,mi)
+   ms=tonumber(ms) or (mi*4); me=tonumber(me) or (ms+4)
+   num=tonumber(num) or 4; den=tonumber(den) or 4
+   local ts=tostring(num).."/"..tostring(den); local extra=""
+   if prev_ts and ts~=prev_ts then extra=',"_ts":"'..ts..'"' end
+   prev_ts=ts
+   local tre=scoreflow_voice_json(p.notes,ms,me,"treble",mode,grid)
+   local bas=scoreflow_voice_json(p.notes,ms,me,"bass",mode,grid)
+   measures[#measures+1]='{"treble":'..tre..',"bass":'..bas..extra..'}'
+  end
+  local staffMode=(mode=="treble" and "single-treble") or (mode=="bass" and "single-bass") or "grand"
+  return '{"title":"Composition Studio","instrument":"piano","staffMode":"'..staffMode..'","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo)..',"measures":['..table.concat(measures,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
+ end
+
+ local parts={}
+ for _,g in ipairs(order) do
+  local p=byTrack[g]
+  if #p.notes>0 then parts[#parts+1]=scoreflow_part_json(p.notes,p.items,m0,m1) end
+ end
+ return '{"title":"Composition Studio","instrument":"ensemble","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo)..',"parts":['..table.concat(parts,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
 end
 local function scoreflow_host_html(score_json)
  local base="https://cdn.jsdelivr.net/gh/IlyaSkorik/scoreflow@"..SCOREFLOW_COMMIT.."/assets/www/"
@@ -1025,7 +1067,9 @@ window.flutter_inappwebview={callHandler:function(name,data){
  if(name==='onNoteTap'&&data){
   try{
    const sc=window.csScore;
-   const n=sc&&sc.measures&&sc.measures[data.measure]&&sc.measures[data.measure][data.voice]&&sc.measures[data.measure][data.voice][data.index];
+   const n=(sc&&sc.parts&&data.part!=null)
+    ? sc.parts[data.part].measures[data.measure][data.voice][data.index]
+    : (sc&&sc.measures&&sc.measures[data.measure]&&sc.measures[data.measure][data.voice]&&sc.measures[data.measure][data.voice][data.index]);
    if(n&&n.csid&&window.csSelectSingle){window.csSelectSingle(n.csid);}
   }catch(e){}
  }
@@ -1033,7 +1077,7 @@ window.flutter_inappwebview={callHandler:function(name,data){
 }};
 </script>
 <script type="module">
-import { render } from 'https://cdn.jsdelivr.net/gh/wibem1/Composition-Studio@5e7c7c5ef5a95d2a29ef8a8f9f13a2e2d5d364ed/web/scoreflow-cs-render.js';
+import { render } from 'https://cdn.jsdelivr.net/gh/wibem1/Composition-Studio@7671d4ebd368f4b3b322caf97d5f7302c41b1977/web/scoreflow-cs-render.js';
 import { state } from ']]..base..[[js/utils/state.js';
 let score=]]..score_json..[[;
 window.csScore=score;
@@ -1043,7 +1087,10 @@ setTimeout(function(){
 },0);
 
 function noteByHit(h){
- try{return score.measures[h.m][h.v][h.i];}catch(e){return null;}
+ try{
+  if(score.parts&&h.p!=null) return score.parts[h.p].measures[h.m][h.v][h.i];
+  return score.measures[h.m][h.v][h.i];
+ }catch(e){return null;}
 }
 function ensureLayer(){
  let l=document.getElementById('cs-selection-layer');
@@ -1350,7 +1397,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Blankes Notationsfenster aus v1.0.26 behoben.\n• Ursache war der ES-Modul-Import des neuen Renderer-Forks über raw.githubusercontent.com.\n• Der Renderer wird jetzt über jsDelivr von einem festen Repository-Commit geladen, analog zu den übrigen ScoreFlow-Modulen.\n• Single-Staff und die neue MIDI→Notation-Logik aus v1.0.26 bleiben erhalten.\n\nZU TESTEN\n\nNotation öffnen: Das Notenbild muss wieder erscheinen. Falls der Renderer selbst einen Laufzeitfehler hat, wird dieser nun im Fenster als „Rendererfehler“ angezeigt statt eines völlig leeren Blatts." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Mehrere ausgewählte REAPER-Tracks werden nicht mehr zu einem gemeinsamen Notenpool vermischt.\n• Jeder Track wird als eigener Part mit Trackname und eigener Instrument-/Schlüsselentscheidung erhalten.\n• Mehrspur-Renderer verwendet für alle Parts dieselbe Taktgeometrie: Takte und Zeilenumbrüche bleiben vertikal ausgerichtet.\n• Ein Klaviertrack kann weiterhin zweisystemig sein; Einzelinstrumente bleiben einsystemig.\n• Auswahl und Bearbeitung bleiben über die globalen csid-Noten-IDs mit dem jeweiligen REAPER-MIDI verbunden.\n\nZU TESTEN\n\n1. Zwei oder mehr MIDI-Items auf verschiedenen Tracks auswählen.\n2. Notation öffnen.\n3. Jeder Track muss als eigener beschrifteter Part erscheinen.\n4. Taktstriche müssen untereinander ausgerichtet sein.\n5. Eine Note in einem Part markieren und transponieren/ziehen; nur die entsprechende REAPER-Note darf geändert werden." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
