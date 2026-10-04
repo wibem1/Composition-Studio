@@ -150,3 +150,15 @@ Die veröffentlichte reaper_webview 0.2.0 bietet nur WEBVIEW_Navigate. Für echt
 - nach MIDI-Änderung wird die bestehende ScoreFlow-WebView-Instanz neu navigiert/rendered
 
 Build ist reproduzierbar über .github/workflows/build-webview-bridge.yml; Grundlage ist exakt reaper_webview v0.2.0. Keine lokale Serverkomponente.
+
+
+## 2026-10-04 – v1.0.20 / ScoreFlow-Auswahl
+
+Fehlerursache für wirkungsloses Anklicken: Der Polyfill für onNoteTap lag in einem klassischen Script und griff auf `score` zu, das als `const` nur im ES-Modul-Scope existierte. Der ReferenceError wurde durch try/catch verschluckt.
+
+Korrektur:
+- Score wird als `window.csScore` explizit für die Interaktionsschicht veröffentlicht.
+- Einzelklick: nearest-note Hit-Test über ScoreFlows vorhandene `state.noteHits`, sichtbare blaue Markierung.
+- Klick-Drag: Rechteckauswahl über die Zentren der vorhandenen ScoreFlow-Hitboxes.
+- Auswahl wird als csid-Liste über die WebView-Bridge übertragen.
+- ±1 Halbton und Dauerfaktor werden in einem einzigen REAPER-Undo-Schritt auf die komplette Auswahl angewandt.
