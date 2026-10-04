@@ -33,3 +33,14 @@ Neu:
 - Aktions-IDs werden nach Möglichkeit dynamisch aus dem MIDI-Editor-Aktionsbereich ermittelt, statt versionsabhängig fest verdrahtet zu werden.
 
 Nächster Schritt erst nach Sichttest des Notenbilds.
+
+
+## 2026-10-04 – Notation-Prototyp 0.3 / v1.0.8
+
+Nach Sichttest von v1.0.7 wird REAPERs eigene Option **Notation: Proportional (musical) note spacing** in das Modul integriert. Sie verteilt kurze Noten großzügiger und lange Werte kompakter als das absolute Piano-Roll-Zeitraster.
+
+- sichtbarer Schalter Musikalische Abstände
+- Lesbar machen aktiviert diesen Modus automatisch
+- danach Zoom to content + drei horizontale Zoom-in-Schritte
+- MIDI-Daten bleiben unverändert
+- Toggle-State wird über REAPERs MIDI-Editor Action Section abgefragt
