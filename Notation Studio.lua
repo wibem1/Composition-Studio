@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.1
+-- @version 0.1.2
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.1"
+local VERSION="0.1.2"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local KEY_NAMES={openai="OpenAIAPIKey",anthropic="AnthropicAPIKey",google="GoogleAPIKey"}
 local MODELS={
@@ -22,6 +22,7 @@ if type(reaper.ImGui_CreateContext)~="function" then
  return
 end
 
+local midi_editor=reaper.MIDIEditor_GetActive()
 local ctx=reaper.ImGui_CreateContext("Notation Studio",reaper.ImGui_ConfigFlags_DockingEnable())
 local open=true
 local status=""
@@ -76,22 +77,32 @@ local function get_key()
  if k~="" then reaper.SetExtState(EXT_SECTION,KEY_NAMES[provider],k,true); return k end
 end
 
+local function midi_section()
+ if type(reaper.SectionFromUniqueID)~="function" then return nil end
+ return reaper.SectionFromUniqueID(32060)
+end
+
 local function midi_action_by_name(name)
- if type(reaper.kbd_enumerateActions)=="function" and type(reaper.kbd_getTextFromCmd)=="function" then
+ local section=midi_section()
+ if section and type(reaper.kbd_enumerateActions)=="function" then
   local i=0
   while true do
-   local cmd=reaper.kbd_enumerateActions(32060,i)
+   local cmd,txt=reaper.kbd_enumerateActions(section,i)
    if not cmd or cmd==0 then break end
-   if reaper.kbd_getTextFromCmd(cmd,32060)==name then return cmd end
+   if txt==name then return cmd end
    i=i+1
   end
  end
- local fallback={["View: Zoom to content"]=40466}
+ local fallback={
+  ["View: Zoom to content"]=40466
+ }
  return fallback[name]
 end
 
 local function active_editor()
- return type(reaper.MIDIEditor_GetActive)=="function" and reaper.MIDIEditor_GetActive() or nil
+ local cur=type(reaper.MIDIEditor_GetActive)=="function" and reaper.MIDIEditor_GetActive() or nil
+ if cur then midi_editor=cur end
+ return midi_editor
 end
 
 local function run_action(name,times)
@@ -133,22 +144,50 @@ end
 
 local function cleanup_notation()
  local ed=active_editor()
- if not ed then status="Kein aktiver MIDI-Editor."; return end
+ if not ed then status="Kein MIDI-Editor gefunden. Notation Studio bitte aus dem geöffneten Notationseditor starten."; return end
  local missing={}
+ local applied={}
  local function act(name)
   local cmd=midi_action_by_name(name)
-  if cmd then reaper.MIDIEditor_OnCommand(ed,cmd) else missing[#missing+1]=name end
+  if cmd then
+   local ok=reaper.MIDIEditor_OnCommand(ed,cmd)
+   if ok==false then missing[#missing+1]=name.." (nicht ausführbar)" else applied[#applied+1]=name end
+  else
+   missing[#missing+1]=name
+  end
  end
- set_musical_spacing(true)
- act("Notation: Set display quantization to 1/16 (default)")
- act("Notation: Set minimum display quantization note length to 1/64 (default)")
- set_toggle("Notation: Automatically detect triplets",true)
- set_toggle("Notation: Automatically voice overlapping notes",true)
- act("View: Zoom to content")
- if #missing==0 then
-  status="Lesbarkeit verbessert."
+
+ -- REAPER 7.81: exact MIDI-editor notation actions.
+ local spacing_cmd=midi_action_by_name("Notation: Proportional (musical) note spacing")
+ if spacing_cmd then
+  local state=reaper.GetToggleCommandStateEx(32060,spacing_cmd)
+  if state~=1 then reaper.MIDIEditor_OnCommand(ed,spacing_cmd) end
+  applied[#applied+1]="Proportional spacing"
  else
-  status="Teilweise ausgeführt. Nicht gefunden: "..table.concat(missing,", ")
+  missing[#missing+1]="Notation: Proportional (musical) note spacing"
+ end
+
+ act("Notation: Set display quantization to 1/16 (default)")
+ act("Notation: Set minimum display quantization note length to 1/16")
+ local trip=midi_action_by_name("Notation: Automatically detect triplets")
+ if trip then
+  if reaper.GetToggleCommandStateEx(32060,trip)~=1 then reaper.MIDIEditor_OnCommand(ed,trip) end
+  applied[#applied+1]="Triplet detection"
+ else missing[#missing+1]="Notation: Automatically detect triplets" end
+
+ local voice=midi_action_by_name("Notation: Automatically voice overlapping notes")
+ if voice then
+  if reaper.GetToggleCommandStateEx(32060,voice)~=1 then reaper.MIDIEditor_OnCommand(ed,voice) end
+  applied[#applied+1]="Automatic voicing"
+ else missing[#missing+1]="Notation: Automatically voice overlapping notes" end
+
+ local zoom=midi_action_by_name("View: Zoom to content")
+ if zoom then reaper.MIDIEditor_OnCommand(ed,zoom) end
+
+ if #missing==0 then
+  status="Lesbarkeit verbessert: proportionale Abstände, Anzeige 1/16, Mindestlänge 1/16, Triolen- und Stimmenautomatik."
+ else
+  status="Teilweise ausgeführt. Nicht gefunden: "..table.concat(missing," | ")
  end
 end
 
@@ -256,6 +295,7 @@ local function draw()
  if visible then
   local _,nsel=selection_context()
   reaper.ImGui_Text(ctx,"Native REAPER-Notation · "..tostring(nsel).." Note(n) markiert")
+  if not active_editor() then reaper.ImGui_TextWrapped(ctx,"Kein MIDI-Editor gebunden – bitte Notation Studio aus dem geöffneten Notationseditor starten.") end
   reaper.ImGui_Separator(ctx)
 
   if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
