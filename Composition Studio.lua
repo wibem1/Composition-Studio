@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.26
+-- @version 1.0.27
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.26"
+local VERSION="1.0.27"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1033,7 +1033,7 @@ window.flutter_inappwebview={callHandler:function(name,data){
 }};
 </script>
 <script type="module">
-import { render } from 'https://raw.githubusercontent.com/wibem1/Composition-Studio/main/web/scoreflow-cs-render.js?v=1026';
+import { render } from 'https://cdn.jsdelivr.net/gh/wibem1/Composition-Studio@5e7c7c5ef5a95d2a29ef8a8f9f13a2e2d5d364ed/web/scoreflow-cs-render.js';
 import { state } from ']]..base..[[js/utils/state.js';
 let score=]]..score_json..[[;
 window.csScore=score;
@@ -1204,7 +1204,12 @@ window.csUpdateScore=function(nextScore){
   return false;
  }
 };
-try{render(score); installSelection();}catch(e){document.body.insertAdjacentHTML('beforeend','<div id="engine-error">'+String(e)+'</div>');}
+try{
+ render(score);
+ installSelection();
+}catch(e){
+ document.body.insertAdjacentHTML('beforeend','<div id="engine-error">Rendererfehler: '+String(e)+'</div>');
+}
 </script></body></html>]]
 end
 local function scoreflow_open_webview()
@@ -1345,7 +1350,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Eigener ScoreFlow-Renderer-Fork mit echtem Einzelstimmenmodus.\n• Violine/Viola/Flöte/Klarinette usw. werden als einzelnes Violinschlüsselsystem dargestellt; Cello/Kontrabass/Fagott als einzelnes Basssystem.\n• Klavier bleibt Grand Staff.\n• MIDI-Gate-Länge wird nicht mehr blind als Notenwert interpretiert. Für kurze artikulierte Töne wird der Abstand zum nächsten Anschlag als primäre Notationsdauer verwendet.\n• Dadurch verschwinden viele falsche 16tel/32tel-Werte und die daraus entstandenen Mikro-Pausen.\n\nNOCH OFFEN\n\n• Tonartübernahme.\n• Tenor-/Altschlüssel und automatische Schlüsselwechsel.\n• echte Mehrstimmenanalyse und Haltebögen über Taktgrenzen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Blankes Notationsfenster aus v1.0.26 behoben.\n• Ursache war der ES-Modul-Import des neuen Renderer-Forks über raw.githubusercontent.com.\n• Der Renderer wird jetzt über jsDelivr von einem festen Repository-Commit geladen, analog zu den übrigen ScoreFlow-Modulen.\n• Single-Staff und die neue MIDI→Notation-Logik aus v1.0.26 bleiben erhalten.\n\nZU TESTEN\n\nNotation öffnen: Das Notenbild muss wieder erscheinen. Falls der Renderer selbst einen Laufzeitfehler hat, wird dieser nun im Fenster als „Rendererfehler“ angezeigt statt eines völlig leeren Blatts." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
