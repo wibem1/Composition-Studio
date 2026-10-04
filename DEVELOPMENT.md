@@ -64,3 +64,14 @@ MIDI-Performance bleibt unverändert. Alle Änderungen liegen in einem REAPER-Un
 ## 2026-10-04 – v1.0.10 Updater-Fix
 
 Praxisfehler: lokale v1.0.8 meldete trotz v1.0.9 auf main „Bereits aktuell“. Diagnose: der Raw-GitHub-Abruf lieferte offenbar eine veraltete Kopie. Der Updater verwendet nun Cache-Control/Pragma no-cache und bei verdächtig identischer Remote-Version einen zweiten Abruf über die GitHub Contents API mit Raw-Accept-Header.
+
+
+## 2026-10-04 – v1.0.11 Lesbar-machen-Fix
+
+Praxisfehler: „Lesbar machen“ führte bei jedem Klick weitere horizontale Zoom-in-Schritte aus. Das widerspricht der Bedeutung einer festen Arbeitsansicht.
+
+Fix:
+- feste Zoom-in-Serie entfernt
+- Lesbar machen = musikalische Abstände aktivieren + View: Zoom to content
+- wiederholtes Klicken soll dieselbe Ansicht ergeben
+- Breiter/Schmaler bleibt ausschließlich manuelle Feineinstellung
