@@ -1,11 +1,21 @@
 -- @description Notation Studio
--- @version 0.1.0
+-- @version 0.1.1
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.0"
-local MAIN_PATH=reaper.GetResourcePath().."/Scripts/Composition Studio/Composition Studio.lua"
+local VERSION="0.1.1"
+local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
+local KEY_NAMES={openai="OpenAIAPIKey",anthropic="AnthropicAPIKey",google="GoogleAPIKey"}
+local MODELS={
+ openai={{"GPT-5.6 Sol","gpt-5.6-sol"},{"GPT-5.6 Terra","gpt-5.6-terra"},{"GPT-5.6 Luna","gpt-5.6-luna"}},
+ anthropic={{"Claude Fable 5","claude-fable-5"},{"Claude Sonnet 5","claude-sonnet-5"},{"Claude Opus 5","claude-opus-5"}},
+ google={{"Gemini 3.8 Flash","gemini-3.8-flash"},{"Gemini 3.1 Pro","gemini-3.1-pro-preview"},{"Gemini 2.5 Pro","gemini-2.5-pro"}}
+}
+local provider=reaper.GetExtState(EXT_SECTION,PROVIDER_KEY)
+if provider=="" or not MODELS[provider] then provider="openai" end
+local model=reaper.GetExtState(EXT_SECTION,MODEL_KEY)
+if model=="" then model=MODELS[provider][1][2] end
 
 if type(reaper.ImGui_CreateContext)~="function" then
  reaper.ShowMessageBox("Notation Studio benötigt ReaImGui.","Notation Studio",0)
@@ -17,9 +27,54 @@ local open=true
 local status=""
 local ai_input=""
 local ai_answer=""
-local last_result_seq=""
+local ai_job=nil
+local ai_busy=false
 
 local function trim(s) return (s or ""):gsub("^%s+",""):gsub("%s+$","") end
+local function shell_quote(v) return "'"..tostring(v):gsub("'","'\\''").."'" end
+local function json_escape(v) return tostring(v or ""):gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t") end
+local function read_file(p) local f=io.open(p,"rb"); if not f then return nil end; local x=f:read("*a"); f:close(); return x end
+local function write_file(p,x) local f=io.open(p,"wb"); if not f then return false end; f:write(x); f:close(); return true end
+local function read_json_string(raw,q)
+ local out,i={},q+1
+ while i<=#raw do
+  local c=raw:sub(i,i)
+  if c=='"' then return table.concat(out) end
+  if c=="\\" then
+   i=i+1; local e=raw:sub(i,i)
+   if e=="n" then out[#out+1]="\n"
+   elseif e=="r" then out[#out+1]="\r"
+   elseif e=="t" then out[#out+1]="\t"
+   elseif e=='"' then out[#out+1]='"'
+   elseif e=="\\" then out[#out+1]="\\"
+   else out[#out+1]=e end
+  else out[#out+1]=c end
+  i=i+1
+ end
+ return table.concat(out)
+end
+local function response_text(raw)
+ local a,b=(raw or ""):find('"type"%s*:%s*"output_text"'); if not a then return nil end
+ local c,d=raw:find('"text"%s*:',b+1); if not c then return nil end
+ local q=raw:find('"',d+1,true); return q and read_json_string(raw,q) or nil
+end
+local function first_text_field(raw)
+ local a,b=(raw or ""):find('"text"%s*:'); if not a then return nil end
+ local q=raw:find('"',b+1,true); return q and read_json_string(raw,q) or nil
+end
+local function provider_name() return provider=="openai" and "OpenAI" or provider=="anthropic" and "Anthropic" or "Google" end
+local function model_label()
+ for _,m in ipairs(MODELS[provider] or {}) do if m[2]==model then return m[1] end end
+ return model
+end
+local function get_key()
+ local k=trim(reaper.GetExtState(EXT_SECTION,KEY_NAMES[provider]))
+ if k~="" then return k end
+ local ok,v=reaper.GetUserInputs("Notation Studio – KI-Zugang",1,provider_name().." API-Key:,extrawidth=320","")
+ if not ok then return nil end
+ k=trim(v)
+ if k~="" then reaper.SetExtState(EXT_SECTION,KEY_NAMES[provider],k,true); return k end
+end
 
 local function midi_action_by_name(name)
  if type(reaper.kbd_enumerateActions)=="function" and type(reaper.kbd_getTextFromCmd)=="function" then
@@ -141,31 +196,56 @@ local function selection_context()
  return table.concat(out,"\n"),count
 end
 
-local function ensure_main_running()
- if reaper.GetExtState(EXT_SECTION,"WindowOpen")=="1" then return true end
- local f=io.open(MAIN_PATH,"rb")
- if not f then status="Composition Studio wurde nicht gefunden."; return false end
- f:close()
- pcall(dofile,MAIN_PATH)
- return true
-end
-
 local function send_ai(request)
+ if ai_busy then status="KI arbeitet bereits."; return end
  local context,count=selection_context()
  if count==0 then status="Bitte zuerst Note(n) im nativen Notationseditor markieren."; return end
- if not ensure_main_running() then return end
- reaper.SetExtState(EXT_SECTION,"NotationAIRequest",request,false)
- reaper.SetExtState(EXT_SECTION,"NotationAIContext",context,false)
- local seq=tostring(os.time())..":"..tostring(math.random(100000,999999))
- reaper.SetExtState(EXT_SECTION,"NotationAIRequestSeq",seq,false)
- status="KI-Auftrag an Composition Studio übergeben …"
+ local key=get_key()
+ if not key then status="Kein API-Key verfügbar."; return end
+ local prompt=[[Du bist der musikalische Assistent von Notation Studio in REAPER.
+Beziehe dich ausschließlich auf die als NOTATION_SELECTION übergebenen markierten Noten.
+Erfinde keine nicht vorhandenen Noten. Bei Analyse- oder Beurteilungsaufträgen veränderst du nichts.
+Antworte musikalisch präzise und konkret.
+
+AUFTRAG:
+]]..request.."\n\n"..context
+ local base=os.tmpname()
+ local rq,rs,cd=base..".json",base..".out",base..".code"
+ local body,url,headers
+ if provider=="openai" then
+  body='{"model":"'..json_escape(model)..'","input":"'..json_escape(prompt)..'"}'
+  url="https://api.openai.com/v1/responses"
+  headers="-H "..shell_quote("Authorization: Bearer "..key).." -H 'Content-Type: application/json'"
+ elseif provider=="anthropic" then
+  body='{"model":"'..json_escape(model)..'","max_tokens":8000,"messages":[{"role":"user","content":"'..json_escape(prompt)..'"}]}'
+  url="https://api.anthropic.com/v1/messages"
+  headers="-H "..shell_quote("x-api-key: "..key).." -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json'"
+ else
+  body='{"contents":[{"parts":[{"text":"'..json_escape(prompt)..'"}]}]}'
+  url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key
+  headers="-H 'Content-Type: application/json'"
+ end
+ if not write_file(rq,body) then status="KI-Anfrage konnte nicht vorbereitet werden."; return end
+ local cmd="/usr/bin/curl -sS --max-time 180 -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(cd).." 2>/dev/null &"
+ os.execute(cmd)
+ ai_job={rq=rq,rs=rs,cd=cd,pv=provider}
+ ai_busy=true
+ status="KI arbeitet …"
 end
 
 local function poll_ai_result()
- local seq=reaper.GetExtState(EXT_SECTION,"NotationAIResultSeq")
- if seq=="" or seq==last_result_seq then return end
- last_result_seq=seq
- ai_answer=reaper.GetExtState(EXT_SECTION,"NotationAIResult")
+ if not ai_job then return end
+ local code=read_file(ai_job.cd)
+ if not code or trim(code)=="" then return end
+ local raw=read_file(ai_job.rs)
+ local http=trim(code)
+ local pv=ai_job.pv
+ os.remove(ai_job.rq); os.remove(ai_job.rs); os.remove(ai_job.cd)
+ ai_job=nil; ai_busy=false
+ if http~="200" or not raw then status="KI-Aufruf fehlgeschlagen (HTTP "..http..")."; return end
+ local text=pv=="openai" and response_text(raw) or first_text_field(raw)
+ if not text or trim(text)=="" then status="KI-Antwort konnte nicht gelesen werden."; return end
+ ai_answer=trim(text)
  status="KI-Antwort erhalten."
 end
 
@@ -198,6 +278,7 @@ local function draw()
   end
 
   if reaper.ImGui_CollapsingHeader(ctx,"KI",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
+   reaper.ImGui_Text(ctx,model_label())
    if reaper.ImGui_Button(ctx,"Auswahl analysieren",-1,30) then
     send_ai("Analysiere ausschließlich die im Notationseditor markierten Noten: Melodik, Rhythmus, Harmonik, Phrasierung, Lesbarkeit und auffällige Probleme. Verändere nichts.")
    end
@@ -206,7 +287,7 @@ local function draw()
    end
    local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##notation_ai_input",ai_input,-1,72)
    if changed then ai_input=v end
-   if reaper.ImGui_Button(ctx,"KI-Auftrag zur Auswahl",-1,32) then
+   if reaper.ImGui_Button(ctx,ai_busy and "KI arbeitet …" or "KI-Auftrag zur Auswahl",-1,32) and not ai_busy then
     local r=trim(ai_input)
     if r~="" then send_ai(r) end
    end
