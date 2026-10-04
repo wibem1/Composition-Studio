@@ -76,3 +76,8 @@ Erst nach erfolgreichem Test wird Phase 2 begonnen.
 Der erste reale Test zeigte, dass korrekte Darstellungsquantisierung bei zu geringer horizontaler Notendichte nicht genügt. Die Lesbarkeit des Notenbilds hat daher Vorrang.
 
 Implementiert: Lesbar machen, Breiter, Schmaler, Auswahl einpassen, Inhalt einpassen. Diese Funktionen steuern REAPERs vorhandene MIDI-Editor-Zoom-Aktionen; sie verändern keine Musikdaten.
+
+
+## Phase 1c – v1.0.8 / musikalische Abstände
+
+REAPERs **Proportional (musical) note spacing** wird nun direkt angesteuert. Dieser Modus ist Grundlage für das weitere Notensatzkonzept, weil rhythmisch kurze Werte mehr optischen Raum erhalten als bei absoluter Zeitdarstellung. Der Schalter ist einzeln testbar und Teil von Lesbar machen.
