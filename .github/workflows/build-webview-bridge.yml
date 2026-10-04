@@ -22,8 +22,11 @@ jobs:
 
       - name: Build universal dylib
         run: |
-          cmake -S reaper_webview -B build-webview -DCMAKE_BUILD_TYPE=Release
+          cmake -S reaper_webview -B build-webview -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES='arm64;x86_64'
           cmake --build build-webview --config Release --target reaper_webview -j 3
+          file build-webview/reaper_webview.dylib
+          lipo -info build-webview/reaper_webview.dylib
+          lipo -verify_arch arm64 x86_64 build-webview/reaper_webview.dylib
 
       - name: Package
         run: |
