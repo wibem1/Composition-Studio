@@ -311,3 +311,8 @@ Der automatische Zoom von „Lesbarkeit verbessern“ wurde korrigiert. v0.1.6 f
 ## 2026-10-04 – Notation Studio v0.1.8 / Zoom vollständig aus Lesbarkeit entfernt
 
 Auf Nutzerwunsch führt „Lesbarkeit verbessern“ keinerlei Zoom-, Fit-to-content- oder Fit-to-selection-Funktion mehr aus. Die Funktion beschränkt sich ausschließlich auf Notationsdarstellung und Anzeigeparameter. Vorhandene manuelle Zoom-/Einpass-Bedienelemente bleiben davon unabhängig.
+
+
+## 2026-10-04 – Notation Studio v0.1.9 / adaptive Zielskalierung
+
+„Lesbarkeit verbessern“ erzeugt wieder eine skalierte Ansicht, aber nicht mehr durch Fit-to-content oder blindes Zoom-in. Aus der markierten Passage werden Taktspanne und Notendichte bestimmt. Ziel sind 4 Takte bei lockerer, 3 Takte bei mittlerer und 2 Takte bei sehr dichter Notation. Liegt der REAPER-Edit-Cursor innerhalb der Auswahl, wird der sichtbare Taktbereich um diesen Cursor zentriert; andernfalls beginnt er bei der Auswahl. Für die eigentliche Skalierung wird temporär eine Time Selection über genau diesen Taktbereich gesetzt, die native MIDI-Editor-Aktion „Zoom to time selection“ ausgeführt und die ursprüngliche Time Selection anschließend wiederhergestellt.
