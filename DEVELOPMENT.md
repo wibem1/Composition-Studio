@@ -137,3 +137,16 @@ Prototype 0.4:
 - bei fehlender reaper_webview-Erweiterung saubere Fallback-Meldung statt Fehler
 
 Der Prototyp ist zunächst 4/4 + Piano/Grand Staff. Nächste Stufe: WebView↔Lua-Rückkanal für direkte Score-Bearbeitung und danach lokale Bündelung der ScoreFlow-Assets.
+
+
+## 2026-10-04 – v1.0.19 / ScoreFlow-Rückkanal
+
+Die veröffentlichte reaper_webview 0.2.0 bietet nur WEBVIEW_Navigate. Für echte Bearbeitung benötigt Composition Studio einen Rückkanal aus WKWebView nach Lua. Statt Polling-Server oder Dateihacks wird ein minimaler macOS-Patch gebaut:
+- zusätzlicher WKScriptMessageHandler csBridge
+- JavaScript API window.compositionStudioBridge.postMessage(...)
+- native Übergabe in REAPER ExtState (ScoreBridgeMessage + monotone ScoreBridgeSeq)
+- Composition Studio pollt ExtState im normalen defer-loop
+- NoteTap bzw. Toolbar-Befehl wird wieder auf score_state.csid und damit konkrete REAPER-MIDI-Note abgebildet
+- nach MIDI-Änderung wird die bestehende ScoreFlow-WebView-Instanz neu navigiert/rendered
+
+Build ist reproduzierbar über .github/workflows/build-webview-bridge.yml; Grundlage ist exakt reaper_webview v0.2.0. Keine lokale Serverkomponente.
