@@ -1,136 +1,117 @@
 -- @description Notation Clef Probe
--- @version 0.2.0
+-- @version 0.3.0
 -- @author Klangwerke
--- @about Two-step diagnostic probe for REAPER default-clef storage. Does not modify the project.
+-- @about Minimal two-step probe: compares only REAPER notation events (type 15) before/after changing Track settings -> Default clef.
 
 local SCRIPT_NAME="Notation Clef Probe"
 local EXT="NotationClefProbe"
-local BASELINE_KEY="Baseline"
-local BASELINE_DESC_KEY="BaselineDesc"
+local KEY="BaselineType15"
+local KEY_TAKE="BaselineTakeGUID"
 
 local function esc(s)
  s=tostring(s or "")
  return s:gsub("\\","\\\\"):gsub("\r","\\r"):gsub("\n","\\n"):gsub("\t","\\t")
 end
 
-local function guid_take(take)
- local ok,g=reaper.GetSetMediaItemTakeInfo_String(take,"GUID","",false)
- return ok and g or ""
-end
-
-local function guid_item(item)
- local ok,g=reaper.GetSetMediaItemInfo_String(item,"GUID","",false)
- return ok and g or ""
-end
-
-local function track_name(track)
- local ok,n=reaper.GetTrackName(track,"")
- return ok and n or ""
-end
-
-local function collect()
+local function active_take()
  local ed=reaper.MIDIEditor_GetActive()
  if not ed then return nil,"Kein aktiver MIDI-Editor." end
-
- local takes={}
- if type(reaper.MIDIEditor_EnumTakes)=="function" then
-  local i=0
-  while true do
-   local tk=reaper.MIDIEditor_EnumTakes(ed,i,true)
-   if not tk then break end
-   if reaper.ValidatePtr2(0,tk,"MediaItem_Take*") and reaper.TakeIsMIDI(tk) then takes[#takes+1]=tk end
-   i=i+1
-  end
- else
-  local tk=reaper.MIDIEditor_GetTake(ed)
-  if tk and reaper.TakeIsMIDI(tk) then takes[1]=tk end
- end
-
- if #takes==0 then return nil,"Kein MIDI-Take im aktiven Editor." end
-
- local out={}
- out[#out+1]="reaper_version="..tostring(reaper.GetAppVersion())
-
- for ti,tk in ipairs(takes) do
-  local item=reaper.GetMediaItemTake_Item(tk)
-  local tr=item and reaper.GetMediaItem_Track(item) or nil
-  out[#out+1]=string.format("===== TAKE %d =====",ti)
-  out[#out+1]="take_guid="..guid_take(tk)
-  out[#out+1]="item_guid="..guid_item(item)
-  out[#out+1]="track_name="..track_name(tr)
-
-  local _,_,_,text_count=reaper.MIDI_CountEvts(tk)
-  out[#out+1]="--- TEXT/SYSEX ---"
-  for i=0,(text_count or 0)-1 do
-   local ok,sel,mut,ppq,typ,msg=reaper.MIDI_GetTextSysexEvt(tk,i)
-   if ok then
-    out[#out+1]=string.format("TEXT %d sel=%s mut=%s ppq=%.9f type=%d msg=%s",
-      i,tostring(sel),tostring(mut),ppq or 0,typ or -1,esc(msg))
-   end
-  end
-
-  out[#out+1]="--- ITEM CHUNK ---"
-  local ok_item,item_chunk=reaper.GetItemStateChunk(item,"",false)
-  out[#out+1]=ok_item and item_chunk or "<item chunk failed>"
-
-  out[#out+1]="--- TRACK CHUNK ---"
-  if tr then
-   local ok_track,track_chunk=reaper.GetTrackStateChunk(tr,"",false)
-   out[#out+1]=ok_track and track_chunk or "<track chunk failed>"
-  end
- end
-
- return table.concat(out,"\n"),nil
+ local tk=reaper.MIDIEditor_GetTake(ed)
+ if not tk or not reaper.TakeIsMIDI(tk) then return nil,"Kein aktiver MIDI-Take im MIDI-Editor." end
+ return tk
 end
 
-local function diff_lines(a,b)
- local A,B={},{}
- for line in tostring(a or ""):gmatch("[^\n]+") do A[line]=(A[line] or 0)+1 end
- for line in tostring(b or ""):gmatch("[^\n]+") do B[line]=(B[line] or 0)+1 end
- local out={"=== NUR VORHER ==="}
- for line,n in pairs(A) do
-  local d=n-(B[line] or 0)
-  for _=1,math.max(0,d) do out[#out+1]=line end
+local function take_guid(tk)
+ local ok,g=reaper.GetSetMediaItemTakeInfo_String(tk,"GUID","",false)
+ return ok and g or ""
+end
+
+local function collect_type15(tk)
+ local out={}
+ local _,_,_,text_count=reaper.MIDI_CountEvts(tk)
+ for i=0,(text_count or 0)-1 do
+  local ok,sel,mut,ppq,typ,msg=reaper.MIDI_GetTextSysexEvt(tk,i)
+  if ok and typ==15 then
+   out[#out+1]=string.format("ppq=%.9f sel=%s mut=%s msg=%s",
+    ppq or 0,tostring(sel),tostring(mut),esc(msg))
+  end
  end
- out[#out+1]=""
- out[#out+1]="=== NUR NACHHER ==="
- for line,n in pairs(B) do
-  local d=n-(A[line] or 0)
-  for _=1,math.max(0,d) do out[#out+1]=line end
- end
+ table.sort(out)
  return table.concat(out,"\n")
 end
 
-local snap,err=collect()
-if not snap then
+local function multiset(s)
+ local t={}
+ for line in tostring(s or ""):gmatch("[^\n]+") do t[line]=(t[line] or 0)+1 end
+ return t
+end
+
+local function diff(before,after)
+ local A,B=multiset(before),multiset(after)
+ local out={"=== NUR VORHER ==="}
+ local n=0
+ for line,c in pairs(A) do
+  local d=c-(B[line] or 0)
+  for _=1,math.max(0,d) do out[#out+1]=line; n=n+1 end
+ end
+ out[#out+1]=""
+ out[#out+1]="=== NUR NACHHER ==="
+ for line,c in pairs(B) do
+  local d=c-(A[line] or 0)
+  for _=1,math.max(0,d) do out[#out+1]=line; n=n+1 end
+ end
+ if n==0 then
+  out[#out+1]="<KEINE ÄNDERUNG BEI TYPE-15-NOTATION-EVENTS>"
+ end
+ return table.concat(out,"\n"),n
+end
+
+local tk,err=active_take()
+if not tk then
  reaper.ShowMessageBox(err,SCRIPT_NAME,0)
  return
 end
 
-local baseline=reaper.GetExtState(EXT,BASELINE_KEY)
+local guid=take_guid(tk)
+local now=collect_type15(tk)
+local baseline=reaper.GetExtState(EXT,KEY)
+local baseline_guid=reaper.GetExtState(EXT,KEY_TAKE)
 
-if baseline=="" then
- reaper.SetExtState(EXT,BASELINE_KEY,snap,false)
- reaper.SetExtState(EXT,BASELINE_DESC_KEY,os.date("%Y-%m-%d %H:%M:%S"),false)
+if baseline=="" and baseline_guid=="" then
+ reaper.SetExtState(EXT,KEY,now,true)
+ reaper.SetExtState(EXT,KEY_TAKE,guid,true)
  reaper.ShowMessageBox(
-  "Ausgangszustand gespeichert.\n\nJetzt bitte NICHT 'Change clef' unter Measure settings verwenden, sondern:\n\nTrack settings → Default clef → Treble\n\nDanach dieses Probe-Skript ein zweites Mal starten.",
+  "1. Zustand gespeichert.\n\nJetzt im selben MIDI-Take:\nTrack settings → Default clef → Treble\n\nDanach dieses Skript noch einmal starten.\n\nEs werden ausschließlich REAPER-Notation-Events vom Typ 15 verglichen.",
   SCRIPT_NAME,0)
  return
 end
 
-local diff=diff_lines(baseline,snap)
-local path=reaper.GetResourcePath().."/Notation-Clef-Probe-DIFF-"..os.date("%Y%m%d-%H%M%S")..".txt"
-local file=io.open(path,"wb")
-if not file then
- reaper.ShowMessageBox("Diff-Datei konnte nicht geschrieben werden:\n"..path,SCRIPT_NAME,0)
+if baseline_guid~=guid then
+ reaper.ShowMessageBox(
+  "Der aktive MIDI-Take ist nicht derselbe wie beim ersten Lauf.\n\nBitte wieder den ursprünglichen Take öffnen und das Skript erneut starten.",
+  SCRIPT_NAME,0)
  return
 end
-file:write(diff)
+
+local report,n=diff(baseline,now)
+local path=reaper.GetResourcePath().."/Notation-Clef-Type15-DIFF-"..os.date("%Y%m%d-%H%M%S")..".txt"
+local file=io.open(path,"wb")
+if not file then
+ reaper.ShowMessageBox("Datei konnte nicht geschrieben werden:\n"..path,SCRIPT_NAME,0)
+ return
+end
+file:write("REAPER "..tostring(reaper.GetAppVersion()).."\n")
+file:write("take_guid="..guid.."\n\n")
+file:write(report)
 file:close()
 
-reaper.DeleteExtState(EXT,BASELINE_KEY,false)
-reaper.DeleteExtState(EXT,BASELINE_DESC_KEY,false)
+reaper.DeleteExtState(EXT,KEY,true)
+reaper.DeleteExtState(EXT,KEY_TAKE,true)
 
-reaper.ShowMessageBox(
- "Vergleich gespeichert:\n\n"..path.."\n\nDer gespeicherte Ausgangszustand wurde zurückgesetzt.\nBitte schick mir diese DIFF-Datei.",
- SCRIPT_NAME,0)
+local msg
+if n==0 then
+ msg="Vergleich abgeschlossen.\n\nDefault clef verändert KEIN Type-15-Notation-Event in diesem Take.\n\nDamit können wir die clef=...-Behauptung ausschließen.\n\nDatei:\n"..path
+else
+ msg="Vergleich abgeschlossen. Es gibt Unterschiede bei Type-15-Notation-Events.\n\nDatei:\n"..path.."\n\nBitte schick mir diese Datei."
+end
+reaper.ShowMessageBox(msg,SCRIPT_NAME,0)
