@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.10
+-- @version 0.1.11
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.10"
+local VERSION="0.1.11"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -231,35 +231,36 @@ local function selected_note_stats()
  return first_qn,last_qn,count
 end
 
+local function force_page_view(ed)
+ local cmd,txt=find_action_variants({
+  {"notation","continuous view always"},
+  {"continuous view always","zoom level"}
+ })
+ if not cmd then return false,"REAPER-Aktion „Continuous view always“ nicht gefunden" end
+ local st=reaper.GetToggleCommandStateEx(32060,cmd)
+ if st==1 then reaper.MIDIEditor_OnCommand(ed,cmd) end
+ local after=reaper.GetToggleCommandStateEx(32060,cmd)
+ if after==1 then return false,"Continuous view konnte nicht ausgeschaltet werden" end
+ return true,txt
+end
+
 local function apply_readable_scale(ed)
  local first_qn,last_qn,count=selected_note_stats()
  if not first_qn or count==0 then return false,"keine markierten Noten" end
 
- local first_measure=reaper.TimeMap_QNToMeasures(0,first_qn)
- local last_measure=reaper.TimeMap_QNToMeasures(0,last_qn)
- local measures=math.max(1,last_measure-first_measure+1)
- local density=count/measures
-
- -- Direct REAPER MIDI-editor scaling. No zoom actions, no time-selection tricks.
- -- Target: roughly 2–4 readable measures on a normal desktop editor.
- local px_per_qn=80
- if density>=28 then px_per_qn=120
- elseif density>=18 then px_per_qn=105
- elseif density>=10 then px_per_qn=90 end
-
+ -- In page view REAPER performs the system wrapping. We only choose a calm notation scale.
+ -- Around 55 px per quarter note gives roughly 4–6 bars per system on a normal desktop window.
+ local px_per_qn=55
  local unit=reaper.MIDIEditor_GetSetting_int(ed,"timebase_unit")
  local px_per_unit=px_per_qn
  if unit==0 then
   local bpm=reaper.Master_GetTempo()
   px_per_unit=px_per_qn*(bpm/60.0)
  end
-
  local setting=math.floor(px_per_unit*1024+0.5)
  local ok=reaper.MIDIEditor_SetSetting_int(ed,"pixels_per_timebase_unit",setting)
- if not ok then return false,"REAPER hat pixels_per_timebase_unit nicht übernommen" end
-
- local actual=reaper.MIDIEditor_GetSetting_int(ed,"pixels_per_timebase_unit")
- return true,string.format("%.0f px/Viertelnote · %.1f markierte Noten/Takt · REAPER-Wert %d",px_per_qn,density,actual or -1)
+ if not ok then return false,"REAPER hat die Partiturskalierung nicht übernommen" end
+ return true,string.format("%.0f px/Viertelnote",px_per_qn)
 end
 
 local function cleanup_notation()
@@ -309,6 +310,10 @@ local function cleanup_notation()
    {"notation","voice","overlapping"},
    {"notation","stimm"}
  },true)
+
+ local page_ok,page_info=force_page_view(ed)
+ if page_ok then done[#done+1]="Seitenansicht / mehrzeiliger Umbruch ["..page_info.."]"
+ else missing[#missing+1]="Seitenansicht: "..tostring(page_info) end
 
  local scaled,scale_info=apply_readable_scale(ed)
  if scaled then done[#done+1]="lesbare Zielskalierung ["..scale_info.."]"
@@ -442,8 +447,9 @@ local function draw()
   reaper.ImGui_Separator(ctx)
 
   if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
+   reaper.ImGui_TextWrapped(ctx,"Für den mehrzeiligen Seitenumbruch darf in REAPER nur ein Track sichtbar sein.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
-   reaper.ImGui_TextWrapped(ctx,"Verbessert Notationsdarstellung und setzt die MIDI-Editor-Skalierung direkt in Pixeln pro Viertelnote. Keine Zoom-Action, keine Zeitauswahl.")
+   reaper.ImGui_TextWrapped(ctx,"Erzeugt eine Partituransicht mit mehrzeiligem Umbruch wie auf einer Notenseite: Continuous View wird ausgeschaltet, die Notation proportional gesetzt und auf eine ruhige Partiturskalierung gebracht.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
