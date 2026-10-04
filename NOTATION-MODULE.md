@@ -81,3 +81,8 @@ Implementiert: Lesbar machen, Breiter, Schmaler, Auswahl einpassen, Inhalt einpa
 ## Phase 1c – v1.0.8 / musikalische Abstände
 
 REAPERs **Proportional (musical) note spacing** wird nun direkt angesteuert. Dieser Modus ist Grundlage für das weitere Notensatzkonzept, weil rhythmisch kurze Werte mehr optischen Raum erhalten als bei absoluter Zeitdarstellung. Der Schalter ist einzeln testbar und Teil von Lesbar machen.
+
+
+## Phase 1d – v1.0.9 / automatische Bereinigung
+
+Ein erster deterministischer Notensatz-Button bündelt REAPERs vorhandene semantische Notationsfunktionen. Ziel ist eine belastbare Basis vor KI-Notensatz und individuellen Display-Offsets. Direkte `disp_pos`-Manipulation wird erst eingesetzt, wenn Einheit und Verhalten vollständig verifiziert sind.
