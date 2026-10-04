@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.38
+-- @version 1.0.39
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.38"
+local VERSION="1.0.39"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -64,6 +64,74 @@ local function shell_quote(s) return "'"..tostring(s):gsub("'","'\\''").."'" end
 local function json_escape(s) return tostring(s or ""):gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t") end
 local function read_file(p) local f=io.open(p,"rb"); if not f then return nil end; local s=f:read("*a"); f:close(); return s end
 local function write_file(p,s) local f=io.open(p,"wb"); if not f then return false end; f:write(s); f:close(); return true end
+local function fetch_update(url,extra_headers)
+ local tmp=os.tmpname()..".lua"; local code=os.tmpname()..".code"
+ local headers=extra_headers or ""
+ local cmd="/usr/bin/curl -sS -L --max-time 60 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "..headers.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code)
+ os.execute(cmd)
+ local status=trim(read_file(code)); local fresh=read_file(tmp); os.remove(code); os.remove(tmp)
+ return status,fresh
+end
+
+local function install_update()
+ if busy then return end
+ busy=true
+ update_status="Update wird geladen …"
+
+ -- Primärquelle: GitHub Contents API mit Raw-Media-Type. Damit umgehen wir raw.githubusercontent.com/CDN-Caches.
+ local api="https://api.github.com/repos/wibem1/Composition-Studio/contents/Composition%20Studio.lua?ref=main&nocache="..tostring(os.time())
+ local status,fresh=fetch_update(api,"-H 'Accept: application/vnd.github.raw+json'")
+ local rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
+
+ -- Fallback nur wenn die API nicht sauber antwortet.
+ if status~="200" or not fresh or not rv then
+  local url=UPDATE_URL.."?version_check="..tostring(os.time())
+  status,fresh=fetch_update(url)
+  rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
+ end
+
+ if status~="200" or not fresh or #fresh<1000 then
+  update_status="Update fehlgeschlagen (HTTP "..tostring(status)..")."
+  busy=false
+  return
+ end
+ if not rv or not fresh:find('local SCRIPT_NAME="Composition Studio"',1,true) then
+  update_status="Update abgebrochen: heruntergeladene Datei ist ungültig."
+  busy=false
+  return
+ end
+ if rv==VERSION then
+  update_status="Bereits aktuell: "..VERSION
+  busy=false
+  return
+ end
+ if not version_is_newer(rv,VERSION) then
+  update_status="Kein neueres Update verfügbar. Lokal: "..VERSION..", GitHub: "..rv
+  busy=false
+  return
+ end
+
+ local compiled,syntax_error=load(fresh,"@Composition Studio update","t")
+ if not compiled then
+  update_status="Update abgebrochen: Lua-Syntaxfehler: "..tostring(syntax_error)
+  busy=false
+  return
+ end
+
+ local previous=read_file(SCRIPT_PATH)
+ if SCRIPT_PATH=="" or not previous or not write_file(SCRIPT_PATH..".backup",previous) or not write_file(SCRIPT_PATH,fresh) then
+  update_status="Update konnte nicht sicher installiert werden."
+  busy=false
+  return
+ end
+
+ update_status="Update auf "..rv.." installiert. Neustart …"
+ restarting=true
+ open=false
+ reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"1",true)
+ reaper.defer(function() pcall(dofile,SCRIPT_PATH) end)
+end
+
 local function ensure_notation_studio_launcher()
  local dir=reaper.GetResourcePath().."/Scripts/Composition Studio"
  os.execute("/bin/mkdir -p "..shell_quote(dir))
@@ -1972,7 +2040,7 @@ local function score_bridge_poll()
 end
 
 ensure_notation_studio_launcher()
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Die direkte Bearbeitung von reaper-menu.ini wurde wieder entfernt.\n• Composition Studio registriert nur noch sauber die MIDI-Editor-Action „Notation Studio...“.\n• REAPERs vorhandene Menüstruktur bleibt vollständig unangetastet.\n• Die Action öffnet das Notation-Studio-Fenster und startet Composition Studio bei Bedarf automatisch.\n• Der KI-Bereich im Notation Studio bleibt unverändert erhalten.\n\nEINMALIGE EINRICHTUNG\n\nOptions → Customize menus/toolbars → MIDI notation note context → Add... → „Notation Studio...“\n\nDanach: Note(n) markieren → Rechtsklick → Notation Studio...\n\nSTATUS\n\n"..notation_context_status end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Updater vollständig wiederhergestellt.\n• Updateprüfung verwendet jetzt zuerst die GitHub-Contents-API mit Raw-Ausgabe und umgeht damit CDN-Cache-Probleme.\n• raw.githubusercontent.com dient nur noch als Fallback.\n• Vor Installation wird die heruntergeladene Lua-Datei weiterhin syntaktisch geprüft und die vorige Version gesichert.\n• Notation Studio, KI-Funktionen und die registrierte MIDI-Editor-Action bleiben erhalten.\n\nRECHTSKLICK-STATUS\n\n"..notation_context_status.."\n\nWORKFLOW\n\nNote(n) im nativen REAPER-Notationseditor markieren → Rechtsklick → Notation Studio... → gewünschten Bereich aufklappen." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,430,520,reaper.ImGui_Cond_FirstUseEver())
