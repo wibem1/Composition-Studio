@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.31
+-- @version 1.0.32
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.31"
+local VERSION="1.0.32"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1064,6 +1064,338 @@ local function scoreflow_score_json()
  end
  return '{"title":"Composition Studio","instrument":"ensemble","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo)..',"parts":['..table.concat(parts,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
 end
+
+local function xml_escape(v)
+ return tostring(v or ""):gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;"):gsub('"',"&quot;")
+end
+local function vrv_pitch(p)
+ local names={
+  {"c",nil},{"c","s"},{"d",nil},{"d","s"},{"e",nil},{"f",nil},
+  {"f","s"},{"g",nil},{"g","s"},{"a",nil},{"a","s"},{"b",nil}
+ }
+ p=math.max(0,math.min(127,math.floor(p or 60)))
+ local x=names[(p%12)+1]
+ return x[1],math.floor(p/12)-1,x[2]
+end
+local VRV_DURS={
+ {4.0,"1",0},{3.0,"2",1},{2.0,"2",0},{1.5,"4",1},{1.0,"4",0},
+ {0.75,"8",1},{0.5,"8",0},{0.375,"16",1},{0.25,"16",0},{0.125,"32",0}
+}
+local function vrv_nearest_duration(qn,grid)
+ qn=math.max(grid or 0.25,tonumber(qn) or 1)
+ local best=VRV_DURS[#VRV_DURS]; local bd=math.huge
+ for _,d in ipairs(VRV_DURS) do
+  if d[1]+1e-8 >= (grid or 0.25) then
+   local e=math.abs(qn-d[1])
+   if e<bd then best=d; bd=e end
+  end
+ end
+ return best[2],best[3],best[1]
+end
+local function vrv_rest_tokens(out,gap,grid)
+ gap=scoreflow_quant(math.max(0,tonumber(gap) or 0),grid)
+ local guard=0
+ while gap>grid/2 and guard<64 do
+  guard=guard+1
+  local chosen=nil
+  for _,d in ipairs(VRV_DURS) do
+   if d[3]==0 and d[1]>=grid-1e-8 and d[1]<=gap+1e-8 then chosen=d; break end
+  end
+  chosen=chosen or {grid,grid<=0.125 and "32" or "16",0}
+  out[#out+1]='<rest dur="'..chosen[2]..'"/>'
+  gap=scoreflow_quant(gap-chosen[1],grid)
+ end
+end
+local function vrv_layer_xml(notes,mstart,mend,mode,staff_kind,grid)
+ local ev={}
+ for _,n in ipairs(notes or {}) do
+  local use=true
+  if mode=="piano" then
+   use=(staff_kind=="treble" and n.pitch>=60) or (staff_kind=="bass" and n.pitch<60)
+  end
+  if use then
+   local qs=scoreflow_quant(n.start_qn,grid)
+   if qs>=mstart-0.0001 and qs<mend-0.0001 then
+    ev[#ev+1]={src=n,start=qs,dur=math.max(grid,scoreflow_quant(n.duration_qn,grid)),pitch=n.pitch}
+   end
+  end
+ end
+ table.sort(ev,function(a,b)
+  if math.abs(a.start-b.start)>0.0001 then return a.start<b.start end
+  return a.pitch<b.pitch
+ end)
+ local groups={}
+ for _,n in ipairs(ev) do
+  local g=groups[#groups]
+  if not g or math.abs(g.start-n.start)>grid/4 then
+   g={start=n.start,notes={}}; groups[#groups+1]=g
+  end
+  g.notes[#g.notes+1]=n
+ end
+ local out={}
+ local cursor=mstart
+ for gi,g in ipairs(groups) do
+  if g.start>cursor+grid/2 then
+   vrv_rest_tokens(out,g.start-cursor,grid)
+   cursor=g.start
+  end
+  if g.start>=cursor-grid/2 then
+   local rawdur=grid
+   for _,n in ipairs(g.notes) do rawdur=math.max(rawdur,n.dur) end
+   local nextStart=(groups[gi+1] and groups[gi+1].start) or mend
+   local slot=math.max(grid,scoreflow_quant(nextStart-g.start,grid))
+   local dur=rawdur
+   if slot<=1.0+1e-8 and rawdur<slot*0.72 then dur=slot
+   elseif rawdur>slot then dur=slot end
+   dur=math.min(dur,mend-g.start)
+   local d,dots,repr=vrv_nearest_duration(dur,grid)
+   local dotattr=dots>0 and (' dots="'..tostring(dots)..'"') or ""
+   if #g.notes==1 then
+    local n=g.notes[1]
+    local pname,oct,accid=vrv_pitch(n.pitch)
+    local acc=accid and (' accid="'..accid..'"') or ""
+    out[#out+1]='<note xml:id="csn'..tostring(n.src.csid)..'" pname="'..pname..'" oct="'..tostring(oct)..'" dur="'..d..'"'..dotattr..acc..'/>'
+   else
+    local chord={'<chord dur="'..d..'"'..dotattr..'>'}
+    for _,n in ipairs(g.notes) do
+     local pname,oct,accid=vrv_pitch(n.pitch)
+     local acc=accid and (' accid="'..accid..'"') or ""
+     chord[#chord+1]='<note xml:id="csn'..tostring(n.src.csid)..'" pname="'..pname..'" oct="'..tostring(oct)..'"'..acc..'/>'
+    end
+    chord[#chord+1]='</chord>'
+    out[#out+1]=table.concat(chord)
+   end
+   cursor=math.max(cursor,g.start+repr)
+  end
+ end
+ if cursor<mend-grid/2 then vrv_rest_tokens(out,mend-cursor,grid) end
+ if #out==0 then
+  local cap=mend-mstart
+  local d,dots=vrv_nearest_duration(cap,grid)
+  out[#out+1]='<mRest/>'
+ end
+ return table.concat(out)
+end
+local function verovio_score_mei()
+ local notes=score_state.notes or {}
+ if #notes==0 then return nil,"Keine Noten in der aktuellen REAPER-Auswahl." end
+
+ local minq,maxq=notes[1].start_qn,notes[1].start_qn+notes[1].duration_qn
+ for _,n in ipairs(notes) do minq=math.min(minq,n.start_qn); maxq=math.max(maxq,n.start_qn+n.duration_qn) end
+ local m0=select(1,reaper.TimeMap_QNToMeasures(0,minq))
+ local m1=select(1,reaper.TimeMap_QNToMeasures(0,math.max(minq,maxq-1e-7)))
+ m0=math.max(0,tonumber(m0) or 0); m1=math.max(m0,tonumber(m1) or m0)
+
+ local byTrack,order={},{}
+ for _,it in ipairs(score_state.items or {}) do
+  local g=it.track_guid or it.track_name
+  if not byTrack[g] then byTrack[g]={notes={},items={}}; order[#order+1]=g end
+  byTrack[g].items[#byTrack[g].items+1]=it
+ end
+ for _,n in ipairs(notes) do
+  local g=n.track_guid or n.track_name
+  if not byTrack[g] then byTrack[g]={notes={},items={}}; order[#order+1]=g end
+  byTrack[g].notes[#byTrack[g].notes+1]=n
+ end
+
+ local staves={}
+ local staffNo=0
+ local name_counts={}
+ for _,g in ipairs(order) do
+  local p=byTrack[g]; local nm=(p.items[1] and p.items[1].track_name) or ""
+  name_counts[nm]=(name_counts[nm] or 0)+1
+ end
+ local pi=0
+ for _,g in ipairs(order) do
+  local p=byTrack[g]
+  if #p.notes>0 then
+   pi=pi+1
+   local mode=scoreflow_staff_mode(p.notes,p.items)
+   local label=scoreflow_part_label(p.items,p.notes,pi,name_counts)
+   local grid=scoreflow_grid(p.notes)
+   if mode=="piano" then
+    staffNo=staffNo+1; local t=staffNo
+    staffNo=staffNo+1; local b=staffNo
+    staves[#staves+1]={part=p,mode=mode,kind="piano",label=label,grid=grid,treble=t,bass=b}
+   else
+    staffNo=staffNo+1
+    staves[#staves+1]={part=p,mode=mode,kind="single",label=label,grid=grid,staff=staffNo}
+   end
+  end
+ end
+
+ local _,_,_,first_num,first_den=reaper.TimeMap_GetMeasureInfo(0,m0)
+ first_num=tonumber(first_num) or 4; first_den=tonumber(first_den) or 4
+
+ local head={}
+ head[#head+1]='<?xml version="1.0" encoding="UTF-8"?>'
+ head[#head+1]='<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1">'
+ head[#head+1]='<meiHead><fileDesc><titleStmt><title>Composition Studio</title></titleStmt><pubStmt/></fileDesc></meiHead>'
+ head[#head+1]='<music><body><mdiv><score>'
+ head[#head+1]='<scoreDef meter.count="'..tostring(first_num)..'" meter.unit="'..tostring(first_den)..'"><staffGrp>'
+ for _,sp in ipairs(staves) do
+  if sp.kind=="piano" then
+   head[#head+1]='<staffGrp symbol="brace" bar.thru="true">'
+   head[#head+1]='<staffDef n="'..sp.treble..'" lines="5" clef.shape="G" clef.line="2" label="'..xml_escape(sp.label)..'"/>'
+   head[#head+1]='<staffDef n="'..sp.bass..'" lines="5" clef.shape="F" clef.line="4"/>'
+   head[#head+1]='</staffGrp>'
+  else
+   local shape,line=sp.mode=="bass" and "F" or "G",sp.mode=="bass" and 4 or 2
+   head[#head+1]='<staffDef n="'..sp.staff..'" lines="5" clef.shape="'..shape..'" clef.line="'..line..'" label="'..xml_escape(sp.label)..'"/>'
+  end
+ end
+ head[#head+1]='</staffGrp></scoreDef><section>'
+
+ local prev_num,prev_den=first_num,first_den
+ for mi=m0,m1 do
+  local _,ms,me,num,den=reaper.TimeMap_GetMeasureInfo(0,mi)
+  ms=tonumber(ms) or mi*4; me=tonumber(me) or ms+4
+  num=tonumber(num) or prev_num; den=tonumber(den) or prev_den
+  if mi>m0 and (num~=prev_num or den~=prev_den) then
+   head[#head+1]='<scoreDef meter.count="'..tostring(num)..'" meter.unit="'..tostring(den)..'"/>'
+  end
+  prev_num,prev_den=num,den
+  head[#head+1]='<measure n="'..tostring(mi-m0+1)..'">'
+  for _,sp in ipairs(staves) do
+   if sp.kind=="piano" then
+    head[#head+1]='<staff n="'..sp.treble..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,"piano","treble",sp.grid)..'</layer></staff>'
+    head[#head+1]='<staff n="'..sp.bass..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,"piano","bass",sp.grid)..'</layer></staff>'
+   else
+    local k=sp.mode=="bass" and "bass" or "treble"
+    head[#head+1]='<staff n="'..sp.staff..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,sp.mode,k,sp.grid)..'</layer></staff>'
+   end
+  end
+  head[#head+1]='</measure>'
+ end
+ head[#head+1]='</section></score></mdiv></body></music></mei>'
+ return table.concat(head)
+end
+
+local function verovio_host_html(mei)
+ local encoded='"'..json_escape(mei)..'"'
+ return [[<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Composition Studio – Notation</title>
+<style>
+html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#111}
+#top{position:sticky;top:0;z-index:20;background:#f5f5f5;border-bottom:1px solid #bbb;padding:7px 10px;font-size:13px;display:flex;flex-direction:column;gap:6px}
+.cs-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap} #top button{font-size:14px;padding:5px 13px;min-width:42px}
+#cs-status{margin-left:8px;color:#444}.cs-label{color:#555}
+#notation-container{position:relative;padding:10px 14px 28px 14px;background:#fff;min-height:300px}
+#notation-container svg{display:block;max-width:100%;height:auto}
+#selection-layer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
+.cs-sel{position:absolute;background:rgba(0,102,204,.16);border:2px solid rgba(0,102,204,.75);border-radius:4px;box-sizing:border-box}
+#drag-box{position:absolute;border:1px dashed #0066cc;background:rgba(0,102,204,.08);pointer-events:none;display:none;z-index:30}
+#error{padding:16px;color:#b00020}
+</style></head><body>
+<div id="top">
+<div class="cs-row"><button onclick="csTransport('start')">|◀</button><button onclick="csTransport('play')">▶</button><button onclick="csTransport('pause')">Ⅱ</button><button onclick="csTransport('stop')">■</button><span class="cs-label">REAPER Player</span></div>
+<div class="cs-row"><button onclick="csCmd('pitch',-1)">−1 Halbton</button><button onclick="csCmd('pitch',1)">+1 Halbton</button><button onclick="csCmd('duration',0.5)">½ Dauer</button><button onclick="csCmd('duration',2)">2× Dauer</button><span id="cs-status">Verovio wird geladen …</span></div>
+</div>
+<div id="notation-container"><div id="selection-layer"></div><div id="drag-box"></div></div>
+<script>
+window.csSelectedIds=[];
+function csBridgeReady(){return !!(window.compositionStudioBridge&&window.compositionStudioBridge.postMessage);}
+function csSend(obj){try{if(csBridgeReady()){window.compositionStudioBridge.postMessage(JSON.stringify(obj));return true;}}catch(e){}return false;}
+function csSetStatus(t){const e=document.getElementById('cs-status');if(e)e.textContent=t;}
+function csTransport(action){if(!csSend({type:'transport',action}))csSetStatus('Bridge fehlt');}
+function csCmd(kind,value){const ids=window.csSelectedIds||[];if(!ids.length){csSetStatus('Zuerst Note(n) markieren');return;}if(!csSend({type:'command',csids:ids.join(','),kind,value}))csSetStatus('Bridge fehlt');}
+</script>
+<script type="module">
+import createVerovioModule from 'https://cdn.jsdelivr.net/npm/verovio@6.3.0/dist/verovio-module.mjs';
+import { VerovioToolkit } from 'https://cdn.jsdelivr.net/npm/verovio@6.3.0/dist/verovio.mjs';
+
+let mei=]]..encoded..[[;
+let toolkit=null,drag=null;
+const container=document.getElementById('notation-container');
+const layer=document.getElementById('selection-layer');
+const box=document.getElementById('drag-box');
+
+function idFromEl(el){const g=el&&el.closest?el.closest('[id^="csn"]'):null;if(!g)return null;const m=g.id.match(/^csn(\d+)$/);return m?Number(m[1]):null;}
+function noteEl(id){return document.getElementById('csn'+id);}
+function refreshSelection(){
+ layer.innerHTML='';
+ const cr=container.getBoundingClientRect();
+ for(const id of window.csSelectedIds||[]){
+  const el=noteEl(id); if(!el)continue;
+  const r=el.getBoundingClientRect(); const d=document.createElement('div'); d.className='cs-sel';
+  d.style.left=(r.left-cr.left+container.scrollLeft-3)+'px';d.style.top=(r.top-cr.top+container.scrollTop-3)+'px';
+  d.style.width=(r.width+6)+'px';d.style.height=(r.height+6)+'px';layer.appendChild(d);
+ }
+ csSetStatus((window.csSelectedIds||[]).length+' Note(n) markiert · '+(csBridgeReady()?'Bridge aktiv':'Bridge fehlt'));
+}
+function allNoteIdsInRect(rect){
+ const out=[];
+ for(const el of container.querySelectorAll('[id^="csn"]')){
+  const m=el.id.match(/^csn(\d+)$/);if(!m)continue;const r=el.getBoundingClientRect();
+  if(!(r.right<rect.left||r.left>rect.right||r.bottom<rect.top||r.top>rect.bottom))out.push(Number(m[1]));
+ }
+ return out;
+}
+function bindInteraction(){
+ container.onpointerdown=(e)=>{
+  if(e.button!==0)return;
+  const id=idFromEl(e.target);
+  drag={id,startX:e.clientX,startY:e.clientY,moved:false,mode:id?'move':'select'};
+  if(id){
+   if(!(window.csSelectedIds||[]).includes(id))window.csSelectedIds=[id];
+   refreshSelection();
+  }else{
+   box.style.display='block';box.style.left=(e.clientX-container.getBoundingClientRect().left)+'px';box.style.top=(e.clientY-container.getBoundingClientRect().top)+'px';box.style.width='0';box.style.height='0';
+  }
+  try{container.setPointerCapture(e.pointerId);}catch(_){}
+ };
+ container.onpointermove=(e)=>{
+  if(!drag)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)>4||Math.abs(dy)>4)drag.moved=true;
+  if(drag.mode==='select'&&drag.moved){
+   const cr=container.getBoundingClientRect(),x0=drag.startX-cr.left,y0=drag.startY-cr.top,x=e.clientX-cr.left,y=e.clientY-cr.top;
+   box.style.left=Math.min(x0,x)+'px';box.style.top=Math.min(y0,y)+'px';box.style.width=Math.abs(x-x0)+'px';box.style.height=Math.abs(y-y0)+'px';
+  }else if(drag.mode==='move'&&drag.moved){
+   const dp=Math.round(-dy/7),dq=Math.round((dx/35)/0.25)*0.25;csSetStatus('Verschieben: '+(dp>=0?'+':'')+dp+' HT · '+(dq>=0?'+':'')+dq+' Viertel');
+  }
+ };
+ container.onpointerup=(e)=>{
+  if(!drag)return;
+  const d=drag;drag=null;box.style.display='none';
+  if(d.mode==='move'){
+   if(d.moved){
+    const dp=Math.round(-(e.clientY-d.startY)/7),dq=Math.round(((e.clientX-d.startX)/35)/0.25)*0.25;
+    if(dp!==0||dq!==0)csSend({type:'move',csids:(window.csSelectedIds||[]).join(','),dpitch:dp,dqn:dq});
+   }else if(d.id){
+    window.csSelectedIds=[d.id];refreshSelection();csSend({type:'select',csids:String(d.id)});
+   }
+  }else{
+   if(d.moved){
+    const rect={left:Math.min(d.startX,e.clientX),right:Math.max(d.startX,e.clientX),top:Math.min(d.startY,e.clientY),bottom:Math.max(d.startY,e.clientY)};
+    window.csSelectedIds=allNoteIdsInRect(rect);refreshSelection();if(window.csSelectedIds.length)csSend({type:'select',csids:window.csSelectedIds.join(',')});
+   }else{
+    window.csSelectedIds=[];refreshSelection();
+   }
+  }
+ };
+}
+function renderCurrent(){
+ if(!toolkit)return;
+ toolkit.loadData(mei);
+ toolkit.setOptions({pageWidth:2800,pageHeight:5000,scale:42,adjustPageHeight:true,breaks:'auto',header:'none',footer:'none',spacingStaff:8,spacingSystem:12,justifyVertically:false});
+ const pages=toolkit.getPageCount();let html='';
+ for(let p=1;p<=pages;p++)html+=toolkit.renderToSVG(p,{});
+ const old=container.querySelectorAll('svg,.vrv-page');old.forEach(x=>x.remove());
+ const wrap=document.createElement('div');wrap.className='vrv-page';wrap.innerHTML=html;container.insertBefore(wrap,layer);
+ bindInteraction();refreshSelection();
+}
+window.csUpdateMEI=function(next){mei=next;renderCurrent();};
+try{
+ const mod=await createVerovioModule();
+ toolkit=new VerovioToolkit(mod);
+ renderCurrent();
+ csSetStatus('Verovio · '+(csBridgeReady()?'Bridge aktiv':'Bridge fehlt')+' · Note(n) markieren');
+}catch(e){
+ document.body.insertAdjacentHTML('beforeend','<div id="error">Verovio-Fehler: '+String(e)+'</div>');
+}
+</script></body></html>]]
+end
+
 local function scoreflow_host_html(score_json)
  local base="https://cdn.jsdelivr.net/gh/IlyaSkorik/scoreflow@"..SCOREFLOW_COMMIT.."/assets/www/"
  return [[<!DOCTYPE html>
@@ -1315,18 +1647,18 @@ try{
 }
 </script></body></html>]]
 end
-local function scoreflow_open_webview()
+local function notation_open_webview()
  score_capture_selection()
- local score,err=scoreflow_score_json()
- if not score then notation_status=err or "Keine Partiturdaten."; return false end
+ local mei,err=verovio_score_mei()
+ if not mei then notation_status=err or "Keine Partiturdaten."; return false end
  if type(reaper.WEBVIEW_Navigate)~="function" then
-  notation_status="Für den echten ScoreFlow-Renderer fehlt die REAPER-Erweiterung reaper_webview."
+  notation_status="Für die Notation fehlt die REAPER-Erweiterung reaper_webview."
   notation_window_open=true
   return false
  end
- local html=scoreflow_host_html(score)
+ local html=verovio_host_html(mei)
  if not write_file(SCOREFLOW_HOST_PATH,html) then
-  notation_status="ScoreFlow-Hostdatei konnte nicht geschrieben werden."
+  notation_status="Notations-Hostdatei konnte nicht geschrieben werden."
   notation_window_open=true
   return false
  end
@@ -1338,19 +1670,19 @@ local function scoreflow_open_webview()
   notation_window_open=true
   return false
  end
- notation_status="ScoreFlow-Partitur geöffnet."
+ notation_status="Verovio-Partitur geöffnet."
  notation_window_open=false
  return true
 end
 
 local function score_bridge_rerender()
- local score=scoreflow_score_json()
- if score and type(reaper.WEBVIEW_Eval)=="function" then
-  local js="window.csUpdateScore("..score..");"
+ local mei=verovio_score_mei()
+ if mei and type(reaper.WEBVIEW_Eval)=="function" then
+  local js='window.csUpdateMEI("'..json_escape(mei)..'");'
   local ok=pcall(reaper.WEBVIEW_Eval,"wv_composition_studio_notation",js)
   if ok then return end
  end
- if type(reaper.WEBVIEW_Navigate)=="function" then scoreflow_open_webview() end
+ if type(reaper.WEBVIEW_Navigate)=="function" then notation_open_webview() end
 end
 local function score_bridge_parse_ids(csv)
  local ids={}
@@ -1386,7 +1718,7 @@ local function score_bridge_apply_command(ids,kind,value)
  reaper.Undo_EndBlock2(0,"Composition Studio Notation – Auswahl bearbeiten",-1)
  reaper.UpdateArrange()
  score_capture_selection()
- notation_status="ScoreFlow: "..tostring(#ids).." Note(n) bearbeitet."
+ notation_status=tostring(#ids).." Note(n) bearbeitet."
  score_bridge_rerender()
 end
 local function score_bridge_move(ids,dpitch,dqn)
@@ -1453,7 +1785,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Mehrspur-Layout orientiert sich jetzt an Dorico/MuseScore-Grundsätzen statt maximaler Verdichtung.\n• Rhythmische Werte erhalten proportionale Horizontalabstände; kurze Werte behalten einen Mindestabstand.\n• Dichte Takte bekommen deutlich mehr Breite.\n• Pro System werden bei dichtem Material weniger Takte gesetzt.\n• Letzte, dünn gefüllte Systeme werden nicht mehr zwanghaft auf volle Breite gedehnt.\n• Vertikale Abstände zwischen Parts und Systemen wurden vergrößert.\n\nZIEL\n\nLesbarkeit vor maximaler Kompaktheit. Das ist weiterhin kein vollständiger Dorico-Satz, aber die Partitur soll nicht mehr als dichtes MIDI-Raster wirken." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• ScoreFlow als sichtbarer Notationsrenderer durch Verovio 6.3.0 ersetzt.\n• Verovio übernimmt ausschließlich den professionellen Notensatz; die Editierlogik bleibt in Composition Studio.\n• Jede REAPER-Note erhält eine feste MEI/SVG-ID csn… und bleibt damit eindeutig auf das MIDI rückführbar.\n• Einzelklick, Rechteckauswahl, Drag, ±1 Halbton, Daueränderung, REAPER Undo und Playerleiste bleiben erhalten.\n• Mehrere REAPER-Tracks werden als getrennte MEI-Staves/Parts ausgegeben; Klavier kann als Grand Staff ausgegeben werden.\n• Änderungen aktualisieren die bestehende Verovio-Partitur per WEBVIEW_Eval, ohne App-Wechsel.\n\nWICHTIG\n\nVerovios eigene Editor-API ist experimentell und wird bewusst nicht zur Grundlage unserer Bearbeitung gemacht. Composition Studio bleibt Eigentümer des Score-Modells und schreibt Änderungen direkt ins REAPER-MIDI.\n\nZU TESTEN\n\n1. Ein und mehrere MIDI-Tracks auswählen → Notation.\n2. Notenbild mit der letzten ScoreFlow-Version vergleichen.\n3. Note anklicken, transponieren und ziehen.\n4. Mehrfachauswahl per Drag.\n5. Prüfen, dass nur die entsprechenden REAPER-Noten geändert werden." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
@@ -1468,7 +1800,7 @@ local function draw_notation_workspace()
   if type(reaper.WEBVIEW_Navigate)~="function" then
    reaper.ImGui_TextWrapped(ctx,"Benötigt wird die MIT-lizenzierte REAPER-Erweiterung „reaper_webview“ (macOS: WKWebView). Nach Installation und REAPER-Neustart öffnet „Notation“ direkt den ScoreFlow-Renderer.")
   else
-   if reaper.ImGui_Button(ctx,"ScoreFlow erneut öffnen",-1,36) then scoreflow_open_webview() end
+   if reaper.ImGui_Button(ctx,"ScoreFlow erneut öffnen",-1,36) then notation_open_webview() end
   end
   reaper.ImGui_Spacing(ctx)
   if reaper.ImGui_Button(ctx,"Schließen",-1,34) then notation_window_open=false end
@@ -1479,5 +1811,5 @@ end
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(48,math.min(260,lines*22+12)); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
-local function loop() poll_job(); finish_save_panel(); score_bridge_poll(); if not open and not notation_window_open then if not restarting then remember_closed() end; return end; check_project_change(); if not open then draw_notation_workspace(); reaper.defer(loop); return end; reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Notation") then scoreflow_open_webview() end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"Notation") then scoreflow_open_webview() end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; draw_notation_workspace(); if open or notation_window_open then reaper.defer(loop) elseif not restarting then remember_closed() end end
+local function loop() poll_job(); finish_save_panel(); score_bridge_poll(); if not open and not notation_window_open then if not restarting then remember_closed() end; return end; check_project_change(); if not open then draw_notation_workspace(); reaper.defer(loop); return end; reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Notation") then notation_open_webview() end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"Notation") then notation_open_webview() end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; draw_notation_workspace(); if open or notation_window_open then reaper.defer(loop) elseif not restarting then remember_closed() end end
 loop()
