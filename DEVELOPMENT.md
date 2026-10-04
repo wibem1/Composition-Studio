@@ -266,3 +266,8 @@ Beim Umbau auf 1.0.38 war der komplette fetch_update/install_update-Block verseh
 Notation Studio ist jetzt ein eigenes ReaScript im Repository: `Notation Studio.lua` (v0.1.0). Das Fenster und seine aufklappbaren Werkzeuggruppen wurden aus `Composition Studio.lua` entfernt. Composition Studio übernimmt nur noch Installation/Aktualisierung des Begleitskripts, Registrierung in MIDI-Editor Section 32060, Start des Skripts und einen kleinen KI-Dienst über ExtState.
 
 Kommunikation: Notation Studio sendet `NotationAIRequest`, `NotationAIContext` und `NotationAIRequestSeq`; Composition Studio verarbeitet die Anfrage mit dem zentral gewählten Provider/Modell und liefert `NotationAIResult` / `NotationAIResultSeq` zurück. Dadurch bleiben API-Zugang und Modellwahl zentral, die Notationsoberfläche aber vollständig modular.
+
+
+## 2026-10-04 – v1.0.41 / Startfehler vollständig behoben
+
+Zwei Refactoringfehler aus v1.0.40 wurden korrigiert: (1) `version_parts()` und `version_is_newer()` waren entfernt worden, obwohl Updater und Companion-Installer sie aufrufen; beide stehen nun wieder vor allen Aufrufern. (2) Zwischen `info_text()` und `draw_history()` war durch String-Surgery ein `endlocal function` entstanden; die Funktionsgrenze ist wieder syntaktisch korrekt.
