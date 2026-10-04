@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.14
+-- @version 1.0.15
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.14"
+local VERSION="1.0.15"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -262,6 +262,94 @@ local function item_guid(item) local ok,g=reaper.GetSetMediaItemInfo_String(item
 local function track_guid(track) return reaper.GetTrackGUID(track) or "" end
 local function selected_tracks() local a={}; for i=0,reaper.CountSelectedTracks(0)-1 do local tr=reaper.GetSelectedTrack(0,i); local _,n=reaper.GetTrackName(tr); a[#a+1]={track=tr,guid=track_guid(tr),name=n~="" and n or "Unbenannte Spur",index=math.floor(reaper.GetMediaTrackInfo_Value(tr,"IP_TRACKNUMBER"))} end; return a end
 local function selected_items(with_notes) local a={}; for i=0,reaper.CountSelectedMediaItems(0)-1 do local item=reaper.GetSelectedMediaItem(0,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local tr=reaper.GetMediaItem_Track(item); local _,tn=reaper.GetTrackName(tr); local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=tr,guid=item_guid(item),track_guid=track_guid(tr),track_name=tn~="" and tn or "Unbenannte Spur",take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; if with_notes then local _,ncount=reaper.MIDI_CountEvts(take); for n=0,(ncount or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end end; a[#a+1]=it end end; return a end
+local NOTE_NAMES={"C","C♯","D","E♭","E","F","F♯","G","A♭","A","B♭","B"}
+local function score_pitch_name(p)
+ p=math.max(0,math.min(127,math.floor(p or 60)))
+ return NOTE_NAMES[(p%12)+1]..tostring(math.floor(p/12)-1)
+end
+local function score_selection_signature()
+ local parts={}
+ for i=0,reaper.CountSelectedMediaItems(0)-1 do
+  local item=reaper.GetSelectedMediaItem(0,i)
+  local take=item and reaper.GetActiveTake(item)
+  if take and reaper.TakeIsMIDI(take) then parts[#parts+1]=item_guid(item) end
+ end
+ table.sort(parts)
+ return table.concat(parts,"|")
+end
+local function score_capture_selection()
+ local items=selected_items(false)
+ local notes,kept={},{}
+ for _,it in ipairs(items) do
+  if it.take and reaper.ValidatePtr2(0,it.take,"MediaItem_Take*") and reaper.TakeIsMIDI(it.take) then
+   kept[#kept+1]=it
+   local _,ncount=reaper.MIDI_CountEvts(it.take)
+   for n=0,(ncount or 0)-1 do
+    local ok,_,muted,sp,ep,ch,p,v=reaper.MIDI_GetNote(it.take,n)
+    if ok and not muted then
+     local st=reaper.MIDI_GetProjTimeFromPPQPos(it.take,sp)
+     local et=reaper.MIDI_GetProjTimeFromPPQPos(it.take,ep)
+     notes[#notes+1]={take=it.take,item=it.item,item_guid=it.guid,take_name=it.take_name,track_name=it.track_name,note_idx=n,start_ppq=sp,end_ppq=ep,start_qn=reaper.TimeMap2_timeToQN(0,st),duration_qn=reaper.TimeMap2_timeToQN(0,et)-reaper.TimeMap2_timeToQN(0,st),pitch=p,velocity=v,channel=ch}
+    end
+   end
+  end
+ end
+ table.sort(notes,function(a,b)
+  if math.abs(a.start_qn-b.start_qn)>0.000001 then return a.start_qn<b.start_qn end
+  if a.item_guid~=b.item_guid then return a.item_guid<b.item_guid end
+  return a.pitch<b.pitch
+ end)
+ score_state.items=kept
+ score_state.notes=notes
+ score_state.selection_signature=score_selection_signature()
+ if #notes==0 then score_state.selected=0 else score_state.selected=math.min(math.max(score_state.selected,1),#notes) end
+ notation_status=#kept==0 and "Keine ausgewählten MIDI-Items in REAPER." or (tostring(#kept).." MIDI-Item(s) übernommen · "..tostring(#notes).." Noten.")
+end
+local function score_selected_note()
+ if score_state.selected<1 then return nil end
+ return score_state.notes[score_state.selected]
+end
+local function score_refresh_after_edit(ref)
+ score_capture_selection()
+ if not ref then return end
+ for i,n in ipairs(score_state.notes) do
+  if n.item_guid==ref.item_guid and math.abs(n.start_ppq-ref.start_ppq)<0.5 and n.channel==ref.channel then
+   score_state.selected=i
+   if n.pitch==ref.pitch then break end
+  end
+ end
+end
+local function score_change_pitch(delta)
+ local n=score_selected_note()
+ if not n then notation_status="Keine Note ausgewählt."; return end
+ local np=math.max(0,math.min(127,n.pitch+delta))
+ local ref={item_guid=n.item_guid,start_ppq=n.start_ppq,channel=n.channel,pitch=np}
+ reaper.Undo_BeginBlock2(0)
+ local ok,sel,mut,sp,ep,ch,_,vel=reaper.MIDI_GetNote(n.take,n.note_idx)
+ if ok then reaper.MIDI_SetNote(n.take,n.note_idx,sel,mut,sp,ep,ch,np,vel,true); reaper.MIDI_Sort(n.take) end
+ reaper.Undo_EndBlock2(0,"Composition Studio Notation – Tonhöhe ändern",-1)
+ reaper.UpdateArrange()
+ score_refresh_after_edit(ref)
+ notation_status="Tonhöhe geändert: "..score_pitch_name(np).." · REAPER-MIDI aktualisiert."
+end
+local function score_scale_duration(factor)
+ local n=score_selected_note()
+ if not n then notation_status="Keine Note ausgewählt."; return end
+ local ref={item_guid=n.item_guid,start_ppq=n.start_ppq,channel=n.channel,pitch=n.pitch}
+ reaper.Undo_BeginBlock2(0)
+ local ok,sel,mut,sp,ep,ch,p,vel=reaper.MIDI_GetNote(n.take,n.note_idx)
+ if ok then
+  local dur=math.max(1,ep-sp)
+  local nd=math.max(1,math.floor(dur*factor+0.5))
+  reaper.MIDI_SetNote(n.take,n.note_idx,sel,mut,sp,sp+nd,ch,p,vel,true)
+  reaper.MIDI_Sort(n.take)
+ end
+ reaper.Undo_EndBlock2(0,"Composition Studio Notation – Notendauer ändern",-1)
+ reaper.UpdateArrange()
+ score_refresh_after_edit(ref)
+ notation_status="Notendauer geändert · REAPER-MIDI aktualisiert."
+end
+
 local function track_context_items(tracks) local a={}; local seen={}; for _,t in ipairs(tracks) do for i=0,reaper.CountTrackMediaItems(t.track)-1 do local item=reaper.GetTrackMediaItem(t.track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local g=item_guid(item); if not seen[g] then seen[g]=true; local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=t.track,guid=g,track_guid=t.guid,track_name=t.name,take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; local _,nc=reaper.MIDI_CountEvts(take); for n=0,(nc or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end; a[#a+1]=it end end end end; return a end
 local function time_selection_context() local s,e=reaper.GetSet_LoopTimeRange(false,false,0,0,false); if not s or not e or e<=s then return "TIME_SELECTION none" end; local sq=reaper.TimeMap2_timeToQN(0,s); local eq=reaper.TimeMap2_timeToQN(0,e); local _,sm,sb=reaper.TimeMap2_timeToBeats(0,s); local _,em,eb=reaper.TimeMap2_timeToBeats(0,e); return string.format("TIME_SELECTION startQN=%.3f endQN=%.3f startBar=%d startBeat=%.3f endBar=%d endBeat=%.3f",sq,eq,(sm or 0)+1,(sb or 0)+1,(em or 0)+1,(eb or 0)+1) end
 local function compact_context(items,tracks,ignore_time) tracks=tracks or selected_tracks(); local l={string.format("Tempo %.2f BPM; selected MIDI items=%d; selected tracks=%d",reaper.Master_GetTempo(),#items,#tracks)}; l[#l+1]=ignore_time and "TIME_SELECTION ignored for free new composition" or time_selection_context(); for i,t in ipairs(tracks) do l[#l+1]=string.format("TRACK %d id=%s name=%s index=%d",i,t.guid,t.name,t.index) end; for i,it in ipairs(items) do l[#l+1]=string.format("ITEM %d id=%s trackId=%s track=%s take=%s rangeQN=%.3f..%.3f",i,it.guid,it.track_guid,it.track_name,it.take_name,it.start_qn,it.end_qn) end; return table.concat(l,"\n") end
@@ -713,7 +801,7 @@ local function text_context_menu(id,text,editable)
  end
  return text
 end
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation Workspace 0.2 besitzt erstmals eine direkte REAPER-MIDI ⇄ Workspace-Brücke.\n• Kein Laden/Import: Beim Klick auf „Notation“ werden die aktuell ausgewählten MIDI-Items automatisch übernommen.\n• Mehrere ausgewählte MIDI-Items werden gemeinsam in das Notenmodell aufgenommen.\n• Einzelne Noten können im Workspace ausgewählt, um einen Halbton verschoben sowie in ihrer Dauer halbiert oder verdoppelt werden.\n• Änderungen werden unmittelbar in das REAPER-MIDI geschrieben und sind über REAPER Undo rückgängig.\n• Die gequetschte Menüleiste wurde entfernt und durch eine klare Werkzeugzeile ersetzt.\n• Der grafische editierbare Score-Renderer folgt als nächste Stufe.\n\nZU TESTEN\n\n1. In REAPER ein oder mehrere MIDI-Items auswählen.\n2. „Notation“ anklicken.\n3. Prüfen, dass die Items ohne weiteren Lade-Schritt sofort im Workspace erscheinen.\n4. Eine Note auswählen und ±1 Halbton bzw. ½/2× Dauer testen.\n5. Kontrollieren, dass das REAPER-MIDI unmittelbar entsprechend geändert wird.\n6. REAPER Undo testen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Fehler in v1.0.14 behoben: score_capture_selection ist jetzt korrekt vor seiner Verwendung definiert.\n• Notation Workspace 0.2 besitzt erstmals eine direkte REAPER-MIDI ⇄ Workspace-Brücke.\n• Kein Laden/Import: Beim Klick auf „Notation“ werden die aktuell ausgewählten MIDI-Items automatisch übernommen.\n• Mehrere ausgewählte MIDI-Items werden gemeinsam in das Notenmodell aufgenommen.\n• Einzelne Noten können im Workspace ausgewählt, um einen Halbton verschoben sowie in ihrer Dauer halbiert oder verdoppelt werden.\n• Änderungen werden unmittelbar in das REAPER-MIDI geschrieben und sind über REAPER Undo rückgängig.\n• Die gequetschte Menüleiste wurde entfernt und durch eine klare Werkzeugzeile ersetzt.\n• Der grafische editierbare Score-Renderer folgt als nächste Stufe.\n\nZU TESTEN\n\n1. In REAPER ein oder mehrere MIDI-Items auswählen.\n2. „Notation“ anklicken.\n3. Prüfen, dass die Items ohne weiteren Lade-Schritt sofort im Workspace erscheinen.\n4. Eine Note auswählen und ±1 Halbton bzw. ½/2× Dauer testen.\n5. Kontrollieren, dass das REAPER-MIDI unmittelbar entsprechend geändert wird.\n6. REAPER Undo testen." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,980,720,reaper.ImGui_Cond_FirstUseEver())
