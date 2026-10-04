@@ -316,3 +316,8 @@ Auf Nutzerwunsch führt „Lesbarkeit verbessern“ keinerlei Zoom-, Fit-to-cont
 ## 2026-10-04 – Notation Studio v0.1.9 / adaptive Zielskalierung
 
 „Lesbarkeit verbessern“ erzeugt wieder eine skalierte Ansicht, aber nicht mehr durch Fit-to-content oder blindes Zoom-in. Aus der markierten Passage werden Taktspanne und Notendichte bestimmt. Ziel sind 4 Takte bei lockerer, 3 Takte bei mittlerer und 2 Takte bei sehr dichter Notation. Liegt der REAPER-Edit-Cursor innerhalb der Auswahl, wird der sichtbare Taktbereich um diesen Cursor zentriert; andernfalls beginnt er bei der Auswahl. Für die eigentliche Skalierung wird temporär eine Time Selection über genau diesen Taktbereich gesetzt, die native MIDI-Editor-Aktion „Zoom to time selection“ ausgeführt und die ursprüngliche Time Selection anschließend wiederhergestellt.
+
+
+## 2026-10-04 – Notation Studio v0.1.10 / direkte MIDI-Editor-Skalierung
+
+Die Action-basierte Zielskalierung aus v0.1.9 wurde entfernt. REAPER stellt über MIDIEditor_GetSetting_int/SetSetting_int den direkten Wert pixels_per_timebase_unit bereit (1024 * Pixel pro Zeitbasiseinheit). „Lesbarkeit verbessern“ setzt diesen Wert nun direkt. Aus der Notendichte werden 80, 90, 105 oder 120 Pixel pro Viertelnote gewählt. Bei seconds-timebase wird der Zielwert über das aktuelle Tempo in Pixel pro Sekunde umgerechnet. Es werden weder Time Selection noch Zoom-Actions verändert.
