@@ -336,3 +336,8 @@ Die v0.1.11 verwendete indirekt „Continuous view always“. v0.1.12 verwendet 
 ## 2026-10-04 – Notation Studio v0.1.13 / Page View korrekt angesteuert
 
 v0.1.12 suchte fälschlich nach einer eigenständigen „Page view“-Action. Laut REAPER-Dokumentation ist Page View ein automatischer Modus: bei genau einem sichtbaren Track und ausgeschaltetem „Continuous view always, regardless of zoom level“ wird die Notation mehrzeilig umgebrochen, solange mindestens ein voller Takt sichtbar ist. v0.1.13 sucht daher explizit die Continuous-View-Toggle-Action, schaltet sie aus und verifiziert anschließend den Toggle-State. Falls die Action nicht gefunden wird, werden passende Action-Namen zur Diagnose direkt im UI ausgegeben. Die Zielskalierung beträgt nun 42 px pro Viertelnote.
+
+
+## 2026-10-04 – Notation Studio v0.1.14 / robuster Updater
+
+Der bisherige Notation-Studio-Updater verwendete ausschließlich raw.githubusercontent.com und konnte dadurch eine gecachte ältere Datei sehen. v0.1.14 verwendet primär die GitHub Contents API mit Accept: application/vnd.github.raw+json und Cache-Buster; raw.githubusercontent.com bleibt nur Fallback. HTTP-Status, Versionsnummer, Dateityp und Lua-Syntax werden vor Installation geprüft; die vorherige Version wird als .backup gesichert.
