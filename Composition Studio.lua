@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.28
+-- @version 1.0.29
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.28"
+local VERSION="1.0.29"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -864,19 +864,65 @@ local function scoreflow_append_rests(out,gap,grid)
  end
 end
 local function scoreflow_staff_mode(notes,items)
+ local lo,hi,sum,cnt=127,0,0,0
+ for _,x in ipairs(notes or {}) do
+  local p=x.pitch or 60
+  lo=math.min(lo,p); hi=math.max(hi,p); sum=sum+p; cnt=cnt+1
+ end
+ local avg=(cnt>0) and (sum/cnt) or 60
+
+ -- Musical register wins over potentially stale track/take/plugin names.
+ -- Clear violin/treble range:
+ if cnt>0 and lo>=55 and avg>=67 then return "treble" end
+ -- Clear bass/cello range:
+ if cnt>0 and hi<=67 and avg<=55 then return "bass" end
+
  local names={}
  for _,it in ipairs(items or score_state.items or {}) do
   names[#names+1]=string.lower(tostring(it.track_name or "").." "..tostring(it.take_name or ""))
  end
  local n=table.concat(names," ")
+
+ -- Piano/keyboard remains explicit because wide range is expected.
  if n:find("klavier",1,true) or n:find("piano",1,true) or n:find("keyboard",1,true) then return "piano" end
- if n:find("cello",1,true) or n:find("violoncello",1,true) or n:find("kontrabass",1,true) or n:find("double bass",1,true) or n:find("fagott",1,true) then return "bass" end
- if n:find("violin",1,true) or n:find("violine",1,true) or n:find("viola",1,true) or n:find("flöte",1,true) or n:find("flute",1,true) or n:find("klarinette",1,true) or n:find("clarinet",1,true) or n:find("oboe",1,true) then return "treble" end
- local lo,hi=127,0
- for _,x in ipairs(notes or {}) do lo=math.min(lo,x.pitch or 60); hi=math.max(hi,x.pitch or 60) end
- if lo>=50 and hi-lo<28 then return "treble" end
- if hi<=64 and hi-lo<28 then return "bass" end
+
+ -- Instrument names are only secondary hints and must be compatible with range.
+ if (n:find("violin",1,true) or n:find("violine",1,true) or n:find("flöte",1,true) or n:find("flute",1,true)
+     or n:find("klarinette",1,true) or n:find("clarinet",1,true) or n:find("oboe",1,true) or n:find("viola",1,true))
+     and (cnt==0 or avg>=58) then return "treble" end
+ if (n:find("cello",1,true) or n:find("violoncello",1,true) or n:find("kontrabass",1,true)
+     or n:find("double bass",1,true) or n:find("fagott",1,true))
+     and (cnt==0 or avg<=61) then return "bass" end
+
+ -- Generic fallback from pitch distribution.
+ if lo>=52 and hi-lo<36 then return "treble" end
+ if hi<=69 and hi-lo<36 then return "bass" end
  return "piano"
+end
+
+local function scoreflow_part_label(part_items,part_notes,part_index,name_counts)
+ local raw=(part_items[1] and part_items[1].track_name) or ""
+ raw=tostring(raw or "")
+ local lower=string.lower(raw)
+ local lo,hi,sum,cnt=127,0,0,0
+ for _,x in ipairs(part_notes or {}) do
+  local p=x.pitch or 60; lo=math.min(lo,p); hi=math.max(hi,p); sum=sum+p; cnt=cnt+1
+ end
+ local avg=(cnt>0) and sum/cnt or 60
+
+ -- Don't expose a clearly contradictory stale SWAM/plugin-style label.
+ local suspicious=false
+ if lower:find("cello",1,true) and avg>=64 then suspicious=true end
+ if lower:find("bass",1,true) and avg>=67 then suspicious=true end
+ if lower=="" then suspicious=true end
+
+ if suspicious then
+  return "Part "..tostring(part_index)
+ end
+
+ local c=(name_counts and name_counts[raw]) or 1
+ if c>1 then return raw.." · "..tostring(part_index) end
+ return raw
 end
 local function scoreflow_voice_json(notes,mstart,mend,staff,mode,grid)
  local ev={}
@@ -933,7 +979,7 @@ local function scoreflow_voice_json(notes,mstart,mend,staff,mode,grid)
  if cursor<mend-grid/2 then scoreflow_append_rests(out,mend-cursor,grid) end
  return "["..table.concat(out,",").."]"
 end
-local function scoreflow_part_json(part_notes,part_items,m0,m1)
+local function scoreflow_part_json(part_notes,part_items,m0,m1,part_index,name_counts)
  local grid=scoreflow_grid(part_notes)
  local mode=scoreflow_staff_mode(part_notes,part_items)
  local measures={}
@@ -951,7 +997,7 @@ local function scoreflow_part_json(part_notes,part_items,m0,m1)
   measures[#measures+1]='{"treble":'..tre..',"bass":'..bas..extra..'}'
  end
  local staffMode=(mode=="treble" and "single-treble") or (mode=="bass" and "single-bass") or "grand"
- local name=(part_items[1] and part_items[1].track_name) or "Part"
+ local name=scoreflow_part_label(part_items,part_notes,part_index,name_counts)
  return '{"name":"'..json_escape(name)..'","staffMode":"'..staffMode..'","measures":['..table.concat(measures,",")..']}'
 end
 local function scoreflow_score_json()
@@ -1001,10 +1047,20 @@ local function scoreflow_score_json()
   return '{"title":"Composition Studio","instrument":"piano","staffMode":"'..staffMode..'","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo)..',"measures":['..table.concat(measures,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
  end
 
- local parts={}
+ local name_counts={}
  for _,g in ipairs(order) do
   local p=byTrack[g]
-  if #p.notes>0 then parts[#parts+1]=scoreflow_part_json(p.notes,p.items,m0,m1) end
+  local nm=(p.items[1] and p.items[1].track_name) or ""
+  name_counts[nm]=(name_counts[nm] or 0)+1
+ end
+ local parts={}
+ local pi=0
+ for _,g in ipairs(order) do
+  local p=byTrack[g]
+  if #p.notes>0 then
+   pi=pi+1
+   parts[#parts+1]=scoreflow_part_json(p.notes,p.items,m0,m1,pi,name_counts)
+  end
  end
  return '{"title":"Composition Studio","instrument":"ensemble","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo)..',"parts":['..table.concat(parts,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
 end
@@ -1397,7 +1453,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Mehrere ausgewählte REAPER-Tracks werden nicht mehr zu einem gemeinsamen Notenpool vermischt.\n• Jeder Track wird als eigener Part mit Trackname und eigener Instrument-/Schlüsselentscheidung erhalten.\n• Mehrspur-Renderer verwendet für alle Parts dieselbe Taktgeometrie: Takte und Zeilenumbrüche bleiben vertikal ausgerichtet.\n• Ein Klaviertrack kann weiterhin zweisystemig sein; Einzelinstrumente bleiben einsystemig.\n• Auswahl und Bearbeitung bleiben über die globalen csid-Noten-IDs mit dem jeweiligen REAPER-MIDI verbunden.\n\nZU TESTEN\n\n1. Zwei oder mehr MIDI-Items auf verschiedenen Tracks auswählen.\n2. Notation öffnen.\n3. Jeder Track muss als eigener beschrifteter Part erscheinen.\n4. Taktstriche müssen untereinander ausgerichtet sein.\n5. Eine Note in einem Part markieren und transponieren/ziehen; nur die entsprechende REAPER-Note darf geändert werden." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Instrument-/Schlüsselerkennung korrigiert: musikalische Tonlage hat jetzt Vorrang vor Track-/Take-/Plugin-Namen.\n• Ein veralteter Name wie „SWAM Cello 3“ kann eine hoch liegende Violinstimme nicht mehr in den Bassschlüssel zwingen.\n• Instrumentnamen dienen nur noch als sekundäre Hinweise und werden gegen die tatsächliche Tonlage plausibilisiert.\n• Widersprüchliche oder leere Partnamen werden neutral als „Part 1“, „Part 2“ usw. angezeigt.\n• Doppelte Tracknamen werden unterscheidbar beschriftet.\n\nZU TESTEN\n\nDie beiden Violinen erneut gemeinsam auswählen. Beide Parts müssen nun im Violinschlüssel erscheinen; kein Part darf nur wegen des Textes „SWAM Cello 3“ als Cello behandelt werden." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
