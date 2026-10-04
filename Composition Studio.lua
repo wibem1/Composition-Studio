@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.15
+-- @version 1.0.16
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.15"
+local VERSION="1.0.16"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -801,19 +801,131 @@ local function text_context_menu(id,text,editable)
  end
  return text
 end
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Fehler in v1.0.14 behoben: score_capture_selection ist jetzt korrekt vor seiner Verwendung definiert.\n• Notation Workspace 0.2 besitzt erstmals eine direkte REAPER-MIDI ⇄ Workspace-Brücke.\n• Kein Laden/Import: Beim Klick auf „Notation“ werden die aktuell ausgewählten MIDI-Items automatisch übernommen.\n• Mehrere ausgewählte MIDI-Items werden gemeinsam in das Notenmodell aufgenommen.\n• Einzelne Noten können im Workspace ausgewählt, um einen Halbton verschoben sowie in ihrer Dauer halbiert oder verdoppelt werden.\n• Änderungen werden unmittelbar in das REAPER-MIDI geschrieben und sind über REAPER Undo rückgängig.\n• Die gequetschte Menüleiste wurde entfernt und durch eine klare Werkzeugzeile ersetzt.\n• Der grafische editierbare Score-Renderer folgt als nächste Stufe.\n\nZU TESTEN\n\n1. In REAPER ein oder mehrere MIDI-Items auswählen.\n2. „Notation“ anklicken.\n3. Prüfen, dass die Items ohne weiteren Lade-Schritt sofort im Workspace erscheinen.\n4. Eine Note auswählen und ±1 Halbton bzw. ½/2× Dauer testen.\n5. Kontrollieren, dass das REAPER-MIDI unmittelbar entsprechend geändert wird.\n6. REAPER Undo testen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation Workspace 0.3 besitzt erstmals eine grafische Partituransicht.\n• Die ausgewählten REAPER-MIDI-Items erscheinen automatisch; kein Lade-Schritt.\n• Taktlinien, zwei Notensysteme und Notenköpfe werden aus dem internen Score-Modell gezeichnet.\n• Ein Klick auf einen Notenkopf wählt genau dieselbe Note aus wie die linke Diagnose-Liste.\n• ±1 Halbton und ½/2× Dauer wirken anschließend direkt auf die grafisch gewählte REAPER-Note.\n• Die Grafik ist bewusst noch ein technischer Renderer zur Prüfung der Zuordnung; der hochwertige OpenVoicing/Score-Renderer folgt erst danach.\n\nZU TESTEN\n\n1. MIDI-Item auswählen → „Notation“.\n2. Rechts auf verschiedene Notenköpfe klicken.\n3. Prüfen, ob sich die Auswahl links synchron ändert.\n4. Eine grafisch gewählte Note mit ±1 Halbton verändern.\n5. Prüfen, ob die Note in REAPER und im Workspace aktualisiert wird.\n6. REAPER Undo testen." end
+local function score_canvas_hit(mx,my,positions)
+ local best,bestd=nil,1e9
+ for i,p in ipairs(positions) do
+  local dx,dy=mx-p.x,my-p.y
+  local d=dx*dx+dy*dy
+  if d<bestd and d<=144 then best,bestd=i,d end
+ end
+ return best
+end
+
+local function score_draw_staff_canvas(width,height)
+ local notes=score_state.notes
+ if #notes==0 then
+  reaper.ImGui_TextWrapped(ctx,"Keine Noten zur grafischen Darstellung.")
+  return
+ end
+ local dl=reaper.ImGui_GetWindowDrawList(ctx)
+ local x0,y0=reaper.ImGui_GetCursorScreenPos(ctx)
+ width=math.max(320,width or 600)
+ height=math.max(260,height or 360)
+ reaper.ImGui_InvisibleButton(ctx,"##score_canvas",width,height)
+
+ local bg=0x151515FF
+ local staff=0xC8C8C8FF
+ local note_col=0xF0F0F0FF
+ local sel_col=0x4AA3FFFF
+ local bar_col=0x707070FF
+ local ledger_col=0xB8B8B8FF
+ reaper.ImGui_DrawList_AddRectFilled(dl,x0,y0,x0+width,y0+height,bg)
+
+ local left=x0+42
+ local right=x0+width-18
+ local usable=math.max(80,right-left)
+ local top_staff=y0+70
+ local bass_staff=y0+185
+ local line_gap=10
+
+ for k=0,4 do
+  reaper.ImGui_DrawList_AddLine(dl,left,top_staff+k*line_gap,right,top_staff+k*line_gap,staff,1)
+  reaper.ImGui_DrawList_AddLine(dl,left,bass_staff+k*line_gap,right,bass_staff+k*line_gap,staff,1)
+ end
+
+ local min_qn,max_qn=notes[1].start_qn,notes[1].start_qn+notes[1].duration_qn
+ for _,n in ipairs(notes) do
+  min_qn=math.min(min_qn,n.start_qn)
+  max_qn=math.max(max_qn,n.start_qn+n.duration_qn)
+ end
+ if max_qn-min_qn<4 then max_qn=min_qn+4 end
+ local q0=math.floor(min_qn/4)*4
+ local q1=math.ceil(max_qn/4)*4
+ if q1<=q0 then q1=q0+4 end
+
+ local function qx(q)
+  return left+(q-q0)/(q1-q0)*usable
+ end
+
+ for q=q0,q1,4 do
+  local bx=qx(q)
+  reaper.ImGui_DrawList_AddLine(dl,bx,top_staff,bx,bass_staff+4*line_gap,bar_col,1)
+  reaper.ImGui_DrawList_AddText(dl,bx+3,y0+10,0xA0A0A0FF,tostring(math.floor(q/4)+1))
+ end
+
+ local function pitch_y(p)
+  -- Technischer Prototyp: chromatische Stufen, keine endgültige Gravurlogik.
+  if p>=60 then
+   return top_staff+2*line_gap-(p-71)*(line_gap/2)
+  else
+   return bass_staff+2*line_gap-(p-50)*(line_gap/2)
+  end
+ end
+
+ local positions={}
+ for i,n in ipairs(notes) do
+  local nx=qx(n.start_qn)
+  local ny=pitch_y(n.pitch)
+  ny=math.max(y0+30,math.min(y0+height-30,ny))
+  positions[i]={x=nx,y=ny}
+  local col=(i==score_state.selected) and sel_col or note_col
+  reaper.ImGui_DrawList_AddCircleFilled(dl,nx,ny,6,col,20)
+  reaper.ImGui_DrawList_AddLine(dl,nx+5,ny,nx+5,ny-30,col,1.5)
+
+  local staff_top,staff_bottom
+  if n.pitch>=60 then staff_top,staff_bottom=top_staff,top_staff+4*line_gap
+  else staff_top,staff_bottom=bass_staff,bass_staff+4*line_gap end
+  if ny<staff_top-line_gap/2 then
+   local ly=staff_top-line_gap
+   while ly>=ny-1 do
+    reaper.ImGui_DrawList_AddLine(dl,nx-9,ly,nx+9,ly,ledger_col,1)
+    ly=ly-line_gap
+   end
+  elseif ny>staff_bottom+line_gap/2 then
+   local ly=staff_bottom+line_gap
+   while ly<=ny+1 do
+    reaper.ImGui_DrawList_AddLine(dl,nx-9,ly,nx+9,ly,ledger_col,1)
+    ly=ly+line_gap
+   end
+  end
+ end
+
+ if reaper.ImGui_IsItemHovered(ctx) and reaper.ImGui_IsMouseClicked(ctx,0) then
+  local mx,my=reaper.ImGui_GetMousePos(ctx)
+  local hit=score_canvas_hit(mx,my,positions)
+  if hit then
+   score_state.selected=hit
+   local n=score_state.notes[hit]
+   notation_status="Grafisch ausgewählt: "..score_pitch_name(n.pitch).." · Start "..string.format("%.3f",n.start_qn).." QN"
+  end
+ end
+end
+
 local function draw_notation_workspace()
  if not notation_window_open then return end
- reaper.ImGui_SetNextWindowSize(ctx,980,720,reaper.ImGui_Cond_FirstUseEver())
+ reaper.ImGui_SetNextWindowSize(ctx,1080,760,reaper.ImGui_Cond_FirstUseEver())
  local visible
  visible,notation_window_open=reaper.ImGui_Begin(ctx,"Composition Studio – Notation###CompositionStudioNotation",notation_window_open)
  if visible then
   local pushed=push_font()
-  reaper.ImGui_Text(ctx,"NOTATION WORKSPACE 0.2")
-  reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,"· REAPER-MIDI ⇄ Score-Bridge")
+  reaper.ImGui_Text(ctx,"NOTATION WORKSPACE 0.3")
+  reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,"· grafische Score-Auswahl")
   reaper.ImGui_Separator(ctx)
+
   local aw=select(1,reaper.ImGui_GetContentRegionAvail(ctx))
-  local gap=8; local bw=math.max(120,(aw-gap*3)/4)
+  local gap=8
+  local bw=math.max(120,(aw-gap*3)/4)
   if reaper.ImGui_Button(ctx,"−1 Halbton",bw,34) then score_change_pitch(-1) end
   reaper.ImGui_SameLine(ctx,0,gap)
   if reaper.ImGui_Button(ctx,"+1 Halbton",bw,34) then score_change_pitch(1) end
@@ -827,39 +939,43 @@ local function draw_notation_workspace()
   reaper.ImGui_Separator(ctx)
 
   local w,h=reaper.ImGui_GetContentRegionAvail(ctx)
-  local left=math.max(390,math.floor(w*0.48))
-  if reaper.ImGui_BeginChild(ctx,"##note_list",left,math.max(280,h-76),reaper.ImGui_ChildFlags_Borders()) then
+  local left=math.max(330,math.floor(w*0.34))
+  local body_h=math.max(360,h-76)
+
+  if reaper.ImGui_BeginChild(ctx,"##note_list",left,body_h,reaper.ImGui_ChildFlags_Borders()) then
    reaper.ImGui_Text(ctx,"NOTENMODELL")
-   reaper.ImGui_TextWrapped(ctx,"Die beim Klick auf „Notation“ ausgewählten REAPER-MIDI-Items werden automatisch übernommen.")
+   reaper.ImGui_TextWrapped(ctx,"Diagnoseansicht. Dieselbe Auswahl wird rechts grafisch angezeigt.")
    reaper.ImGui_Separator(ctx)
    if #score_state.notes==0 then
     reaper.ImGui_TextWrapped(ctx,"In REAPER MIDI-Item(s) auswählen und „Notation“ erneut anklicken.")
    else
     for i,n in ipairs(score_state.notes) do
-     local label=string.format("%3d  %-4s  %-18s  Start %.3f  Dauer %.3f",i,score_pitch_name(n.pitch),n.track_name or "",n.start_qn,n.duration_qn)
-     if reaper.ImGui_Selectable(ctx,label,i==score_state.selected) then score_state.selected=i; notation_status="Note ausgewählt: "..score_pitch_name(n.pitch) end
+     local label=string.format("%3d  %-4s  Start %.3f  Dauer %.3f",i,score_pitch_name(n.pitch),n.start_qn,n.duration_qn)
+     if reaper.ImGui_Selectable(ctx,label,i==score_state.selected) then
+      score_state.selected=i
+      notation_status="Liste ausgewählt: "..score_pitch_name(n.pitch)
+     end
     end
    end
    reaper.ImGui_EndChild(ctx)
   end
+
   reaper.ImGui_SameLine(ctx,0,8)
   local rw=select(1,reaper.ImGui_GetContentRegionAvail(ctx))
-  if reaper.ImGui_BeginChild(ctx,"##score_preview",rw,math.max(280,h-76),reaper.ImGui_ChildFlags_Borders()) then
+  if reaper.ImGui_BeginChild(ctx,"##score_preview",rw,body_h,reaper.ImGui_ChildFlags_Borders()) then
    reaper.ImGui_Text(ctx,"PARTITURANSICHT")
+   reaper.ImGui_TextWrapped(ctx,"Notenkopf anklicken → dieselbe REAPER-Note wird ausgewählt.")
    reaper.ImGui_Separator(ctx)
+   local cw,ch=reaper.ImGui_GetContentRegionAvail(ctx)
+   score_draw_staff_canvas(math.max(320,cw-4),math.max(260,ch-118))
    local n=score_selected_note()
    if n then
-    reaper.ImGui_Text(ctx,"Spur: "..tostring(n.track_name or ""))
-    reaper.ImGui_Text(ctx,"Item: "..tostring(n.take_name or ""))
-    reaper.ImGui_Text(ctx,"Tonhöhe: "..score_pitch_name(n.pitch).."  (MIDI "..tostring(n.pitch)..")")
-    reaper.ImGui_Text(ctx,string.format("Start: %.3f QN",n.start_qn))
-    reaper.ImGui_Text(ctx,string.format("Dauer: %.3f QN",n.duration_qn))
-    reaper.ImGui_Text(ctx,"Velocity: "..tostring(n.velocity).." · Kanal: "..tostring(n.channel+1))
-    reaper.ImGui_Spacing(ctx)
+    reaper.ImGui_Separator(ctx)
+    reaper.ImGui_Text(ctx,string.format("%s · %s · Start %.3f · Dauer %.3f · Vel %d",score_pitch_name(n.pitch),n.track_name or "",n.start_qn,n.duration_qn,n.velocity))
    end
-   reaper.ImGui_TextWrapped(ctx,"Der grafische editierbare Score-Renderer folgt als nächste Stufe. Der Datenkern arbeitet bereits direkt auf den ausgewählten REAPER-MIDI-Items.")
    reaper.ImGui_EndChild(ctx)
   end
+
   if notation_status~="" then reaper.ImGui_TextWrapped(ctx,notation_status) end
   if reaper.ImGui_Button(ctx,"Schließen",-1,34) then notation_window_open=false end
   pop_font(pushed)
