@@ -99,3 +99,8 @@ Die REAPER-eigene Notationsansicht ist nicht länger Zieloberfläche von Composi
 - kein separates Bedienprogramm, solange die integrierte Lösung technisch und qualitativ überzeugt
 
 Workspace 0.1 testet zunächst nur Fensterarchitektur und Unabhängigkeit vom Hauptfenster. Der eigentliche Score-Kern folgt als getrennte technische Stufe.
+
+
+## Renderer-Basis – ScoreFlow + reaper_webview
+
+Nach Verifikation der verfügbaren Projekte wird ScoreFlow als aktuelle Renderer-/Editor-Basis untersucht. ScoreFlow ist MIT-lizenziert und trennt seinen modularen VexFlow-JavaScript-Kern von der Flutter-Hülle. Die Engine bietet bereits Note-Hit-Testing und einen stabilen Score-JSON-Vertrag. Für die Einbettung in REAPER wird die ebenfalls MIT-lizenzierte Erweiterung reaper_webview verwendet (macOS WKWebView / Windows WebView2). Dadurch bleibt Composition Studio eine REAPER-integrierte Anwendung und benötigt kein separates Notationsprogramm.
