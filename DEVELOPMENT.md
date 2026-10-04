@@ -281,3 +281,8 @@ Notation Studio wurde vollständig aus `Composition Studio.lua` entfernt: kein M
 ## 2026-10-04 – Notation Studio v0.1.2 / native actions actually execute
 
 Two concrete bugs fixed. First, `kbd_enumerateActions()` was incorrectly called with numeric section id 32060; REAPER requires a `KbdSectionInfo` from `SectionFromUniqueID(32060)`. Second, clicking the modeless Notation Studio window removes focus from the MIDI editor, so repeated `MIDIEditor_GetActive()` calls can return nil. The MIDI editor HWND is now captured at script startup and reused. Readability profile now explicitly applies proportional spacing, display quantization 1/16, minimum display note length 1/16, triplet detection and automatic voicing, then zooms to content.
+
+
+## 2026-10-04 – Notation Studio v0.1.3 / größere Schrift
+
+Notation Studio verwendet jetzt eine eigene 20-pt-ReaImGui-Schrift für das gesamte Fenster. Standardfenstergröße von 450x600 auf 520x680 vergrößert, damit die aufklappbaren Bereiche mit der größeren Schrift besser lesbar bleiben.
