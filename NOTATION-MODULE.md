@@ -86,3 +86,16 @@ REAPERs **Proportional (musical) note spacing** wird nun direkt angesteuert. Die
 ## Phase 1d – v1.0.9 / automatische Bereinigung
 
 Ein erster deterministischer Notensatz-Button bündelt REAPERs vorhandene semantische Notationsfunktionen. Ziel ist eine belastbare Basis vor KI-Notensatz und individuellen Display-Offsets. Direkte `disp_pos`-Manipulation wird erst eingesetzt, wenn Einheit und Verhalten vollständig verifiziert sind.
+
+
+## Architekturwechsel – 2026-10-04 / Workspace 0.1
+
+Die REAPER-eigene Notationsansicht ist nicht länger Zieloberfläche von Composition Studio. REAPER bleibt DAW, MIDI-/Audio-Engine und Plugin-Host. Composition Studio erhält ein eigenes integriertes Notationsfenster.
+
+### Feste Zielstruktur
+- Hauptfenster: Chat, Komposition, REAPER-Steuerung, Modellwahl, Einstieg „Notation“
+- Notationsfenster: editierbarer Score, Stimmen, Dynamik, Artikulationen, Spielanweisungen, Layout, MusicXML/PDF, KI-Bearbeitung und SWAM-Semantik
+- gemeinsame Musikdaten: REAPER MIDI ⇄ Score-Modell
+- kein separates Bedienprogramm, solange die integrierte Lösung technisch und qualitativ überzeugt
+
+Workspace 0.1 testet zunächst nur Fensterarchitektur und Unabhängigkeit vom Hauptfenster. Der eigentliche Score-Kern folgt als getrennte technische Stufe.
