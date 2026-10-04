@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.7
+-- @version 1.0.8
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.7"
+local VERSION="1.0.8"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -262,7 +262,7 @@ local function initialize_halion_track(track) local fxs=find_halions(track); if 
 local function initialize_halion_project() local tracks,slots=0,0; for i=0,reaper.CountTracks(0)-1 do local tr=reaper.GetTrack(0,i); if #find_halions(tr)>0 then local n=initialize_halion_track(tr); if n>0 then tracks=tracks+1; slots=slots+n end end end; return tracks,slots end
 
 
--- Notationsmodul v0.2: Darstellungsdaten + Notationseditor-Zoom; MIDI-Performance bleibt unverändert.
+-- Notationsmodul v0.3: musikalische Abstände + Darstellungsdaten + Notationseditor-Zoom; MIDI-Performance bleibt unverändert.
 local function midi_action_by_name(name)
  if type(reaper.kbd_enumerateActions)=="function" and type(reaper.kbd_getTextFromCmd)=="function" then
   local i=0
@@ -289,15 +289,36 @@ local function notation_run_view_action(name,times)
  update_status="Notation: "..name
  return true
 end
+local function notation_spacing_state()
+ local cmd=midi_action_by_name("Notation: Proportional (musical) note spacing")
+ if not cmd then return nil,nil end
+ local state=type(reaper.GetToggleCommandStateEx)=="function" and reaper.GetToggleCommandStateEx(32060,cmd) or -1
+ return state==1,cmd
+end
+local function notation_set_musical_spacing(enable)
+ local ed=type(reaper.MIDIEditor_GetActive)=="function" and reaper.MIDIEditor_GetActive() or nil
+ if not ed then update_status="Notation: Kein aktiver MIDI-Editor."; return false end
+ local on,cmd=notation_spacing_state()
+ if not cmd then update_status="Notation: Proportionale musikalische Notenabstände wurden in dieser REAPER-Version nicht gefunden."; return false end
+ if on~=enable then reaper.MIDIEditor_OnCommand(ed,cmd) end
+ update_status=enable and "Notation: Musikalische proportionale Abstände eingeschaltet." or "Notation: Absolute Rasterabstände eingeschaltet."
+ return true
+end
+local function notation_toggle_musical_spacing()
+ local on,cmd=notation_spacing_state()
+ if not cmd then update_status="Notation: Proportionale musikalische Notenabstände wurden nicht gefunden."; return end
+ notation_set_musical_spacing(not on)
+end
 local function notation_make_readable()
  local ed=type(reaper.MIDIEditor_GetActive)=="function" and reaper.MIDIEditor_GetActive() or nil
  if not ed then update_status="Notation: Kein aktiver MIDI-Editor."; return end
- -- Erst reproduzierbaren Ausgangspunkt herstellen, dann horizontal vergrößern.
+ -- Erst musikalische Abstände aktivieren, dann reproduzierbaren Ausgangspunkt herstellen und moderat vergrößern.
+ if not notation_set_musical_spacing(true) then return end
  if not notation_run_view_action("View: Zoom to content",1) then return end
  local zin=midi_action_by_name("View: Zoom in horizontally")
  if not zin then update_status="Notation: Horizontales Vergrößern ist in dieser REAPER-Version nicht auffindbar."; return end
- for _=1,4 do reaper.MIDIEditor_OnCommand(ed,zin) end
- update_status="Notation: Lesbare Arbeitsansicht eingestellt. Mit Breiter/Schmaler fein anpassen."
+ for _=1,3 do reaper.MIDIEditor_OnCommand(ed,zin) end
+ update_status="Notation: Musikalische Abstände + lesbare Arbeitsansicht eingestellt. Mit Breiter/Schmaler fein anpassen."
 end
 
 local function notation_takes()
@@ -429,10 +450,12 @@ local function notation_auto_lengths()
  update_status=update_status.." Auto wählte 1/"..tostring(chosen).."."
 end
 local function draw_notation_panel()
- reaper.ImGui_Text(ctx,"NOTATION – PROTOTYP 0.2")
+ reaper.ImGui_Text(ctx,"NOTATION – PROTOTYP 0.3")
  reaper.ImGui_TextWrapped(ctx,"Zuerst ein brauchbares Notenbild herstellen, danach bei Bedarf die dargestellten Notenlängen quantisieren. Die MIDI-Performance bleibt unverändert.")
  reaper.ImGui_Separator(ctx)
  reaper.ImGui_Text(ctx,"NOTENBILD")
+ local spacing_on=select(1,notation_spacing_state())
+ if reaper.ImGui_Button(ctx,(spacing_on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##notation_spacing",-1,30) then notation_toggle_musical_spacing() end
  if reaper.ImGui_Button(ctx,"Lesbar machen##notation_readable",-1,32) then notation_make_readable() end
  local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local gap=6; local half=math.max(90,(w-gap)/2)
  if reaper.ImGui_Button(ctx,"Breiter  +##notation_wider",half,30) then notation_run_view_action("View: Zoom in horizontally",1) end; reaper.ImGui_SameLine(ctx,0,gap)
@@ -449,7 +472,7 @@ local function draw_notation_panel()
  if reaper.ImGui_Button(ctx,"1/32##notation32",bw,30) then notation_quantize_lengths(32) end
  if reaper.ImGui_Button(ctx,"Originale Darstellung##notation_reset",-1,30) then notation_reset_lengths() end
  reaper.ImGui_Separator(ctx)
- reaper.ImGui_TextWrapped(ctx,"Lesbar machen setzt zunächst Zoom auf den gesamten Inhalt und vergrößert die horizontale Darstellung anschließend in vier Stufen. Breiter/Schmaler erlaubt die Feineinstellung.")
+ reaper.ImGui_TextWrapped(ctx,"Lesbar machen aktiviert zuerst REAPERs proportionale musikalische Notenabstände, passt den gesamten Inhalt ein und vergrößert anschließend moderat. Breiter/Schmaler erlaubt die Feineinstellung.")
 end
 
 local CONTROLLER=[[Du bist der Controller von Composition Studio in REAPER. Der Benutzer spricht frei; es gibt KEINE Triggerwörter. Interpretiere nur, was eindeutig gemeint ist. Bei Unklarheit FRAGE nach.
@@ -582,7 +605,7 @@ local function text_context_menu(id,text,editable)
  end
  return text
 end
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation-Prototyp 0.2: neuer Bereich NOTENBILD.\n• „Lesbar machen“ setzt eine reproduzierbare Arbeitsansicht mit deutlich größerem horizontalen Abstand.\n• „Breiter/Schmaler“, „Auswahl einpassen“ und „Inhalt einpassen“ steuern den REAPER-Notationseditor direkt.\n• Darstellungsquantisierung ausgewählter Noten auf Auto, 1/8, 1/16 oder 1/32; die MIDI-Performance bleibt unverändert.\n• Originale Notendarstellung kann für die Auswahl wiederhergestellt werden.\n• Zielarchitektur dokumentiert: KI-Komposition + KI-Notensatz + bidirektionale Spielanweisungen + Mehrspur-SWAM + MusicXML/PDF-Export.\n\nZU TESTEN\n\n1. MIDI-/Notationseditor öffnen.\n2. Oben im Studio auf Notation klicken.\n3. Zuerst „Lesbar machen“ testen: Werden die Noten horizontal deutlich entzerrt?\n4. „Breiter“ und „Schmaler“ mehrfach testen.\n5. Einige Noten auswählen und „Auswahl einpassen“ testen.\n6. „Inhalt einpassen“ testen.\n7. Danach 1/8, 1/16, 1/32 und Auto vergleichen.\n8. Prüfen, dass die MIDI-Wiedergabe unverändert bleibt." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation-Prototyp 0.3: proportionale musikalische Notenabstände integriert.\n• „Musikalische Abstände“ schaltet REAPERs Proportional-(musical)-Spacing direkt ein/aus.\n• „Lesbar machen“ aktiviert musikalische Abstände automatisch, passt den Inhalt ein und vergrößert moderat.\n• „Breiter/Schmaler“, „Auswahl einpassen“ und „Inhalt einpassen“ bleiben zur Feineinstellung erhalten.\n• Darstellungsquantisierung ausgewählter Noten auf Auto, 1/8, 1/16 oder 1/32; die MIDI-Performance bleibt unverändert.\n• Originale Notendarstellung kann für die Auswahl wiederhergestellt werden.\n• Zielarchitektur dokumentiert: KI-Komposition + KI-Notensatz + bidirektionale Spielanweisungen + Mehrspur-SWAM + MusicXML/PDF-Export.\n\nZU TESTEN\n\n1. Dasselbe dichte Notenbeispiel öffnen.\n2. Oben im Studio auf Notation klicken.\n3. „Musikalische Abstände“ ein- und ausschalten und die Verteilung vergleichen.\n4. „Lesbar machen“ testen: Dichte Achtel/Sechzehntel sollten mehr Platz erhalten, lange Werte weniger unnötigen Raum.\n5. Mit „Breiter/Schmaler“ fein einstellen.\n6. Danach erst Darstellungsquantisierung testen.\n7. Prüfen, dass die MIDI-Wiedergabe unverändert bleibt." end
 local function draw_history() if notation_visible then draw_notation_panel(); return end; if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(48,math.min(260,lines*22+12)); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
