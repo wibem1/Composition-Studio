@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.23
+-- @version 0.1.24
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.23"
+local VERSION="0.1.24"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -449,64 +449,85 @@ local function cleanup_notation()
  local done={}
  local missing={}
 
- local function execute_exact(label,name)
-  local cmd=midi_action_by_name(name)
-  if not cmd then
-   missing[#missing+1]=label.." ["..name.."]"
-   return false
-  end
-  reaper.MIDIEditor_OnCommand(ed,cmd)
-  done[#done+1]=label
-  return true
- end
-
- local function set_toggle_found(label,variants,enable)
+ local function execute_found(label,variants,toggle_on)
   local cmd,txt=find_action_variants(variants)
-  if not cmd then
-   missing[#missing+1]=label
-   return false
-  end
-  local st=reaper.GetToggleCommandStateEx(32060,cmd)
-  if st==-1 then
-   missing[#missing+1]=label.." [Status nicht lesbar: "..tostring(txt).."]"
-   return false
-  end
-  if (st==1)~=enable then
+  if not cmd then missing[#missing+1]=label; return false end
+  if toggle_on then
+   local st=reaper.GetToggleCommandStateEx(32060,cmd)
+   if st~=1 then reaper.MIDIEditor_OnCommand(ed,cmd) end
+  else
    reaper.MIDIEditor_OnCommand(ed,cmd)
   end
-  local after=reaper.GetToggleCommandStateEx(32060,cmd)
-  if after~=-1 and (after==1)~=enable then
-   missing[#missing+1]=label.." konnte nicht auf "..(enable and "EIN" or "AUS").." gesetzt werden"
-   return false
-  end
-  done[#done+1]=label.." "..(enable and "EIN" or "AUS")
+  done[#done+1]=label.." ["..txt.."]"
   return true
  end
 
- -- Nur Darstellung, keine MIDI-Daten und keine weiteren Layout-/Stimmenänderungen.
- execute_exact(
-  "Anzeigequantisierung 1/16",
-  "Notation: Set display quantization to 1/16 (default)"
- )
+ execute_found("proportionale Abstände",{
+   {"notation","proportional"},
+   {"proportional","spacing"}
+ },true)
 
- execute_exact(
-  "Mindestnotenlänge 1/16",
-  "Notation: Set minimum display quantization note length to 1/16"
- )
+ execute_found("Anzeigequantisierung 1/16",{
+   {"notation","1/16","quant"},
+   {"notation","1/16"}
+ },false)
 
- set_toggle_found(
-  "Automatische Triolenerkennung",
-  {
+ execute_found("Mindestnotenlänge 1/64",{
+   {"notation","minimum","1/64"},
+   {"notation","mindest","1/64"}
+ },false)
+
+ execute_found("Triolenerkennung",{
    {"notation","triplet"},
    {"notation","triol"}
-  },
-  false
- )
+ },true)
+
+ local profile,instrument=selected_track_profile()
+
+ -- Für Solo-Streicher sind MIDI-Überlappungen meist Legato/Performance-Daten
+ -- und sollen nicht automatisch als zusätzliche Notationsstimmen erscheinen.
+ local voice_cmd,voice_txt=find_action_variants({
+   {"notation","voice","overlapping"},
+   {"notation","stimm"}
+ })
+ if voice_cmd then
+  local want_voice=(profile=="grand")
+  local vst=reaper.GetToggleCommandStateEx(32060,voice_cmd)
+  if vst~=-1 and (vst==1)~=want_voice then reaper.MIDIEditor_OnCommand(ed,voice_cmd) end
+  done[#done+1]="automatische Stimmenzuordnung "..(want_voice and "EIN" or "AUS").." ["..tostring(voice_txt).."]"
+ else
+  missing[#missing+1]="automatische Stimmenzuordnung"
+ end
+ local clef_ok,clef_info=set_default_clef_chunk(profile)
+ if clef_ok then
+  done[#done+1]="Notensystem: "..instrument.." → "..profile.." ["..tostring(clef_info).."]"
+ elseif profile=="grand" then
+  done[#done+1]="Notensystem: "..instrument.." → Treble+bass unverändert"
+ else
+  missing[#missing+1]="Notensystem: "..instrument.." → "..tostring(clef_info)
+ end
+
+ local visible_tracks=count_visible_tracks(ed)
+ if visible_tracks and visible_tracks>1 then
+  missing[#missing+1]="Page View benötigt genau einen sichtbaren Track; aktuell sichtbar: "..tostring(visible_tracks)
+ end
+
+ local page_ok,page_info=disable_continuous_view(ed)
+ if page_ok then done[#done+1]=page_info
+ else missing[#missing+1]=page_info end
+
+ local scaled,scale_info=apply_readable_scale(ed)
+ if scaled then done[#done+1]="lesbare horizontale Zielskalierung ["..scale_info.."]"
+ else missing[#missing+1]="Horizontale Zielskalierung: "..tostring(scale_info) end
+
+ local vertical_ok,vertical_info=enlarge_notation_vertically(ed)
+ if vertical_ok then done[#done+1]="größere Notensysteme ["..vertical_info.."]"
+ else missing[#missing+1]="Vertikale Skalierung: "..tostring(vertical_info) end
 
  if #missing==0 then
   status="Ausgeführt:\n• "..table.concat(done,"\n• ")
  else
-  status="Ausgeführt:\n• "..table.concat(done,"\n• ").."\n\nNicht gefunden / nicht gesetzt:\n• "..table.concat(missing,"\n• ")
+  status="Ausgeführt:\n• "..table.concat(done,"\n• ").."\n\nNicht gefunden:\n• "..table.concat(missing,"\n• ")
  end
 end
 
@@ -633,7 +654,7 @@ local function draw()
    reaper.ImGui_TextWrapped(ctx,"Für den mehrzeiligen Seitenumbruch darf in REAPER nur ein Track sichtbar sein.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
    if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
-   reaper.ImGui_TextWrapped(ctx,"„Lesbarkeit verbessern“ verändert nur die Notationsdarstellung: Anzeigequantisierung 1/16, Mindestnotenlänge 1/16 und automatische Triolenerkennung AUS. Schlüssel, Stimmen, Zoom und Seitendarstellung werden dabei nicht verändert.")
+   reaper.ImGui_TextWrapped(ctx,"Seitendarstellung mit adaptiver Skalierung. Für Solo-Streicher: Mindestnotenlänge 1/64 und automatische Überlappungs-Stimmen AUS, damit kurze Läufe und Legato-Überlappungen nicht künstlich verdichtet werden.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
