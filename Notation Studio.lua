@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.21
+-- @version 0.1.22
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.21"
+local VERSION="0.1.22"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -485,11 +485,6 @@ local function cleanup_notation()
   "Notation: Set minimum display quantization note length to 1/16"
  )
 
- execute_found("Triolenerkennung",{
-   {"notation","triplet"},
-   {"notation","triol"}
- },true)
-
  local profile,instrument=selected_track_profile()
 
  -- Für Solo-Streicher sind MIDI-Überlappungen meist Legato/Performance-Daten
@@ -662,7 +657,7 @@ local function draw()
    reaper.ImGui_TextWrapped(ctx,"Für den mehrzeiligen Seitenumbruch darf in REAPER nur ein Track sichtbar sein.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
    if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
-   reaper.ImGui_TextWrapped(ctx,"Seitendarstellung mit adaptiver Skalierung. Anzeigequantisierung und Mindestnotenlänge werden beim Aufräumen über REAPERs native Notationsaktionen auf 1/16 gesetzt. Für Solo-Streicher bleibt die automatische Überlappungs-Stimmenzuordnung AUS.")
+   reaper.ImGui_TextWrapped(ctx,"Seitendarstellung mit adaptiver Skalierung. Anzeigequantisierung und Mindestnotenlänge werden beim Aufräumen über REAPERs native Notationsaktionen auf 1/16 gesetzt. Die Triolenerkennung wird nicht automatisch verändert. Für Solo-Streicher bleibt die automatische Überlappungs-Stimmenzuordnung AUS.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
