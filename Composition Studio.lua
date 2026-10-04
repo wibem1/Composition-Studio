@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.17
+-- @version 1.0.18
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.17"
+local VERSION="1.0.18"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -19,6 +19,8 @@ local TITLE_KEY="LastWorkTitle"
 local work_title=reaper.GetProjExtState(0,EXT_SECTION,TITLE_KEY); if type(work_title)=="number" then local _,v=reaper.GetProjExtState(0,EXT_SECTION,TITLE_KEY); work_title=v end; work_title=tostring(work_title or ""):gsub("^%s+",""):gsub("%s+$","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Composition%20Studio.lua"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
+local SCOREFLOW_COMMIT="b2d86a085504c5ac85bdf5f302167d4c79de50e2"
+local SCOREFLOW_HOST_PATH=reaper.GetResourcePath().."/Composition-Studio-ScoreFlow.html"
 
 local function ensure_native_startup_hook()
  local p=reaper.GetResourcePath().."/Scripts/__startup.lua"; local mark="-- BEGIN COMPOSITION STUDIO AUTO START"
@@ -801,190 +803,173 @@ local function text_context_menu(id,text,editable)
  end
  return text
 end
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation Workspace 0.3 besitzt erstmals eine grafische Partituransicht.\n• Partiturdarstellung jetzt klassisch schwarz auf weiß; nur die ausgewählte Note bleibt zur Orientierung farbig markiert.\n• Die ausgewählten REAPER-MIDI-Items erscheinen automatisch; kein Lade-Schritt.\n• Taktlinien, zwei Notensysteme und Notenköpfe werden aus dem internen Score-Modell gezeichnet.\n• Ein Klick auf einen Notenkopf wählt genau dieselbe Note aus wie die linke Diagnose-Liste.\n• ±1 Halbton und ½/2× Dauer wirken anschließend direkt auf die grafisch gewählte REAPER-Note.\n• Die Grafik ist bewusst noch ein technischer Renderer zur Prüfung der Zuordnung; der hochwertige OpenVoicing/Score-Renderer folgt erst danach.\n\nZU TESTEN\n\n1. MIDI-Item auswählen → „Notation“.\n2. Rechts auf verschiedene Notenköpfe klicken.\n3. Prüfen, ob sich die Auswahl links synchron ändert.\n4. Eine grafisch gewählte Note mit ±1 Halbton verändern.\n5. Prüfen, ob die Note in REAPER und im Workspace aktualisiert wird.\n6. REAPER Undo testen." end
-local function score_canvas_hit(mx,my,positions)
- local best,bestd=nil,1e9
- for i,p in ipairs(positions) do
-  local dx,dy=mx-p.x,my-p.y
-  local d=dx*dx+dy*dy
-  if d<bestd and d<=144 then best,bestd=i,d end
- end
- return best
+
+local function url_encode_path(path)
+ return tostring(path or ""):gsub("([^%w%-%._~/])",function(c) return string.format("%%%02X",string.byte(c)) end)
 end
-
-local function score_draw_staff_canvas(width,height)
- local notes=score_state.notes
- if #notes==0 then
-  reaper.ImGui_TextWrapped(ctx,"Keine Noten zur grafischen Darstellung.")
-  return
+local function scoreflow_pitch_key(p)
+ local names={"c","c#","d","eb","e","f","f#","g","ab","a","bb","b"}
+ p=math.max(0,math.min(127,math.floor(p or 60)))
+ return names[(p%12)+1].."/"..tostring(math.floor(p/12)-1)
+end
+local SCOREFLOW_DURS={
+ {4.0,"w",0},{3.0,"h",1},{2.0,"h",0},{1.5,"q",1},{1.0,"q",0},
+ {0.75,"8",1},{0.5,"8",0},{0.375,"16",1},{0.25,"16",0},
+ {0.1875,"32",1},{0.125,"32",0},{0.09375,"64",1},{0.0625,"64",0}
+}
+local function scoreflow_nearest_duration(qn)
+ qn=math.max(0.0625,tonumber(qn) or 1)
+ local best=SCOREFLOW_DURS[#SCOREFLOW_DURS]; local bd=math.huge
+ for _,d in ipairs(SCOREFLOW_DURS) do
+  local e=math.abs(qn-d[1])
+  if e<bd then best=d; bd=e end
  end
- local dl=reaper.ImGui_GetWindowDrawList(ctx)
- local x0,y0=reaper.ImGui_GetCursorScreenPos(ctx)
- width=math.max(320,width or 600)
- height=math.max(260,height or 360)
- reaper.ImGui_InvisibleButton(ctx,"##score_canvas",width,height)
-
- local bg=0xFFFFFFFF
- local staff=0x111111FF
- local note_col=0x111111FF
- local sel_col=0x0066CCFF
- local bar_col=0x505050FF
- local ledger_col=0x111111FF
- reaper.ImGui_DrawList_AddRectFilled(dl,x0,y0,x0+width,y0+height,bg)
-
- local left=x0+42
- local right=x0+width-18
- local usable=math.max(80,right-left)
- local top_staff=y0+70
- local bass_staff=y0+185
- local line_gap=10
-
- for k=0,4 do
-  reaper.ImGui_DrawList_AddLine(dl,left,top_staff+k*line_gap,right,top_staff+k*line_gap,staff,1)
-  reaper.ImGui_DrawList_AddLine(dl,left,bass_staff+k*line_gap,right,bass_staff+k*line_gap,staff,1)
+ return best[2],best[3],best[1]
+end
+local function scoreflow_note_json(keys,qn,is_rest)
+ local dur,dots=scoreflow_nearest_duration(qn)
+ local kk={}
+ for _,k in ipairs(keys or {}) do kk[#kk+1]='"'..json_escape(k)..'"' end
+ return '{"keys":['..table.concat(kk,",")..'],"duration":"'..dur..'","dots":'..tostring(dots)..',"rest":'..(is_rest and "true" or "false")..'}'
+end
+local function scoreflow_append_rests(out,gap)
+ gap=math.max(0,tonumber(gap) or 0)
+ local guard=0
+ while gap>0.03 and guard<64 do
+  guard=guard+1
+  local chosen=nil
+  for _,d in ipairs(SCOREFLOW_DURS) do if d[1]<=gap+0.001 then chosen=d; break end end
+  chosen=chosen or SCOREFLOW_DURS[#SCOREFLOW_DURS]
+  out[#out+1]='{"keys":[],"duration":"'..chosen[2]..'","dots":'..tostring(chosen[3])..',"rest":true}'
+  gap=gap-chosen[1]
  end
-
- local min_qn,max_qn=notes[1].start_qn,notes[1].start_qn+notes[1].duration_qn
+end
+local function scoreflow_voice_json(notes,mstart,mend,staff)
+ local ev={}
  for _,n in ipairs(notes) do
-  min_qn=math.min(min_qn,n.start_qn)
-  max_qn=math.max(max_qn,n.start_qn+n.duration_qn)
+  local which=(n.pitch>=60) and "treble" or "bass"
+  if which==staff and n.start_qn>=mstart-0.0001 and n.start_qn<mend-0.0001 then ev[#ev+1]=n end
  end
- if max_qn-min_qn<4 then max_qn=min_qn+4 end
- local q0=math.floor(min_qn/4)*4
- local q1=math.ceil(max_qn/4)*4
- if q1<=q0 then q1=q0+4 end
-
- local function qx(q)
-  return left+(q-q0)/(q1-q0)*usable
+ table.sort(ev,function(a,b)
+  if math.abs(a.start_qn-b.start_qn)>0.0001 then return a.start_qn<b.start_qn end
+  return a.pitch<b.pitch
+ end)
+ local groups={}
+ for _,n in ipairs(ev) do
+  local g=groups[#groups]
+  if not g or math.abs(g.start-n.start_qn)>0.0001 then
+   g={start=n.start_qn,notes={}}; groups[#groups+1]=g
+  end
+  g.notes[#g.notes+1]=n
  end
-
- for q=q0,q1,4 do
-  local bx=qx(q)
-  reaper.ImGui_DrawList_AddLine(dl,bx,top_staff,bx,bass_staff+4*line_gap,bar_col,1)
-  reaper.ImGui_DrawList_AddText(dl,bx+3,y0+10,0x404040FF,tostring(math.floor(q/4)+1))
- end
-
- local function pitch_y(p)
-  -- Technischer Prototyp: chromatische Stufen, keine endgültige Gravurlogik.
-  if p>=60 then
-   return top_staff+2*line_gap-(p-71)*(line_gap/2)
-  else
-   return bass_staff+2*line_gap-(p-50)*(line_gap/2)
+ local out={}
+ local cursor=mstart
+ for _,g in ipairs(groups) do
+  if g.start>cursor+0.03 then scoreflow_append_rests(out,g.start-cursor); cursor=g.start end
+  if g.start>=cursor-0.08 then
+   local keys={}; local dur=0
+   for _,n in ipairs(g.notes) do keys[#keys+1]=scoreflow_pitch_key(n.pitch); dur=math.max(dur,n.duration_qn) end
+   dur=math.min(dur,mend-g.start)
+   local _,_,repr=scoreflow_nearest_duration(dur)
+   out[#out+1]=scoreflow_note_json(keys,dur,false)
+   cursor=math.max(cursor,g.start+repr)
   end
  end
-
- local positions={}
- for i,n in ipairs(notes) do
-  local nx=qx(n.start_qn)
-  local ny=pitch_y(n.pitch)
-  ny=math.max(y0+30,math.min(y0+height-30,ny))
-  positions[i]={x=nx,y=ny}
-  local col=(i==score_state.selected) and sel_col or note_col
-  reaper.ImGui_DrawList_AddCircleFilled(dl,nx,ny,6,col,20)
-  reaper.ImGui_DrawList_AddLine(dl,nx+5,ny,nx+5,ny-30,col,1.5)
-
-  local staff_top,staff_bottom
-  if n.pitch>=60 then staff_top,staff_bottom=top_staff,top_staff+4*line_gap
-  else staff_top,staff_bottom=bass_staff,bass_staff+4*line_gap end
-  if ny<staff_top-line_gap/2 then
-   local ly=staff_top-line_gap
-   while ly>=ny-1 do
-    reaper.ImGui_DrawList_AddLine(dl,nx-9,ly,nx+9,ly,ledger_col,1)
-    ly=ly-line_gap
-   end
-  elseif ny>staff_bottom+line_gap/2 then
-   local ly=staff_bottom+line_gap
-   while ly<=ny+1 do
-    reaper.ImGui_DrawList_AddLine(dl,nx-9,ly,nx+9,ly,ledger_col,1)
-    ly=ly+line_gap
-   end
-  end
+ if cursor<mend-0.03 then scoreflow_append_rests(out,mend-cursor) end
+ return "["..table.concat(out,",").."]"
+end
+local function scoreflow_score_json()
+ local notes=score_state.notes or {}
+ if #notes==0 then return nil,"Keine Noten in der aktuellen REAPER-Auswahl." end
+ local minq,maxq=notes[1].start_qn,notes[1].start_qn+notes[1].duration_qn
+ for _,n in ipairs(notes) do minq=math.min(minq,n.start_qn); maxq=math.max(maxq,n.start_qn+n.duration_qn) end
+ local q0=math.floor(minq/4)*4
+ local measures={}
+ local count=math.max(1,math.ceil((maxq-q0)/4-1e-9))
+ for i=0,count-1 do
+  local ms=q0+i*4; local me=ms+4
+  measures[#measures+1]='{"treble":'..scoreflow_voice_json(notes,ms,me,"treble")..',"bass":'..scoreflow_voice_json(notes,ms,me,"bass")..'}'
  end
-
- if reaper.ImGui_IsItemHovered(ctx) and reaper.ImGui_IsMouseClicked(ctx,0) then
-  local mx,my=reaper.ImGui_GetMousePos(ctx)
-  local hit=score_canvas_hit(mx,my,positions)
-  if hit then
-   score_state.selected=hit
-   local n=score_state.notes[hit]
-   notation_status="Grafisch ausgewählt: "..score_pitch_name(n.pitch).." · Start "..string.format("%.3f",n.start_qn).." QN"
-  end
+ return '{"title":"Composition Studio","instrument":"piano","timeSignature":"4/4","keySignature":"C","tempo":'..string.format("%.2f",reaper.Master_GetTempo())..',"measures":['..table.concat(measures,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
+end
+local function scoreflow_host_html(score_json)
+ local base="https://cdn.jsdelivr.net/gh/IlyaSkorik/scoreflow@"..SCOREFLOW_COMMIT.."/assets/www/"
+ return [[<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Composition Studio – Notation</title>
+<script src="]]..base..[[js/vexflow.js"></script>
+<style>
+html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#111}
+#top{position:sticky;top:0;z-index:10;background:#f5f5f5;border-bottom:1px solid #bbb;padding:8px 12px;font-size:13px}
+#notation-container{position:relative;width:100%;box-sizing:border-box;padding:8px;background:#fff}
+#notation-container svg{display:block}
+#playhead{position:absolute;top:8px;width:2px;background:#1687d9;opacity:0;pointer-events:none}
+.note-sel{position:absolute;background:rgba(0,102,204,.18);border-radius:3px;pointer-events:none}
+#engine-error{padding:16px;color:#c62828}
+#print-root{position:fixed;left:-10000px;top:0}
+</style></head><body>
+<div id="top">Composition Studio · ScoreFlow/VexFlow renderer · technischer Integrationsprototyp</div>
+<div id="notation-container"><div id="playhead"></div></div><div id="print-root"></div>
+<script>window.flutter_inappwebview={callHandler:function(){return Promise.resolve(null);}};</script>
+<script type="module">
+import { render } from ']]..base..[[js/render/render.js';
+const score=]]..score_json..[[;
+try{render(score);}catch(e){document.body.insertAdjacentHTML('beforeend','<div id="engine-error">'+String(e)+'</div>');}
+</script></body></html>]]
+end
+local function scoreflow_open_webview()
+ score_capture_selection()
+ local score,err=scoreflow_score_json()
+ if not score then notation_status=err or "Keine Partiturdaten."; return false end
+ if type(reaper.WEBVIEW_Navigate)~="function" then
+  notation_status="Für den echten ScoreFlow-Renderer fehlt die REAPER-Erweiterung reaper_webview."
+  notation_window_open=true
+  return false
  end
+ local html=scoreflow_host_html(score)
+ if not write_file(SCOREFLOW_HOST_PATH,html) then
+  notation_status="ScoreFlow-Hostdatei konnte nicht geschrieben werden."
+  notation_window_open=true
+  return false
+ end
+ local url="file://"..url_encode_path(SCOREFLOW_HOST_PATH).."?v="..tostring(os.time())
+ local opts='{"SetTitle":"Composition Studio – Notation","InstanceId":"wv_composition_studio_notation","ShowPanel":"always","BasicCtxMenu":true}'
+ local ok,e=pcall(reaper.WEBVIEW_Navigate,url,opts)
+ if not ok then
+  notation_status="WebView konnte nicht geöffnet werden: "..tostring(e)
+  notation_window_open=true
+  return false
+ end
+ notation_status="ScoreFlow-Partitur geöffnet."
+ notation_window_open=false
+ return true
 end
 
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Der handgezeichnete ReaImGui-Score ist nicht mehr der Zielrenderer.\n• Neuer Integrationspfad: reaper_webview → ScoreFlow/VexFlow.\n• Beim Klick auf „Notation“ wird die aktuelle MIDI-Auswahl automatisch in ein ScoreFlow-kompatibles Partiturmodell übersetzt und als echtes VexFlow-Notenbild geöffnet.\n• Für den Prototypen werden ScoreFlow-Assets über einen fest gepinnten Commit geladen; später werden sie lokal gebündelt.\n• Wenn reaper_webview fehlt, stürzt nichts ab: Composition Studio zeigt die fehlende Abhängigkeit im Notationsfenster an.\n• Der erste Renderer-Test ist zunächst auf Klavier/Grand Staff und 4/4 fokussiert.\n\nZU TESTEN\n\n1. MIDI-Item auswählen → „Notation“.\n2. Falls reaper_webview vorhanden ist, muss ein echtes eingebettetes ScoreFlow/VexFlow-Fenster erscheinen.\n3. Notenbild mit dem bisherigen ReaImGui-Prototyp vergleichen.\n4. Falls stattdessen die Meldung über fehlendes reaper_webview erscheint, ist nur diese Erweiterung nachzuinstallieren." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
- reaper.ImGui_SetNextWindowSize(ctx,1080,760,reaper.ImGui_Cond_FirstUseEver())
+ reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
  local visible
  visible,notation_window_open=reaper.ImGui_Begin(ctx,"Composition Studio – Notation###CompositionStudioNotation",notation_window_open)
  if visible then
   local pushed=push_font()
-  reaper.ImGui_Text(ctx,"NOTATION WORKSPACE 0.3")
-  reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,"· grafische Score-Auswahl")
+  reaper.ImGui_Text(ctx,"NOTATION · ECHTER RENDERER")
   reaper.ImGui_Separator(ctx)
-
-  local aw=select(1,reaper.ImGui_GetContentRegionAvail(ctx))
-  local gap=8
-  local bw=math.max(120,(aw-gap*3)/4)
-  if reaper.ImGui_Button(ctx,"−1 Halbton",bw,34) then score_change_pitch(-1) end
-  reaper.ImGui_SameLine(ctx,0,gap)
-  if reaper.ImGui_Button(ctx,"+1 Halbton",bw,34) then score_change_pitch(1) end
-  reaper.ImGui_SameLine(ctx,0,gap)
-  if reaper.ImGui_Button(ctx,"½ Dauer",bw,34) then score_scale_duration(0.5) end
-  reaper.ImGui_SameLine(ctx,0,gap)
-  if reaper.ImGui_Button(ctx,"2× Dauer",bw,34) then score_scale_duration(2.0) end
-
+  reaper.ImGui_TextWrapped(ctx,notation_status~="" and notation_status or "ScoreFlow/VexFlow wird über reaper_webview eingebettet.")
   reaper.ImGui_Spacing(ctx)
-  reaper.ImGui_Text(ctx,string.format("%d MIDI-Item(s) · %d Noten",#score_state.items,#score_state.notes))
-  reaper.ImGui_Separator(ctx)
-
-  local w,h=reaper.ImGui_GetContentRegionAvail(ctx)
-  local left=math.max(330,math.floor(w*0.34))
-  local body_h=math.max(360,h-76)
-
-  if reaper.ImGui_BeginChild(ctx,"##note_list",left,body_h,reaper.ImGui_ChildFlags_Borders()) then
-   reaper.ImGui_Text(ctx,"NOTENMODELL")
-   reaper.ImGui_TextWrapped(ctx,"Diagnoseansicht. Dieselbe Auswahl wird rechts grafisch angezeigt.")
-   reaper.ImGui_Separator(ctx)
-   if #score_state.notes==0 then
-    reaper.ImGui_TextWrapped(ctx,"In REAPER MIDI-Item(s) auswählen und „Notation“ erneut anklicken.")
-   else
-    for i,n in ipairs(score_state.notes) do
-     local label=string.format("%3d  %-4s  Start %.3f  Dauer %.3f",i,score_pitch_name(n.pitch),n.start_qn,n.duration_qn)
-     if reaper.ImGui_Selectable(ctx,label,i==score_state.selected) then
-      score_state.selected=i
-      notation_status="Liste ausgewählt: "..score_pitch_name(n.pitch)
-     end
-    end
-   end
-   reaper.ImGui_EndChild(ctx)
+  if type(reaper.WEBVIEW_Navigate)~="function" then
+   reaper.ImGui_TextWrapped(ctx,"Benötigt wird die MIT-lizenzierte REAPER-Erweiterung „reaper_webview“ (macOS: WKWebView). Nach Installation und REAPER-Neustart öffnet „Notation“ direkt den ScoreFlow-Renderer.")
+  else
+   if reaper.ImGui_Button(ctx,"ScoreFlow erneut öffnen",-1,36) then scoreflow_open_webview() end
   end
-
-  reaper.ImGui_SameLine(ctx,0,8)
-  local rw=select(1,reaper.ImGui_GetContentRegionAvail(ctx))
-  if reaper.ImGui_BeginChild(ctx,"##score_preview",rw,body_h,reaper.ImGui_ChildFlags_Borders()) then
-   reaper.ImGui_Text(ctx,"PARTITURANSICHT")
-   reaper.ImGui_TextWrapped(ctx,"Notenkopf anklicken → dieselbe REAPER-Note wird ausgewählt.")
-   reaper.ImGui_Separator(ctx)
-   local cw,ch=reaper.ImGui_GetContentRegionAvail(ctx)
-   score_draw_staff_canvas(math.max(320,cw-4),math.max(260,ch-118))
-   local n=score_selected_note()
-   if n then
-    reaper.ImGui_Separator(ctx)
-    reaper.ImGui_Text(ctx,string.format("%s · %s · Start %.3f · Dauer %.3f · Vel %d",score_pitch_name(n.pitch),n.track_name or "",n.start_qn,n.duration_qn,n.velocity))
-   end
-   reaper.ImGui_EndChild(ctx)
-  end
-
-  if notation_status~="" then reaper.ImGui_TextWrapped(ctx,notation_status) end
+  reaper.ImGui_Spacing(ctx)
   if reaper.ImGui_Button(ctx,"Schließen",-1,34) then notation_window_open=false end
   pop_font(pushed)
   reaper.ImGui_End(ctx)
  end
 end
-
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(48,math.min(260,lines*22+12)); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
-local function loop() poll_job(); finish_save_panel(); if not open and not notation_window_open then if not restarting then remember_closed() end; return end; check_project_change(); if not open then draw_notation_workspace(); reaper.defer(loop); return end; reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Notation") then score_capture_selection(); notation_window_open=true end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,notation_window_open and "Notation ✓" or "Notation") then score_capture_selection(); notation_window_open=true end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; draw_notation_workspace(); if open or notation_window_open then reaper.defer(loop) elseif not restarting then remember_closed() end end
+local function loop() poll_job(); finish_save_panel(); if not open and not notation_window_open then if not restarting then remember_closed() end; return end; check_project_change(); if not open then draw_notation_workspace(); reaper.defer(loop); return end; reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Notation") then scoreflow_open_webview() end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"Notation") then scoreflow_open_webview() end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; draw_notation_workspace(); if open or notation_window_open then reaper.defer(loop) elseif not restarting then remember_closed() end end
 loop()
