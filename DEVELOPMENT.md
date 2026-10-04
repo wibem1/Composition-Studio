@@ -179,3 +179,15 @@ Notation Workspace erweitert:
 - Drag im freien Bereich bleibt Rechteckauswahl.
 - vertikale Mausdistanz -> Halbtonschritte; horizontale Distanz -> QN-Verschiebung, auf 0.25 QN gerundet.
 - MIDI-Start und -Ende werden gemeinsam verschoben; Dauer bleibt erhalten; Änderungen sind ein REAPER-Undo-Schritt.
+
+
+## 2026-10-04 – v1.0.25 / MIDI→Notation Transkription
+
+Der bisherige Konverter war die Hauptursache des schlechten Notenbilds: fester 4/4-Takt, starre MIDI-60-Systemtrennung und Restauffüllung bis 1/64. Ersetzt durch:
+- echte REAPER-Taktgrenzen via TimeMap_QNToMeasures / TimeMap_GetMeasureInfo
+- Taktartwechsel als ScoreFlow _ts
+- Quantisierung von Start/Dauer auf 1/16, bei real sehr kurzen Noten adaptiv 1/32
+- beschränkte, saubere Restwerte ohne punktierte Mikrorestketten
+- Instrument-/Tracknamen-basierte Systemzuweisung für Streicher und typische Orchesterinstrumente
+
+Offen: echte Tonart, Single-Staff-Renderer, Stimmenanalyse, taktübergreifende Haltebögen.
