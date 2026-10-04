@@ -121,3 +121,19 @@ Erst wenn diese Zuordnung stabil ist, wird der hochwertige Renderer eingebettet.
 ## 2026-10-04 – v1.0.17 / Partiturfarben
 
 Der technische Score-Prototyp bleibt bewusst funktional statt gravurorientiert. Darstellung geändert auf klassisches Notenbild: weißer Hintergrund, schwarze Linien/Noten/Taktstriche; nur die aktuell ausgewählte Note bleibt farbig markiert.
+
+
+## 2026-10-04 – v1.0.18 / ScoreFlow-Renderer-Integration
+
+Der selbst gezeichnete ReaImGui-Score wird nicht weitergeführt. Verifizierte Basis:
+- ScoreFlow (IlyaSkorik/scoreflow), MIT, VexFlow-Engine mit Grand Staff, Beaming, Pausen, Tuplets, Artikulationen, Dynamik und eigenem Layout/Collision-System.
+- reaper_webview (SadFrozz/reaper_webview), MIT, dockbare/freie WebView-Panels in REAPER; macOS via WKWebView.
+
+Prototype 0.4:
+- aktuelle REAPER-MIDI-Auswahl wird automatisch in ScoreFlow-kompatibles JSON übersetzt
+- lokaler HTML-Host wird unter dem REAPER Resource Path erzeugt
+- ScoreFlow-Engine wird auf einen festen Commit gepinnt und für diesen Prototyp über jsDelivr geladen
+- WEBVIEW_Navigate öffnet die Partitur als REAPER-Panel
+- bei fehlender reaper_webview-Erweiterung saubere Fallback-Meldung statt Fehler
+
+Der Prototyp ist zunächst 4/4 + Piano/Grand Staff. Nächste Stufe: WebView↔Lua-Rückkanal für direkte Score-Bearbeitung und danach lokale Bündelung der ScoreFlow-Assets.
