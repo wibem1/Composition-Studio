@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.21
+-- @version 1.0.22
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.21"
+local VERSION="1.0.22"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -32,7 +32,7 @@ do
  if reaper.GetExtState("CompositionStudio","WindowOpen")=="1" then
   local p=reaper.GetResourcePath().."/Scripts/Composition Studio/Composition Studio.lua"
   local f=io.open(p,"rb")
-  if f then f:close(); local ok,e=pcall(dofile,p); if not ok then reaper.ShowConsoleMsg(tostring(e).."\n") end end
+  if f then f:close(); pcall(dofile,p) end
  end
 end
 -- END COMPOSITION STUDIO AUTO START
@@ -96,7 +96,7 @@ local function install_update()
  if not compiled then update_status="Update abgebrochen: Lua-Syntaxfehler: "..tostring(syntax_error); busy=false; return end
  local previous=read_file(SCRIPT_PATH)
  if SCRIPT_PATH=="" or not previous or not write_file(SCRIPT_PATH..".backup",previous) or not write_file(SCRIPT_PATH,fresh) then update_status="Update konnte nicht sicher installiert werden."; busy=false; return end
- update_status="Update auf "..rv.." installiert. Neustart …"; restarting=true; open=false; reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"1",true); reaper.defer(function() local ok,e=pcall(dofile,SCRIPT_PATH); if not ok then reaper.ShowConsoleMsg("Composition Studio Update-Neustart: "..tostring(e).."\n") end end)
+ update_status="Update auf "..rv.." installiert. Neustart …"; restarting=true; open=false; reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"1",true); reaper.defer(function() pcall(dofile,SCRIPT_PATH) end)
 end
 local function utf8(cp) if cp<=0x7f then return string.char(cp) elseif cp<=0x7ff then return string.char(0xc0+math.floor(cp/64),0x80+cp%64) elseif cp<=0xffff then return string.char(0xe0+math.floor(cp/4096),0x80+math.floor(cp/64)%64,0x80+cp%64) else return string.char(0xf0+math.floor(cp/262144),0x80+math.floor(cp/4096)%64,0x80+cp%64) end end
 local function read_json_string(raw,q) local out,i={},q+1; while i<=#raw do local c=raw:sub(i,i); if c=='"' then return table.concat(out) end; if c=="\\" then i=i+1; local e=raw:sub(i,i); if e=="n" then out[#out+1]="\n" elseif e=="r" then out[#out+1]="\r" elseif e=="t" then out[#out+1]="\t" elseif e=='"' then out[#out+1]='"' elseif e=="\\" then out[#out+1]="\\" elseif e=="u" then local h=raw:sub(i+1,i+4); local cp=tonumber(h,16); if cp then i=i+4; out[#out+1]=utf8(cp) end else out[#out+1]=e end else out[#out+1]=c end; i=i+1 end; return table.concat(out) end
