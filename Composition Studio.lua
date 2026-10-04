@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.25
+-- @version 1.0.26
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.25"
+local VERSION="1.0.26"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -904,16 +904,25 @@ local function scoreflow_voice_json(notes,mstart,mend,staff,mode,grid)
  end
  local out={}
  local cursor=mstart
- for _,g in ipairs(groups) do
+ for gi,g in ipairs(groups) do
   if g.start>cursor+grid/2 then
    scoreflow_append_rests(out,g.start-cursor,grid)
    cursor=g.start
   end
   if g.start>=cursor-grid/2 then
-   local keys={}; local dur=grid
+   local keys={}; local rawdur=grid
    for _,n in ipairs(g.notes) do
     keys[#keys+1]=scoreflow_pitch_key(n.pitch)
-    dur=math.max(dur,n.dur)
+    rawdur=math.max(rawdur,n.dur)
+   end
+   local nextStart=(groups[gi+1] and groups[gi+1].start) or mend
+   local slot=math.max(grid,scoreflow_quant(nextStart-g.start,grid))
+   local dur=rawdur
+   -- MIDI gate length is performance articulation, not necessarily notation.
+   -- For short notes that clearly occupy the next onset slot, notate the slot
+   -- instead of creating tiny values plus rests.
+   if slot<=1.0+1e-8 and rawdur<slot*0.72 then dur=slot
+   elseif rawdur>slot then dur=slot
    end
    dur=math.min(dur,mend-g.start)
    local _,_,repr=scoreflow_nearest_duration(dur,grid)
@@ -954,7 +963,8 @@ local function scoreflow_score_json()
   measures[#measures+1]='{"treble":'..tre..',"bass":'..bas..extra..'}'
  end
  local timesig=tostring(first_num or 4).."/"..tostring(first_den or 4)
- return '{"title":"Composition Studio","instrument":"piano","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo or reaper.Master_GetTempo())..',"measures":['..table.concat(measures,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
+ local staffMode=(mode=="treble" and "single-treble") or (mode=="bass" and "single-bass") or "grand"
+ return '{"title":"Composition Studio","instrument":"piano","staffMode":"'..staffMode..'","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo or reaper.Master_GetTempo())..',"measures":['..table.concat(measures,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
 end
 local function scoreflow_host_html(score_json)
  local base="https://cdn.jsdelivr.net/gh/IlyaSkorik/scoreflow@"..SCOREFLOW_COMMIT.."/assets/www/"
@@ -1023,7 +1033,7 @@ window.flutter_inappwebview={callHandler:function(name,data){
 }};
 </script>
 <script type="module">
-import { render } from ']]..base..[[js/render/render.js';
+import { render } from 'https://raw.githubusercontent.com/wibem1/Composition-Studio/main/web/scoreflow-cs-render.js?v=1026';
 import { state } from ']]..base..[[js/utils/state.js';
 let score=]]..score_json..[[;
 window.csScore=score;
@@ -1335,7 +1345,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• MIDI→Notation-Transkription grundlegend überarbeitet.\n• Taktgrenzen und Taktarten kommen jetzt aus dem REAPER-Projekt statt aus festem 4/4.\n• MIDI-Anschläge und Dauern werden vor der Notation auf ein sinnvolles 1/16-Raster quantisiert; 1/32 nur wenn das Ausgangsmaterial tatsächlich so kurz ist.\n• Restbildung verwendet keine grotesken punktierten 32stel/64stel-Ketten mehr.\n• Instrument-/Spurlogik: Violine/Viola/Flöte/Klarinette usw. bleiben im oberen System; Cello/Kontrabass/Fagott im unteren; Klavier bleibt zweisystemig.\n• Der ScoreFlow-Renderer bleibt unverändert; verbessert wurde die musikalische Datenbasis, die er erhält.\n\nNOCH OFFEN\n\n• Tonart wird derzeit noch nicht zuverlässig aus REAPER übernommen.\n• ScoreFlow zeigt für Nicht-Klavier derzeit weiterhin ein leeres zweites System; dafür braucht der Renderer selbst noch einen Single-Staff-Modus.\n• Stimmenaufteilung, Haltebögen über Taktgrenzen und feinere metrische Pausengruppierung folgen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Eigener ScoreFlow-Renderer-Fork mit echtem Einzelstimmenmodus.\n• Violine/Viola/Flöte/Klarinette usw. werden als einzelnes Violinschlüsselsystem dargestellt; Cello/Kontrabass/Fagott als einzelnes Basssystem.\n• Klavier bleibt Grand Staff.\n• MIDI-Gate-Länge wird nicht mehr blind als Notenwert interpretiert. Für kurze artikulierte Töne wird der Abstand zum nächsten Anschlag als primäre Notationsdauer verwendet.\n• Dadurch verschwinden viele falsche 16tel/32tel-Werte und die daraus entstandenen Mikro-Pausen.\n\nNOCH OFFEN\n\n• Tonartübernahme.\n• Tenor-/Altschlüssel und automatische Schlüsselwechsel.\n• echte Mehrstimmenanalyse und Haltebögen über Taktgrenzen." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
