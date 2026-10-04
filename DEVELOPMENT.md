@@ -19,3 +19,17 @@ Migration 2026-09-26: Der produktive REAPER-Stand wurde aus Reaper-Composition, 
 - Bedienung: Studio-Menü → Notation → Auto / 1/8 / 1/16 / 1/32 / Originale Darstellung.
 - Jede Änderung ist als REAPER-Undo-Block gekapselt.
 - Nächste Stufen erst nach Test: dargestellte Positionen, Stimmen/Systeme, Artikulation/Spielanweisungen, KI-Notensatz, semantische Playback-Schicht, Mehrspur-SWAM, MusicXML/PDF.
+
+
+## 2026-10-04 – Notation-Prototyp 0.2 / v1.0.7
+
+Aus dem ersten Praxistest ergab sich: Darstellungsquantisierung allein reicht nicht; die Noten stehen in REAPER bei langen/dichten Items horizontal zu eng. Deshalb hat Notenbild/Spacing Vorrang vor weiteren Notationsfunktionen.
+
+Neu:
+- Lesbar machen: Zoom to content + vier horizontale Zoom-in-Schritte.
+- Breiter / Schmaler: direkte horizontale Feineinstellung.
+- Auswahl einpassen: REAPER-Aktion View: Zoom to selected notes/CC.
+- Inhalt einpassen: REAPER-Aktion View: Zoom to content.
+- Aktions-IDs werden nach Möglichkeit dynamisch aus dem MIDI-Editor-Aktionsbereich ermittelt, statt versionsabhängig fest verdrahtet zu werden.
+
+Nächster Schritt erst nach Sichttest des Notenbilds.
