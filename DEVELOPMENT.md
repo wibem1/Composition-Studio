@@ -169,3 +169,13 @@ Korrektur:
 Zwei getrennte Fehlerbilder:
 - Drag-Selektion wurde korrekt im pointerup erzeugt, danach aber vom normalen ScoreFlow-click-Handler wieder auf eine einzelne Note reduziert. Ein Capture-click-Suppressor unterdrückt nun genau den Folgeclick nach einem echten Drag.
 - Sichtbare Markierung ist reine Browserfunktion und beweist nicht, dass der native csBridge installiert ist. Die ScoreFlow-Toolbar zeigt deshalb nun explizit „Bridge aktiv“ bzw. „Bridge fehlt“. Bearbeitungsbuttons melden ebenfalls sofort, wenn kein nativer Rückkanal vorhanden ist.
+
+
+## 2026-10-04 – v1.0.23 / Player + Noten verschieben
+
+Notation Workspace erweitert:
+- eigene Playerleiste im ScoreFlow-WebView (Anfang, Play, Pause, Stop), Befehle gehen über csBridge an REAPER und nutzen den nativen REAPER-Transport.
+- direkter Drag auf einer Note verschiebt sie; bei bestehender Mehrfachauswahl wird die ganze Gruppe verschoben.
+- Drag im freien Bereich bleibt Rechteckauswahl.
+- vertikale Mausdistanz -> Halbtonschritte; horizontale Distanz -> QN-Verschiebung, auf 0.25 QN gerundet.
+- MIDI-Start und -Ende werden gemeinsam verschoben; Dauer bleibt erhalten; Änderungen sind ein REAPER-Undo-Schritt.
