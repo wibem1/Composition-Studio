@@ -18,11 +18,20 @@ jobs:
           git clone --branch v0.2.0 --depth 1 --recurse-submodules https://github.com/SadFrozz/reaper_webview.git reaper_webview
 
       - name: Apply Composition Studio bridge
-        run: python3 tools/patch_reaper_webview_bridge.py
-
-      - name: Build universal dylib
         run: |
-          cmake -S reaper_webview -B build-webview -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
+          python3 tools/patch_reaper_webview_bridge.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("reaper_webview/CMakeLists.txt")
+          s=p.read_text()
+          marker="project(reaper_webview VERSION 0.2.0 LANGUAGES C CXX)"
+          s=s.replace(marker, 'set(CMAKE_OSX_ARCHITECTURES "x86_64" CACHE STRING "Forced by Composition Studio" FORCE)\n'+marker, 1)
+          p.write_text(s)
+          PY
+
+      - name: Build x86_64 dylib
+        run: |
+          cmake -S reaper_webview -B build-webview -DCMAKE_BUILD_TYPE=Release
           cmake --build build-webview --config Release --target reaper_webview -j 3
           file build-webview/reaper_webview.dylib
           lipo -info build-webview/reaper_webview.dylib
