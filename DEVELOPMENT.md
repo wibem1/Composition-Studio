@@ -254,3 +254,8 @@ Zusätzlich erzeugt Composition Studio automatisch Scripts/Composition Studio/No
 ## 2026-10-04 – v1.0.38 / Saubere Rechtsklick-Integration
 
 Die automatische Manipulation von reaper-menu.ini aus v1.0.37 wurde entfernt. Composition Studio erzeugt weiterhin Scripts/Composition Studio/Notation Studio.lua und registriert es via AddRemoveReaScript in MIDI-Editor Section 32060. Die Einbindung in „MIDI notation note context“ erfolgt einmalig über REAPERs offiziellen Menü-Customizer. Dadurch bleibt REAPERs Standardmenü vollständig unangetastet.
+
+
+## 2026-10-04 – v1.0.39 / Updater-Reparatur
+
+Beim Umbau auf 1.0.38 war der komplette fetch_update/install_update-Block versehentlich mit entfernt worden. v1.0.39 stellt ihn wieder her. Die Primärquelle ist jetzt die GitHub Contents API mit Accept: application/vnd.github.raw+json; raw.githubusercontent.com ist nur noch Fallback. Syntaxprüfung, Backup und Versionsvergleich bleiben erhalten.
