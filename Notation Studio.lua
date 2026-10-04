@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.8
+-- @version 0.1.9
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.8"
+local VERSION="0.1.9"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -209,6 +209,73 @@ local function set_musical_spacing(enable)
  return true
 end
 
+local function selected_note_stats()
+ local first_qn,last_qn,count=nil,nil,0
+ for _,tk in ipairs(selected_takes and selected_takes() or {}) do
+  local i=-1
+  while true do
+   i=reaper.MIDI_EnumSelNotes(tk,i)
+   if i==-1 then break end
+   local ok,_,mut,sp,ep=reaper.MIDI_GetNote(tk,i)
+   if ok and not mut then
+    local st=reaper.MIDI_GetProjTimeFromPPQPos(tk,sp)
+    local et=reaper.MIDI_GetProjTimeFromPPQPos(tk,ep)
+    local sq=reaper.TimeMap2_timeToQN(0,st)
+    local eq=reaper.TimeMap2_timeToQN(0,et)
+    first_qn=first_qn and math.min(first_qn,sq) or sq
+    last_qn=last_qn and math.max(last_qn,eq) or eq
+    count=count+1
+   end
+  end
+ end
+ return first_qn,last_qn,count
+end
+
+local function apply_readable_scale(ed)
+ local first_qn,last_qn,count=selected_note_stats()
+ if not first_qn or count==0 then return false,"keine markierten Noten" end
+
+ local first_measure=reaper.TimeMap_QNToMeasures(0,first_qn)
+ local last_measure=reaper.TimeMap_QNToMeasures(0,last_qn)
+ local span_measures=math.max(1,last_measure-first_measure+1)
+ local density=count/span_measures
+
+ local target_measures=4
+ if density>=24 then target_measures=2
+ elseif density>=12 then target_measures=3 end
+
+ local cursor_qn=reaper.TimeMap2_timeToQN(0,reaper.GetCursorPosition())
+ local anchor_qn=(cursor_qn>=first_qn and cursor_qn<=last_qn) and cursor_qn or first_qn
+ local anchor_measure=reaper.TimeMap_QNToMeasures(0,anchor_qn)
+
+ -- Keep the anchor roughly centered where possible.
+ local start_measure=math.max(first_measure,anchor_measure-math.floor(target_measures/2))
+ if start_measure+target_measures-1>last_measure then
+  start_measure=math.max(first_measure,last_measure-target_measures+1)
+ end
+
+ local start_time=reaper.TimeMap_GetMeasureInfo(0,start_measure)
+ local end_time=reaper.TimeMap_GetMeasureInfo(0,start_measure+target_measures)
+ if not start_time or not end_time or end_time<=start_time then return false,"Taktbereich konnte nicht bestimmt werden" end
+
+ local old_start,old_end=reaper.GetSet_LoopTimeRange2(0,false,false,0,0,false)
+ reaper.GetSet_LoopTimeRange2(0,true,false,start_time,end_time,false)
+
+ local cmd,txt=find_action_variants({
+  {"view","zoom to time selection"},
+  {"zoom","time selection"},
+  {"zoom","zeitauswahl"}
+ })
+ if not cmd then
+  reaper.GetSet_LoopTimeRange2(0,true,false,old_start,old_end,false)
+  return false,"REAPER-Aktion „Zoom to time selection“ nicht gefunden"
+ end
+
+ reaper.MIDIEditor_OnCommand(ed,cmd)
+ reaper.GetSet_LoopTimeRange2(0,true,false,old_start,old_end,false)
+ return true,string.format("%d Takte · %.1f markierte Noten/Takt · %s",target_measures,density,txt)
+end
+
 local function cleanup_notation()
  local ed=active_editor()
  if not ed then
@@ -256,6 +323,10 @@ local function cleanup_notation()
    {"notation","voice","overlapping"},
    {"notation","stimm"}
  },true)
+
+ local scaled,scale_info=apply_readable_scale(ed)
+ if scaled then done[#done+1]="lesbare Zielskalierung ["..scale_info.."]"
+ else missing[#missing+1]="Zielskalierung: "..tostring(scale_info) end
 
 
  if #missing==0 then
@@ -386,7 +457,7 @@ local function draw()
 
   if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
-   reaper.ImGui_TextWrapped(ctx,"Verbessert nur die Notationsdarstellung. Zoom und Einpassen der Ansicht bleiben vollständig getrennte manuelle Funktionen.")
+   reaper.ImGui_TextWrapped(ctx,"Verbessert Notationsdarstellung und erzeugt eine gut lesbare Zielskalierung von etwa 2–4 Takten. Die Breite wird an die Notendichte angepasst.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
