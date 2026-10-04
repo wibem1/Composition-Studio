@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.13
+-- @version 0.1.14
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.13"
+local VERSION="0.1.14"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -54,26 +54,65 @@ local function version_is_newer(remote,localv)
  if b~=y then return b>y end
  return c>z
 end
+local function fetch_update(url,extra_headers)
+ local tmp=os.tmpname()..".lua"
+ local code=os.tmpname()..".code"
+ local headers=extra_headers or ""
+ local cmd="/usr/bin/curl -sS -L --max-time 60 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "..headers.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code)
+ os.execute(cmd)
+ local http=trim(read_file(code))
+ local fresh=read_file(tmp)
+ os.remove(code); os.remove(tmp)
+ return http,fresh
+end
+
 local function install_update()
  if ai_busy then status="Update erst möglich, wenn die KI fertig ist."; return end
  status="Update wird geladen …"
- local tmp=os.tmpname()..".lua"
- local cmd="/usr/bin/curl -sS -L --max-time 60 -H 'Cache-Control: no-cache' -o "..shell_quote(tmp).." "..shell_quote(UPDATE_URL.."?nocache="..tostring(os.time()))
- local rc=os.execute(cmd)
- local fresh=read_file(tmp); os.remove(tmp)
- if not fresh or #fresh<500 then status="Update fehlgeschlagen."; return end
- local rv=fresh:match("%-%- @version%s+([%w%.%-]+)")
- if not rv or not fresh:find("%-%- @description Notation Studio") then status="Update abgebrochen: ungültige Datei."; return end
- if rv==VERSION then status="Bereits aktuell: "..VERSION; return end
- if not version_is_newer(rv,VERSION) then status="Kein neueres Update verfügbar. Lokal: "..VERSION..", GitHub: "..rv; return end
+
+ local api="https://api.github.com/repos/wibem1/Composition-Studio/contents/Notation%20Studio.lua?ref=main&nocache="..tostring(os.time())
+ local http,fresh=fetch_update(api,"-H 'Accept: application/vnd.github.raw+json'")
+ local rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
+
+ if http~="200" or not fresh or not rv then
+  http,fresh=fetch_update(UPDATE_URL.."?nocache="..tostring(os.time()))
+  rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
+ end
+
+ if http~="200" or not fresh or #fresh<500 then
+  status="Update fehlgeschlagen (HTTP "..tostring(http)..")."
+  return
+ end
+ if not rv or not fresh:find("%-%- @description Notation Studio") then
+  status="Update abgebrochen: ungültige Datei."
+  return
+ end
+ if rv==VERSION then
+  status="Bereits aktuell: "..VERSION
+  return
+ end
+ if not version_is_newer(rv,VERSION) then
+  status="Kein neueres Update verfügbar. Lokal: "..VERSION..", GitHub: "..rv
+  return
+ end
+
  local compiled,err=load(fresh,"@Notation Studio update","t")
- if not compiled then status="Update abgebrochen: Lua-Syntaxfehler: "..tostring(err); return end
+ if not compiled then
+  status="Update abgebrochen: Lua-Syntaxfehler: "..tostring(err)
+  return
+ end
+
  local previous=read_file(SCRIPT_PATH)
- if not previous or not write_file(SCRIPT_PATH..".backup",previous) or not write_file(SCRIPT_PATH,fresh) then status="Update konnte nicht sicher installiert werden."; return end
+ if not previous or not write_file(SCRIPT_PATH..".backup",previous) or not write_file(SCRIPT_PATH,fresh) then
+  status="Update konnte nicht sicher installiert werden."
+  return
+ end
+
  status="Update auf "..rv.." installiert. Neustart …"
  open=false
  reaper.defer(function() pcall(dofile,SCRIPT_PATH) end)
 end
+
 local function read_json_string(raw,q)
  local out,i={},q+1
  while i<=#raw do
