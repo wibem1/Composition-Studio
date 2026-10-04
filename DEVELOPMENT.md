@@ -242,3 +242,10 @@ Das reine Rechteck-Overlay war zwar schnell, aber musikalisch nicht orientierend
 Strategiewechsel zurück zum nativen REAPER-Notationseditor. Das WebView/Verovio-Fenster wird aus dem sichtbaren Workflow entfernt; die experimentellen Funktionen bleiben vorerst im Code, werden aber nicht mehr über den Hauptbutton geöffnet.
 
 Neue Oberfläche: kompaktes ReaImGui-Fenster „Notation Studio“ mit CollapsingHeader-Gruppen. Standardmäßig offen ist nur „Lesbarkeit“. Weitere Gruppen: Darstellung/Quantisierung, Stimmen/Notation, Artikulation, Dynamik, Spielweise/SWAM. Zielworkflow: Auswahl im nativen REAPER-Notationseditor -> Rechtsklick -> ein einziger Eintrag „Notation Studio…“ -> Werkzeugpalette.
+
+
+## 2026-10-04 – v1.0.37 / KI + Rechtsklick-Launcher
+
+Notation Studio enthält jetzt eine eigene KI-Gruppe. Die aktive Notenauswahl im MIDI-/Notationseditor wird als NOTATION_SELECTION/SELNOTE-Kontext an den Controller übergeben. Buttons: Auswahl analysieren, Artikulation/Dynamik beurteilen, freier KI-Auftrag zur Auswahl, SWAM-Interpretation.
+
+Zusätzlich erzeugt Composition Studio automatisch Scripts/Composition Studio/Notation Studio.lua und registriert es via AddRemoveReaScript in Section 32060 (MIDI Editor). Das Launcher-Script setzt ExtState OpenNotationStudio und startet Composition Studio bei Bedarf. Wenn in reaper-menu.ini bereits ein [MIDI notation note context]-Block existiert, wird der Launcher dort verlustfrei angehängt; vorher wird eine Backup-Datei geschrieben. Fehlt der Block, wird er absichtlich nicht neu erzeugt, weil ein neu erzeugter Custom-Block REAPERs vollständiges Factory-Kontextmenü ersetzen würde.
