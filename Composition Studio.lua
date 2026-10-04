@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.16
+-- @version 1.0.17
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.16"
+local VERSION="1.0.17"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -801,7 +801,7 @@ local function text_context_menu(id,text,editable)
  end
  return text
 end
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation Workspace 0.3 besitzt erstmals eine grafische Partituransicht.\n• Die ausgewählten REAPER-MIDI-Items erscheinen automatisch; kein Lade-Schritt.\n• Taktlinien, zwei Notensysteme und Notenköpfe werden aus dem internen Score-Modell gezeichnet.\n• Ein Klick auf einen Notenkopf wählt genau dieselbe Note aus wie die linke Diagnose-Liste.\n• ±1 Halbton und ½/2× Dauer wirken anschließend direkt auf die grafisch gewählte REAPER-Note.\n• Die Grafik ist bewusst noch ein technischer Renderer zur Prüfung der Zuordnung; der hochwertige OpenVoicing/Score-Renderer folgt erst danach.\n\nZU TESTEN\n\n1. MIDI-Item auswählen → „Notation“.\n2. Rechts auf verschiedene Notenköpfe klicken.\n3. Prüfen, ob sich die Auswahl links synchron ändert.\n4. Eine grafisch gewählte Note mit ±1 Halbton verändern.\n5. Prüfen, ob die Note in REAPER und im Workspace aktualisiert wird.\n6. REAPER Undo testen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation Workspace 0.3 besitzt erstmals eine grafische Partituransicht.\n• Partiturdarstellung jetzt klassisch schwarz auf weiß; nur die ausgewählte Note bleibt zur Orientierung farbig markiert.\n• Die ausgewählten REAPER-MIDI-Items erscheinen automatisch; kein Lade-Schritt.\n• Taktlinien, zwei Notensysteme und Notenköpfe werden aus dem internen Score-Modell gezeichnet.\n• Ein Klick auf einen Notenkopf wählt genau dieselbe Note aus wie die linke Diagnose-Liste.\n• ±1 Halbton und ½/2× Dauer wirken anschließend direkt auf die grafisch gewählte REAPER-Note.\n• Die Grafik ist bewusst noch ein technischer Renderer zur Prüfung der Zuordnung; der hochwertige OpenVoicing/Score-Renderer folgt erst danach.\n\nZU TESTEN\n\n1. MIDI-Item auswählen → „Notation“.\n2. Rechts auf verschiedene Notenköpfe klicken.\n3. Prüfen, ob sich die Auswahl links synchron ändert.\n4. Eine grafisch gewählte Note mit ±1 Halbton verändern.\n5. Prüfen, ob die Note in REAPER und im Workspace aktualisiert wird.\n6. REAPER Undo testen." end
 local function score_canvas_hit(mx,my,positions)
  local best,bestd=nil,1e9
  for i,p in ipairs(positions) do
@@ -824,12 +824,12 @@ local function score_draw_staff_canvas(width,height)
  height=math.max(260,height or 360)
  reaper.ImGui_InvisibleButton(ctx,"##score_canvas",width,height)
 
- local bg=0x151515FF
- local staff=0xC8C8C8FF
- local note_col=0xF0F0F0FF
- local sel_col=0x4AA3FFFF
- local bar_col=0x707070FF
- local ledger_col=0xB8B8B8FF
+ local bg=0xFFFFFFFF
+ local staff=0x111111FF
+ local note_col=0x111111FF
+ local sel_col=0x0066CCFF
+ local bar_col=0x505050FF
+ local ledger_col=0x111111FF
  reaper.ImGui_DrawList_AddRectFilled(dl,x0,y0,x0+width,y0+height,bg)
 
  local left=x0+42
@@ -861,7 +861,7 @@ local function score_draw_staff_canvas(width,height)
  for q=q0,q1,4 do
   local bx=qx(q)
   reaper.ImGui_DrawList_AddLine(dl,bx,top_staff,bx,bass_staff+4*line_gap,bar_col,1)
-  reaper.ImGui_DrawList_AddText(dl,bx+3,y0+10,0xA0A0A0FF,tostring(math.floor(q/4)+1))
+  reaper.ImGui_DrawList_AddText(dl,bx+3,y0+10,0x404040FF,tostring(math.floor(q/4)+1))
  end
 
  local function pitch_y(p)
