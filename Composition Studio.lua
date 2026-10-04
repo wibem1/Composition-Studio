@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.24
+-- @version 1.0.25
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.24"
+local VERSION="1.0.25"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -815,83 +815,146 @@ local function scoreflow_pitch_key(p)
 end
 local SCOREFLOW_DURS={
  {4.0,"w",0},{3.0,"h",1},{2.0,"h",0},{1.5,"q",1},{1.0,"q",0},
- {0.75,"8",1},{0.5,"8",0},{0.375,"16",1},{0.25,"16",0},
- {0.1875,"32",1},{0.125,"32",0},{0.09375,"64",1},{0.0625,"64",0}
+ {0.75,"8",1},{0.5,"8",0},{0.375,"16",1},{0.25,"16",0},{0.125,"32",0}
 }
-local function scoreflow_nearest_duration(qn)
- qn=math.max(0.0625,tonumber(qn) or 1)
+local SCOREFLOW_REST_DURS={
+ {4.0,"w",0},{2.0,"h",0},{1.0,"q",0},{0.5,"8",0},{0.25,"16",0},{0.125,"32",0}
+}
+local function scoreflow_quant(v,grid)
+ grid=grid or 0.25
+ return math.floor((tonumber(v) or 0)/grid+0.5)*grid
+end
+local function scoreflow_grid(notes)
+ local shortest=math.huge
+ for _,n in ipairs(notes or {}) do
+  if n.duration_qn and n.duration_qn>0 then shortest=math.min(shortest,n.duration_qn) end
+ end
+ if shortest<0.19 then return 0.125 end
+ return 0.25
+end
+local function scoreflow_nearest_duration(qn,grid)
+ qn=math.max(grid or 0.25,tonumber(qn) or 1)
  local best=SCOREFLOW_DURS[#SCOREFLOW_DURS]; local bd=math.huge
  for _,d in ipairs(SCOREFLOW_DURS) do
-  local e=math.abs(qn-d[1])
-  if e<bd then best=d; bd=e end
+  if d[1]+1e-8 >= (grid or 0.25) then
+   local e=math.abs(qn-d[1])
+   if e<bd then best=d; bd=e end
+  end
  end
  return best[2],best[3],best[1]
 end
-local function scoreflow_note_json(keys,qn,is_rest,csid)
- local dur,dots=scoreflow_nearest_duration(qn)
+local function scoreflow_note_json(keys,qn,is_rest,csid,grid)
+ local dur,dots=scoreflow_nearest_duration(qn,grid)
  local kk={}
  for _,k in ipairs(keys or {}) do kk[#kk+1]='"'..json_escape(k)..'"' end
  return '{"keys":['..table.concat(kk,",")..'],"duration":"'..dur..'","dots":'..tostring(dots)..',"rest":'..(is_rest and "true" or "false")..(csid and (',"csid":'..tostring(csid)) or "")..'}'
 end
-local function scoreflow_append_rests(out,gap)
- gap=math.max(0,tonumber(gap) or 0)
+local function scoreflow_append_rests(out,gap,grid)
+ gap=scoreflow_quant(math.max(0,tonumber(gap) or 0),grid)
  local guard=0
- while gap>0.03 and guard<64 do
+ while gap>grid/2 and guard<64 do
   guard=guard+1
   local chosen=nil
-  for _,d in ipairs(SCOREFLOW_DURS) do if d[1]<=gap+0.001 then chosen=d; break end end
-  chosen=chosen or SCOREFLOW_DURS[#SCOREFLOW_DURS]
-  out[#out+1]='{"keys":[],"duration":"'..chosen[2]..'","dots":'..tostring(chosen[3])..',"rest":true}'
-  gap=gap-chosen[1]
+  for _,d in ipairs(SCOREFLOW_REST_DURS) do
+   if d[1]>=grid-1e-8 and d[1]<=gap+1e-8 then chosen=d; break end
+  end
+  chosen=chosen or {grid,grid<=0.125 and "32" or "16",0}
+  out[#out+1]='{"keys":[],"duration":"'..chosen[2]..'","dots":0,"rest":true}'
+  gap=scoreflow_quant(gap-chosen[1],grid)
  end
 end
-local function scoreflow_voice_json(notes,mstart,mend,staff)
+local function scoreflow_staff_mode(notes)
+ local names={}
+ for _,it in ipairs(score_state.items or {}) do
+  names[#names+1]=string.lower(tostring(it.track_name or "").." "..tostring(it.take_name or ""))
+ end
+ local n=table.concat(names," ")
+ if n:find("klavier",1,true) or n:find("piano",1,true) or n:find("keyboard",1,true) then return "piano" end
+ if n:find("cello",1,true) or n:find("violoncello",1,true) or n:find("kontrabass",1,true) or n:find("double bass",1,true) or n:find("fagott",1,true) then return "bass" end
+ if n:find("violin",1,true) or n:find("violine",1,true) or n:find("viola",1,true) or n:find("flöte",1,true) or n:find("flute",1,true) or n:find("klarinette",1,true) or n:find("clarinet",1,true) or n:find("oboe",1,true) then return "treble" end
+ local lo,hi=127,0
+ for _,x in ipairs(notes or {}) do lo=math.min(lo,x.pitch or 60); hi=math.max(hi,x.pitch or 60) end
+ if lo>=50 and hi-lo<28 then return "treble" end
+ if hi<=64 and hi-lo<28 then return "bass" end
+ return "piano"
+end
+local function scoreflow_voice_json(notes,mstart,mend,staff,mode,grid)
  local ev={}
  for _,n in ipairs(notes) do
-  local which=(n.pitch>=60) and "treble" or "bass"
-  if which==staff and n.start_qn>=mstart-0.0001 and n.start_qn<mend-0.0001 then ev[#ev+1]=n end
+  local which
+  if mode=="treble" then which="treble"
+  elseif mode=="bass" then which="bass"
+  else which=(n.pitch>=60) and "treble" or "bass" end
+  local qs=scoreflow_quant(n.start_qn,grid)
+  if which==staff and qs>=mstart-0.0001 and qs<mend-0.0001 then
+   ev[#ev+1]={src=n,start=qs,dur=math.max(grid,scoreflow_quant(n.duration_qn,grid)),pitch=n.pitch}
+  end
  end
  table.sort(ev,function(a,b)
-  if math.abs(a.start_qn-b.start_qn)>0.0001 then return a.start_qn<b.start_qn end
+  if math.abs(a.start-b.start)>0.0001 then return a.start<b.start end
   return a.pitch<b.pitch
  end)
  local groups={}
  for _,n in ipairs(ev) do
   local g=groups[#groups]
-  if not g or math.abs(g.start-n.start_qn)>0.0001 then
-   g={start=n.start_qn,notes={}}; groups[#groups+1]=g
+  if not g or math.abs(g.start-n.start)>grid/4 then
+   g={start=n.start,notes={}}; groups[#groups+1]=g
   end
   g.notes[#g.notes+1]=n
  end
  local out={}
  local cursor=mstart
  for _,g in ipairs(groups) do
-  if g.start>cursor+0.03 then scoreflow_append_rests(out,g.start-cursor); cursor=g.start end
-  if g.start>=cursor-0.08 then
-   local keys={}; local dur=0
-   for _,n in ipairs(g.notes) do keys[#keys+1]=scoreflow_pitch_key(n.pitch); dur=math.max(dur,n.duration_qn) end
+  if g.start>cursor+grid/2 then
+   scoreflow_append_rests(out,g.start-cursor,grid)
+   cursor=g.start
+  end
+  if g.start>=cursor-grid/2 then
+   local keys={}; local dur=grid
+   for _,n in ipairs(g.notes) do
+    keys[#keys+1]=scoreflow_pitch_key(n.pitch)
+    dur=math.max(dur,n.dur)
+   end
    dur=math.min(dur,mend-g.start)
-   local _,_,repr=scoreflow_nearest_duration(dur)
-   out[#out+1]=scoreflow_note_json(keys,dur,false,g.notes[1] and g.notes[1].csid or nil)
+   local _,_,repr=scoreflow_nearest_duration(dur,grid)
+   out[#out+1]=scoreflow_note_json(keys,dur,false,g.notes[1] and g.notes[1].src.csid or nil,grid)
    cursor=math.max(cursor,g.start+repr)
   end
  end
- if cursor<mend-0.03 then scoreflow_append_rests(out,mend-cursor) end
+ if cursor<mend-grid/2 then scoreflow_append_rests(out,mend-cursor,grid) end
  return "["..table.concat(out,",").."]"
 end
 local function scoreflow_score_json()
  local notes=score_state.notes or {}
  if #notes==0 then return nil,"Keine Noten in der aktuellen REAPER-Auswahl." end
+ local grid=scoreflow_grid(notes)
  local minq,maxq=notes[1].start_qn,notes[1].start_qn+notes[1].duration_qn
- for _,n in ipairs(notes) do minq=math.min(minq,n.start_qn); maxq=math.max(maxq,n.start_qn+n.duration_qn) end
- local q0=math.floor(minq/4)*4
- local measures={}
- local count=math.max(1,math.ceil((maxq-q0)/4-1e-9))
- for i=0,count-1 do
-  local ms=q0+i*4; local me=ms+4
-  measures[#measures+1]='{"treble":'..scoreflow_voice_json(notes,ms,me,"treble")..',"bass":'..scoreflow_voice_json(notes,ms,me,"bass")..'}'
+ for _,n in ipairs(notes) do
+  minq=math.min(minq,n.start_qn)
+  maxq=math.max(maxq,n.start_qn+n.duration_qn)
  end
- return '{"title":"Composition Studio","instrument":"piano","timeSignature":"4/4","keySignature":"C","tempo":'..string.format("%.2f",reaper.Master_GetTempo())..',"measures":['..table.concat(measures,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
+ local m0=select(1,reaper.TimeMap_QNToMeasures(0,minq))
+ local m1=select(1,reaper.TimeMap_QNToMeasures(0,math.max(minq,maxq-1e-7)))
+ m0=math.max(0,tonumber(m0) or 0); m1=math.max(m0,tonumber(m1) or m0)
+ local mode=scoreflow_staff_mode(notes)
+ local measures={}
+ local first_num,first_den,first_tempo=nil,nil,nil
+ local prev_ts=nil
+ for mi=m0,m1 do
+  local _,ms,me,num,den,tempo=reaper.TimeMap_GetMeasureInfo(0,mi)
+  ms=tonumber(ms) or (mi*4); me=tonumber(me) or (ms+4)
+  num=tonumber(num) or 4; den=tonumber(den) or 4; tempo=tonumber(tempo) or reaper.Master_GetTempo()
+  if not first_num then first_num,first_den,first_tempo=num,den,tempo end
+  local ts=tostring(num).."/"..tostring(den)
+  local extra=""
+  if prev_ts and ts~=prev_ts then extra=',"_ts":"'..ts..'"' end
+  prev_ts=ts
+  local tre=scoreflow_voice_json(notes,ms,me,"treble",mode,grid)
+  local bas=scoreflow_voice_json(notes,ms,me,"bass",mode,grid)
+  measures[#measures+1]='{"treble":'..tre..',"bass":'..bas..extra..'}'
+ end
+ local timesig=tostring(first_num or 4).."/"..tostring(first_den or 4)
+ return '{"title":"Composition Studio","instrument":"piano","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo or reaper.Master_GetTempo())..',"measures":['..table.concat(measures,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
 end
 local function scoreflow_host_html(score_json)
  local base="https://cdn.jsdelivr.net/gh/IlyaSkorik/scoreflow@"..SCOREFLOW_COMMIT.."/assets/www/"
@@ -1272,7 +1335,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notenbild wird bei Transposition, Daueränderung und Drag nicht mehr durch vollständige WebView-Navigation neu geladen.\n• Neue Bridge-Funktion WEBVIEW_Eval aktualisiert den bereits geöffneten ScoreFlow direkt per JavaScript.\n• Dadurch bleibt das Notationsfenster stehen und nur die SVG-Partitur wird neu gerendert.\n• Playerleiste und Noten-Drag bleiben erhalten.\n\nWICHTIG\n\nFür diese Funktion ist die aktualisierte x86_64-WebView-Bridge erforderlich. Die alte Bridge funktioniert weiter, fällt aber auf den bisherigen vollständigen Neuaufbau zurück.\n\nNÄCHSTER QUALITÄTSSCHRITT\n\nDie musikalisch falsche MIDI→Notation-Transkription wird getrennt überarbeitet: Taktart, Instrument/System, Stimmen, Pausen, Quantisierung, Balken und Bindungen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• MIDI→Notation-Transkription grundlegend überarbeitet.\n• Taktgrenzen und Taktarten kommen jetzt aus dem REAPER-Projekt statt aus festem 4/4.\n• MIDI-Anschläge und Dauern werden vor der Notation auf ein sinnvolles 1/16-Raster quantisiert; 1/32 nur wenn das Ausgangsmaterial tatsächlich so kurz ist.\n• Restbildung verwendet keine grotesken punktierten 32stel/64stel-Ketten mehr.\n• Instrument-/Spurlogik: Violine/Viola/Flöte/Klarinette usw. bleiben im oberen System; Cello/Kontrabass/Fagott im unteren; Klavier bleibt zweisystemig.\n• Der ScoreFlow-Renderer bleibt unverändert; verbessert wurde die musikalische Datenbasis, die er erhält.\n\nNOCH OFFEN\n\n• Tonart wird derzeit noch nicht zuverlässig aus REAPER übernommen.\n• ScoreFlow zeigt für Nicht-Klavier derzeit weiterhin ein leeres zweites System; dafür braucht der Renderer selbst noch einen Single-Staff-Modus.\n• Stimmenaufteilung, Haltebögen über Taktgrenzen und feinere metrische Pausengruppierung folgen." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
