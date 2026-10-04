@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.34
+-- @version 1.0.35
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.34"
+local VERSION="1.0.35"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1318,8 +1318,9 @@ html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacS
 #notation-container svg{display:block;max-width:100%;height:auto}
 #selection-layer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
 #drag-preview{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:25}
+#drag-preview svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible}
 .cs-sel{position:absolute;background:rgba(0,102,204,.16);border:2px solid rgba(0,102,204,.75);border-radius:4px;box-sizing:border-box}
-.cs-ghost{position:absolute;background:rgba(0,102,204,.22);border:2px solid rgba(0,102,204,.9);border-radius:4px;box-sizing:border-box}
+.cs-ghost-guide{position:absolute;border-left:1px dashed rgba(0,102,204,.65);border-top:1px dashed rgba(0,102,204,.65);pointer-events:none}
 #drag-box{position:absolute;border:1px dashed #0066cc;background:rgba(0,102,204,.08);pointer-events:none;display:none;z-index:30}
 #error{padding:16px;color:#b00020}
 </style></head><body>
@@ -1371,23 +1372,66 @@ function allNoteIdsInRect(rect){
 function beginMovePreview(){
  preview.innerHTML='';
  const cr=container.getBoundingClientRect();
+ const ns='http://www.w3.org/2000/svg';
+ const ov=document.createElementNS(ns,'svg');
+ ov.setAttribute('width',String(container.scrollWidth));
+ ov.setAttribute('height',String(container.scrollHeight));
+ ov.setAttribute('viewBox','0 0 '+container.scrollWidth+' '+container.scrollHeight);
+ const grp=document.createElementNS(ns,'g');
+ grp.setAttribute('id','cs-ghost-group');
+ grp.setAttribute('opacity','0.78');
+ grp.style.filter='drop-shadow(0 0 1px rgba(0,102,204,.9))';
+ ov.appendChild(grp);
+
+ let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
  for(const id of window.csSelectedIds||[]){
   const el=noteEl(id); if(!el)continue;
   const r=el.getBoundingClientRect();
-  const d=document.createElement('div');d.className='cs-ghost';
-  d.style.left=(r.left-cr.left+container.scrollLeft-3)+'px';
-  d.style.top=(r.top-cr.top+container.scrollTop-3)+'px';
-  d.style.width=(r.width+6)+'px';d.style.height=(r.height+6)+'px';
-  preview.appendChild(d);
+  minX=Math.min(minX,r.left-cr.left+container.scrollLeft);
+  minY=Math.min(minY,r.top-cr.top+container.scrollTop);
+  maxX=Math.max(maxX,r.right-cr.left+container.scrollLeft);
+  maxY=Math.max(maxY,r.bottom-cr.top+container.scrollTop);
+
+  const clone=el.cloneNode(true);
+  clone.removeAttribute('id');
+  const svg=el.ownerSVGElement;
+  if(svg){
+   const srect=svg.getBoundingClientRect();
+   const tx=srect.left-cr.left+container.scrollLeft;
+   const ty=srect.top-cr.top+container.scrollTop;
+   const holder=document.createElementNS(ns,'g');
+   holder.setAttribute('transform','translate('+tx+','+ty+')');
+   holder.appendChild(clone);
+   grp.appendChild(holder);
+  }
  }
- preview.style.transform='translate(0px,0px)';
+ preview.appendChild(ov);
+
+ const guide=document.createElement('div');
+ guide.className='cs-ghost-guide';
+ guide.id='cs-ghost-guide';
+ if(isFinite(minX)){
+  guide.style.left=minX+'px';
+  guide.style.top=minY+'px';
+  guide.style.width=Math.max(12,maxX-minX)+'px';
+  guide.style.height=Math.max(12,maxY-minY)+'px';
+ }
+ preview.appendChild(guide);
+ preview.dataset.baseX=isFinite(minX)?String(minX):'0';
+ preview.dataset.baseY=isFinite(minY)?String(minY):'0';
 }
 function previewMove(dx,dy){
- preview.style.transform='translate('+dx+'px,'+dy+'px)';
+ const q=dragQuant(dx,dy);
+ const snapDx=q.dq*28;
+ const snapDy=-q.dp*5;
+ const grp=document.getElementById('cs-ghost-group');
+ if(grp)grp.setAttribute('transform','translate('+snapDx+','+snapDy+')');
+ const guide=document.getElementById('cs-ghost-guide');
+ if(guide)guide.style.transform='translate('+snapDx+'px,'+snapDy+'px)';
+ return q;
 }
 function clearPreview(){
  preview.innerHTML='';
- preview.style.transform='';
 }
 function dragQuant(dx,dy){
  const dp=Math.round(-dy/5);
@@ -1414,12 +1458,11 @@ function bindInteraction(){
    const cr=container.getBoundingClientRect(),x0=drag.startX-cr.left,y0=drag.startY-cr.top,x=e.clientX-cr.left,y=e.clientY-cr.top;
    box.style.left=Math.min(x0,x)+'px';box.style.top=Math.min(y0,y)+'px';box.style.width=Math.abs(x-x0)+'px';box.style.height=Math.abs(y-y0)+'px';
   }else if(drag.mode==='move'&&drag.moved){
-   previewMove(dx,dy);
-   const q=dragQuant(dx,dy);
+   const q=previewMove(dx,dy);
    const key=q.dp+':'+q.dq;
    if(drag.lastQ!==key){
     drag.lastQ=key;
-    csSetStatus('Verschieben: '+(q.dp>=0?'+':'')+q.dp+' HT · '+(q.dq>=0?'+':'')+q.dq+' Viertel');
+    csSetStatus('Ziel: '+(q.dp>=0?'+':'')+q.dp+' HT · '+(q.dq>=0?'+':'')+q.dq+' Viertel');
    }
   }
  };
@@ -1863,7 +1906,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Drag-Vorschau belastet das Verovio-SVG nicht mehr: statt echte Notengruppen bei jedem Mausereignis zu transformieren, bewegt sich nur noch ein leichtes Overlay.\n• Bounding-Boxes werden nur einmal beim Beginn des Drags berechnet.\n• Statusanzeige wird während des Ziehens nur aktualisiert, wenn sich der quantisierte Zielwert ändert.\n• Die Vorschau bleibt bis zum neuen REAPER/Verovio-Render am Ziel stehen und verdeckt dadurch die Renderlatenz.\n• MEI erzeugt jetzt metrische Balkengruppen für Achtel und kürzere Noten.\n• In 4/4 und 3/4 wird pro Viertelschlag gruppiert; in zusammengesetzten 6/8-, 9/8-, 12/8-Takten pro punktierter Viertel.\n\nZU TESTEN\n\n1. Note oder Mehrfachauswahl ziehen: Vorschau muss unmittelbar und flüssig folgen.\n2. Nach Loslassen soll die Vorschau bis zum fertigen Neusatz stehen bleiben.\n3. Achtel/Sechzehntel müssen deutlich häufiger sinnvoll gebalkt erscheinen statt als einzelne Fähnchen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Drag-Vorschau zeigt jetzt die tatsächliche Verovio-Notengrafik als Ghost-Kopie statt abstrakter Rechtecke.\n• Die Ghost-Note enthält Notehead, Hals, Balken/Fähnchen und Vorzeichen.\n• Die Vorschau bewegt sich bereits während des Ziehens auf das quantisierte musikalische Zielraster.\n• Damit ist vor dem Loslassen sichtbar, wo die Note tatsächlich landen wird.\n• Eine dezente Zielmarkierung begleitet die Ghost-Note.\n• Der schnelle Overlay-Ansatz bleibt erhalten: das originale Verovio-SVG wird während des Drags nicht neu gesetzt.\n\nZU TESTEN\n\nEine Note langsam horizontal und vertikal ziehen. Die Ghost-Note muss sichtbar von Rasterposition zu Rasterposition springen und genau die Position anzeigen, die nach dem Loslassen nach REAPER geschrieben wird." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
