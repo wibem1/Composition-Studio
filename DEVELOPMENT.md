@@ -286,3 +286,8 @@ Two concrete bugs fixed. First, `kbd_enumerateActions()` was incorrectly called 
 ## 2026-10-04 – Notation Studio v0.1.3 / größere Schrift
 
 Notation Studio verwendet jetzt eine eigene 20-pt-ReaImGui-Schrift für das gesamte Fenster. Standardfenstergröße von 450x600 auf 520x680 vergrößert, damit die aufklappbaren Bereiche mit der größeren Schrift besser lesbar bleiben.
+
+
+## 2026-10-04 – Notation Studio v0.1.4 / eigener Updater
+
+Notation Studio besitzt jetzt einen eigenständigen Update-Menüpunkt im Drei-Punkte-Menü. Das Skript lädt die aktuelle Version direkt aus dem Repository, prüft Versionsnummer und Lua-Syntax, sichert die vorherige Datei als .backup und startet nach erfolgreichem Update automatisch neu. Damit ist Notation Studio vollständig unabhängig vom Composition-Studio-Updater.
