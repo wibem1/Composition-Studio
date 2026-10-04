@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.35
+-- @version 1.0.36
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.35"
+local VERSION="1.0.36"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -638,40 +638,52 @@ local function notation_auto_lengths()
  update_status=update_status.." Auto wählte 1/"..tostring(chosen).."."
 end
 local function draw_notation_panel()
- reaper.ImGui_Text(ctx,"NOTATION – PROTOTYP 0.5")
- reaper.ImGui_TextWrapped(ctx,"Zuerst ein brauchbares Notenbild herstellen, danach bei Bedarf die dargestellten Notenlängen quantisieren. Die MIDI-Performance bleibt unverändert.")
+ reaper.ImGui_Text(ctx,"NOTATION STUDIO")
+ reaper.ImGui_TextWrapped(ctx,"Werkzeuge für die aktuelle Auswahl im nativen REAPER-Notationseditor.")
  reaper.ImGui_Separator(ctx)
- reaper.ImGui_Text(ctx,"NOTENBILD")
- local spacing_on=select(1,notation_spacing_state())
- if reaper.ImGui_Button(ctx,(spacing_on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##notation_spacing",-1,30) then notation_toggle_musical_spacing() end
- if reaper.ImGui_Button(ctx,"Notensatz bereinigen##notation_cleanup",-1,34) then notation_cleanup() end
- if reaper.ImGui_Button(ctx,"Lesbar machen##notation_readable",-1,32) then notation_make_readable() end
- local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local gap=6; local half=math.max(90,(w-gap)/2)
- if reaper.ImGui_Button(ctx,"Breiter  +##notation_wider",half,30) then notation_run_view_action("View: Zoom in horizontally",1) end; reaper.ImGui_SameLine(ctx,0,gap)
- if reaper.ImGui_Button(ctx,"Schmaler  –##notation_narrower",half,30) then notation_run_view_action("View: Zoom out horizontally",1) end
- if reaper.ImGui_Button(ctx,"Auswahl einpassen##notation_sel",half,30) then notation_run_view_action("View: Zoom to selected notes/CC",1) end; reaper.ImGui_SameLine(ctx,0,gap)
- if reaper.ImGui_Button(ctx,"Inhalt einpassen##notation_content",half,30) then notation_run_view_action("View: Zoom to content",1) end
- reaper.ImGui_Separator(ctx)
- reaper.ImGui_Text(ctx,"DARSTELLUNGSQUANTISIERUNG")
- reaper.ImGui_Text(ctx,"Ausgewählte Noten: "..tostring(notation_selected_count()))
- if reaper.ImGui_Button(ctx,"Auto##notation_auto",-1,30) then notation_auto_lengths() end
- local bw=math.max(70,(w-gap*2)/3)
- if reaper.ImGui_Button(ctx,"1/8##notation8",bw,30) then notation_quantize_lengths(8) end; reaper.ImGui_SameLine(ctx,0,gap)
- if reaper.ImGui_Button(ctx,"1/16##notation16",bw,30) then notation_quantize_lengths(16) end; reaper.ImGui_SameLine(ctx,0,gap)
- if reaper.ImGui_Button(ctx,"1/32##notation32",bw,30) then notation_quantize_lengths(32) end
- if reaper.ImGui_Button(ctx,"Originale Darstellung##notation_reset",-1,30) then notation_reset_lengths() end
- reaper.ImGui_Separator(ctx)
- reaper.ImGui_Text(ctx,"MESSUNG: INDIVIDUELLE ANZEIGEPOSITION")
- reaper.ImGui_TextWrapped(ctx,"Noch kein Notensatzalgorithmus: möglichst genau eine gut sichtbare Note auswählen und kontrollierte disp_pos-Werte vergleichen.")
- local mw=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local mg=6; local mb=math.max(70,(mw-mg*2)/3)
- if reaper.ImGui_Button(ctx,"-0.50##dpm50",mb,28) then notation_apply_disp_pos(-0.50) end; reaper.ImGui_SameLine(ctx,0,mg)
- if reaper.ImGui_Button(ctx,"-0.25##dpm25",mb,28) then notation_apply_disp_pos(-0.25) end; reaper.ImGui_SameLine(ctx,0,mg)
- if reaper.ImGui_Button(ctx,"0##dp0",mb,28) then notation_apply_disp_pos(nil) end
- if reaper.ImGui_Button(ctx,"+0.25##dpp25",mb,28) then notation_apply_disp_pos(0.25) end; reaper.ImGui_SameLine(ctx,0,mg)
- if reaper.ImGui_Button(ctx,"+0.50##dpp50",mb,28) then notation_apply_disp_pos(0.50) end; reaper.ImGui_SameLine(ctx,0,mg)
- if reaper.ImGui_Button(ctx,"+1.00##dpp100",mb,28) then notation_apply_disp_pos(1.00) end
- reaper.ImGui_Separator(ctx)
- reaper.ImGui_TextWrapped(ctx,"Notensatz bereinigen nutzt weiterhin REAPERs eigene Notationslogik. Der neue disp_pos-Bereich dient nur zur Vermessung von Richtung und Größenordnung, bevor wir automatische Abstände berechnen.")
+
+ if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
+  local spacing_on=select(1,notation_spacing_state())
+  if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then notation_cleanup() end
+  if reaper.ImGui_Button(ctx,(spacing_on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##notation_spacing",-1,30) then notation_toggle_musical_spacing() end
+  local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local gap=6; local half=math.max(90,(w-gap)/2)
+  if reaper.ImGui_Button(ctx,"Breiter  +##notation_wider",half,30) then notation_run_view_action("View: Zoom in horizontally",1) end; reaper.ImGui_SameLine(ctx,0,gap)
+  if reaper.ImGui_Button(ctx,"Schmaler  –##notation_narrower",half,30) then notation_run_view_action("View: Zoom out horizontally",1) end
+  if reaper.ImGui_Button(ctx,"Auswahl einpassen##notation_sel",half,30) then notation_run_view_action("View: Zoom to selected notes/CC",1) end; reaper.ImGui_SameLine(ctx,0,gap)
+  if reaper.ImGui_Button(ctx,"Inhalt einpassen##notation_content",half,30) then notation_run_view_action("View: Zoom to content",1) end
+ end
+
+ if reaper.ImGui_CollapsingHeader(ctx,"Darstellung / Quantisierung") then
+  reaper.ImGui_Text(ctx,"Ausgewählte Noten: "..tostring(notation_selected_count()))
+  local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local gap=6
+  if reaper.ImGui_Button(ctx,"Auto##notation_auto",-1,30) then notation_auto_lengths() end
+  local bw=math.max(70,(w-gap*2)/3)
+  if reaper.ImGui_Button(ctx,"1/8##notation8",bw,30) then notation_quantize_lengths(8) end; reaper.ImGui_SameLine(ctx,0,gap)
+  if reaper.ImGui_Button(ctx,"1/16##notation16",bw,30) then notation_quantize_lengths(16) end; reaper.ImGui_SameLine(ctx,0,gap)
+  if reaper.ImGui_Button(ctx,"1/32##notation32",bw,30) then notation_quantize_lengths(32) end
+  if reaper.ImGui_Button(ctx,"Originale Darstellung##notation_reset",-1,30) then notation_reset_lengths() end
+ end
+
+ if reaper.ImGui_CollapsingHeader(ctx,"Stimmen / Notation") then
+  reaper.ImGui_TextWrapped(ctx,"Hier kommen Stimme, Haltebogen, Bindebogen, enharmonische Umdeutung und Systemwechsel hinein.")
+ end
+
+ if reaper.ImGui_CollapsingHeader(ctx,"Artikulation") then
+  reaper.ImGui_TextWrapped(ctx,"Hier kommen Legato, Staccato, Tenuto, Akzent, Marcato und Tremolo hinein.")
+ end
+
+ if reaper.ImGui_CollapsingHeader(ctx,"Dynamik") then
+  reaper.ImGui_TextWrapped(ctx,"Hier kommen pp, p, mp, mf, f, ff sowie Crescendo und Diminuendo hinein.")
+ end
+
+ if reaper.ImGui_CollapsingHeader(ctx,"Spielweise / SWAM") then
+  reaper.ImGui_TextWrapped(ctx,"Hier kommen pizz., arco, sul pont., sul tasto, Flageolett und die zugehörige SWAM-Steuerung hinein.")
+ end
+
+ if update_status~="" then
+  reaper.ImGui_Separator(ctx)
+  reaper.ImGui_TextWrapped(ctx,update_status)
+ end
 end
 
 local CONTROLLER=[[Du bist der Controller von Composition Studio in REAPER. Der Benutzer spricht frei; es gibt KEINE Triggerwörter. Interpretiere nur, was eindeutig gemeint ist. Bei Unklarheit FRAGE nach.
@@ -1906,31 +1918,22 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Drag-Vorschau zeigt jetzt die tatsächliche Verovio-Notengrafik als Ghost-Kopie statt abstrakter Rechtecke.\n• Die Ghost-Note enthält Notehead, Hals, Balken/Fähnchen und Vorzeichen.\n• Die Vorschau bewegt sich bereits während des Ziehens auf das quantisierte musikalische Zielraster.\n• Damit ist vor dem Loslassen sichtbar, wo die Note tatsächlich landen wird.\n• Eine dezente Zielmarkierung begleitet die Ghost-Note.\n• Der schnelle Overlay-Ansatz bleibt erhalten: das originale Verovio-SVG wird während des Drags nicht neu gesetzt.\n\nZU TESTEN\n\nEine Note langsam horizontal und vertikal ziehen. Die Ghost-Note muss sichtbar von Rasterposition zu Rasterposition springen und genau die Position anzeigen, die nach dem Loslassen nach REAPER geschrieben wird." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Rückkehr zum nativen REAPER-Notationseditor als eigentliche Notenansicht.\n• Composition Studio öffnet dafür kein separates Web-Notationsfenster mehr.\n• Neues kompaktes „Notation Studio“-Fenster als Werkzeugpalette für die aktuelle Auswahl.\n• Das Fenster ist in aufklappbare Bereiche gegliedert: Lesbarkeit, Darstellung/Quantisierung, Stimmen/Notation, Artikulation, Dynamik sowie Spielweise/SWAM.\n• „Lesbarkeit verbessern“ steht prominent oben und verwendet REAPERs native Notationsoptionen.\n• Weitere Funktionen werden in die jeweiligen Gruppen eingebaut, ohne das Rechtsklick-Menü selbst aufzublähen.\n\nWORKFLOW\n\nIm nativen REAPER-Notationseditor Note(n) markieren → Rechtsklick → Notation Studio öffnen → gewünschte Werkzeuggruppe aufklappen." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
- reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
+ reaper.ImGui_SetNextWindowSize(ctx,430,520,reaper.ImGui_Cond_FirstUseEver())
  local visible
- visible,notation_window_open=reaper.ImGui_Begin(ctx,"Composition Studio – Notation###CompositionStudioNotation",notation_window_open)
+ visible,notation_window_open=reaper.ImGui_Begin(ctx,"Notation Studio###CompositionStudioNotation",notation_window_open)
  if visible then
   local pushed=push_font()
-  reaper.ImGui_Text(ctx,"NOTATION · ECHTER RENDERER")
-  reaper.ImGui_Separator(ctx)
-  reaper.ImGui_TextWrapped(ctx,notation_status~="" and notation_status or "ScoreFlow/VexFlow wird über reaper_webview eingebettet.")
-  reaper.ImGui_Spacing(ctx)
-  if type(reaper.WEBVIEW_Navigate)~="function" then
-   reaper.ImGui_TextWrapped(ctx,"Benötigt wird die MIT-lizenzierte REAPER-Erweiterung „reaper_webview“ (macOS: WKWebView). Nach Installation und REAPER-Neustart öffnet „Notation“ direkt den ScoreFlow-Renderer.")
-  else
-   if reaper.ImGui_Button(ctx,"ScoreFlow erneut öffnen",-1,36) then notation_open_webview() end
-  end
-  reaper.ImGui_Spacing(ctx)
-  if reaper.ImGui_Button(ctx,"Schließen",-1,34) then notation_window_open=false end
+  draw_notation_panel()
   pop_font(pushed)
   reaper.ImGui_End(ctx)
  end
 end
+
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(48,math.min(260,lines*22+12)); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
-local function loop() poll_job(); finish_save_panel(); score_bridge_poll(); if not open and not notation_window_open then if not restarting then remember_closed() end; return end; check_project_change(); if not open then draw_notation_workspace(); reaper.defer(loop); return end; reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Notation") then notation_open_webview() end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"Notation") then notation_open_webview() end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; draw_notation_workspace(); if open or notation_window_open then reaper.defer(loop) elseif not restarting then remember_closed() end end
+local function loop() poll_job(); finish_save_panel(); score_bridge_poll(); if not open and not notation_window_open then if not restarting then remember_closed() end; return end; check_project_change(); if not open then draw_notation_workspace(); reaper.defer(loop); return end; reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Notation Studio") then notation_window_open=true end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"Notation Studio") then notation_window_open=true end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; draw_notation_workspace(); if open or notation_window_open then reaper.defer(loop) elseif not restarting then remember_closed() end end
 loop()
