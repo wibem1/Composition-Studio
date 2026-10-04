@@ -259,3 +259,10 @@ Die automatische Manipulation von reaper-menu.ini aus v1.0.37 wurde entfernt. Co
 ## 2026-10-04 – v1.0.39 / Updater-Reparatur
 
 Beim Umbau auf 1.0.38 war der komplette fetch_update/install_update-Block versehentlich mit entfernt worden. v1.0.39 stellt ihn wieder her. Die Primärquelle ist jetzt die GitHub Contents API mit Accept: application/vnd.github.raw+json; raw.githubusercontent.com ist nur noch Fallback. Syntaxprüfung, Backup und Versionsvergleich bleiben erhalten.
+
+
+## 2026-10-04 – v1.0.40 / Notation Studio vollständig ausgelagert
+
+Notation Studio ist jetzt ein eigenes ReaScript im Repository: `Notation Studio.lua` (v0.1.0). Das Fenster und seine aufklappbaren Werkzeuggruppen wurden aus `Composition Studio.lua` entfernt. Composition Studio übernimmt nur noch Installation/Aktualisierung des Begleitskripts, Registrierung in MIDI-Editor Section 32060, Start des Skripts und einen kleinen KI-Dienst über ExtState.
+
+Kommunikation: Notation Studio sendet `NotationAIRequest`, `NotationAIContext` und `NotationAIRequestSeq`; Composition Studio verarbeitet die Anfrage mit dem zentral gewählten Provider/Modell und liefert `NotationAIResult` / `NotationAIResultSeq` zurück. Dadurch bleiben API-Zugang und Modellwahl zentral, die Notationsoberfläche aber vollständig modular.
