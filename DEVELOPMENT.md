@@ -208,3 +208,8 @@ v1.0.26 band den lokalen Renderer-Fork über raw.githubusercontent.com als ES-Mo
 ## 2026-10-04 – v1.0.28 / Mehrspur-Partitur
 
 Mehrere ausgewählte REAPER-Tracks werden nicht mehr in einen gemeinsamen Notenpool gemischt. score_capture_selection trägt track_guid in jede Note; scoreflow_score_json gruppiert nach Track und erzeugt score.parts[]. Der Renderer hat einen Mehrspurpfad mit gemeinsamer Taktgeometrie: pro Takt wird die maximale benötigte Breite aller Parts bestimmt, daraus werden gemeinsame Zeilenumbrüche und X-Positionen berechnet. Jeder Part wird anschließend in diese Geometrie gezeichnet. Trackname erscheint links. Klavier kann grand staff bleiben, Einzelinstrumente single staff.
+
+
+## 2026-10-04 – v1.0.29 / Instrumenterkennung
+
+Fehler: Track-/Take-Namen wie „SWAM Cello 3“ wurden als harte Instrumentangabe verwendet. Bei tatsächlich hohen Violinstimmen führte das zu Bassschlüssel und falschen Labels. Neue Regel: tatsächliche MIDI-Lage (low/high/average pitch) hat Vorrang; Namen sind nur sekundäre Hinweise und müssen zur Lage passen. Widersprüchliche Labels werden neutralisiert, doppelte Namen disambiguiert.
