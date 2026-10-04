@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.23
+-- @version 1.0.24
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.23"
+local VERSION="1.0.24"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -962,7 +962,7 @@ window.flutter_inappwebview={callHandler:function(name,data){
 <script type="module">
 import { render } from ']]..base..[[js/render/render.js';
 import { state } from ']]..base..[[js/utils/state.js';
-const score=]]..score_json..[[;
+let score=]]..score_json..[[;
 window.csScore=score;
 setTimeout(function(){
  if(csBridgeReady()) csSetStatus('Bridge aktiv · Note(n) markieren');
@@ -1118,6 +1118,19 @@ function installSelection(){
   }
  },true);
 }
+window.csUpdateScore=function(nextScore){
+ try{
+  score=nextScore;
+  window.csScore=score;
+  render(score);
+  installSelection();
+  drawSelected(window.csSelectedIds||[]);
+  return true;
+ }catch(e){
+  csSetStatus('Renderfehler: '+String(e));
+  return false;
+ }
+};
 try{render(score); installSelection();}catch(e){document.body.insertAdjacentHTML('beforeend','<div id="engine-error">'+String(e)+'</div>');}
 </script></body></html>]]
 end
@@ -1150,6 +1163,12 @@ local function scoreflow_open_webview()
 end
 
 local function score_bridge_rerender()
+ local score=scoreflow_score_json()
+ if score and type(reaper.WEBVIEW_Eval)=="function" then
+  local js="window.csUpdateScore("..score..");"
+  local ok=pcall(reaper.WEBVIEW_Eval,"wv_composition_studio_notation",js)
+  if ok then return end
+ end
  if type(reaper.WEBVIEW_Navigate)=="function" then scoreflow_open_webview() end
 end
 local function score_bridge_parse_ids(csv)
@@ -1253,7 +1272,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Playerleiste im Notationsfenster: Anfang, Play, Pause und Stop steuern direkt den REAPER-Transport.\n• Noten können direkt mit der Maus verschoben werden. Drag auf einer Note = Verschieben; Drag im freien Bereich = Mehrfachauswahl.\n• Vertikale Bewegung transponiert halbtonweise.\n• Horizontale Bewegung wird auf ein 1/4-QN-Raster (Sechzehntel in 4/4) gerundet.\n• Bei Mehrfachauswahl verschiebt Drag die gesamte markierte Gruppe.\n• Alle Änderungen bleiben REAPER-MIDI mit Undo.\n\nZU TESTEN\n\n1. Playerbuttons im Notationsfenster.\n2. Einzelne Note direkt ziehen: horizontal und vertikal.\n3. Mehrere Noten markieren und eine davon ziehen: komplette Auswahl muss gemeinsam verschoben werden.\n4. Drag im freien Bereich muss weiterhin Auswahlrahmen erzeugen.\n5. REAPER Undo prüfen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notenbild wird bei Transposition, Daueränderung und Drag nicht mehr durch vollständige WebView-Navigation neu geladen.\n• Neue Bridge-Funktion WEBVIEW_Eval aktualisiert den bereits geöffneten ScoreFlow direkt per JavaScript.\n• Dadurch bleibt das Notationsfenster stehen und nur die SVG-Partitur wird neu gerendert.\n• Playerleiste und Noten-Drag bleiben erhalten.\n\nWICHTIG\n\nFür diese Funktion ist die aktualisierte x86_64-WebView-Bridge erforderlich. Die alte Bridge funktioniert weiter, fällt aber auf den bisherigen vollständigen Neuaufbau zurück.\n\nNÄCHSTER QUALITÄTSSCHRITT\n\nDie musikalisch falsche MIDI→Notation-Transkription wird getrennt überarbeitet: Taktart, Instrument/System, Stimmen, Pausen, Quantisierung, Balken und Bindungen." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
