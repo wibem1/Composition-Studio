@@ -271,3 +271,8 @@ Kommunikation: Notation Studio sendet `NotationAIRequest`, `NotationAIContext` u
 ## 2026-10-04 – v1.0.41 / Startfehler vollständig behoben
 
 Zwei Refactoringfehler aus v1.0.40 wurden korrigiert: (1) `version_parts()` und `version_is_newer()` waren entfernt worden, obwohl Updater und Companion-Installer sie aufrufen; beide stehen nun wieder vor allen Aufrufern. (2) Zwischen `info_text()` und `draw_history()` war durch String-Surgery ein `endlocal function` entstanden; die Funktionsgrenze ist wieder syntaktisch korrekt.
+
+
+## 2026-10-04 – v1.0.42 / Vollständige Trennung
+
+Notation Studio wurde vollständig aus `Composition Studio.lua` entfernt: kein Menüpunkt, kein Button, kein Companion-Installer und kein ExtState-KI-Dienst mehr. `Notation Studio.lua` v0.1.1 arbeitet eigenständig, verwendet die gemeinsam gespeicherten Provider-/Modell-/API-Key-Einstellungen direkt und führt seine KI-Aufrufe selbst aus. Beide ReaScripts sind damit unabhängig startbar.
