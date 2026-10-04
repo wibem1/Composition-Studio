@@ -321,3 +321,8 @@ Auf Nutzerwunsch führt „Lesbarkeit verbessern“ keinerlei Zoom-, Fit-to-cont
 ## 2026-10-04 – Notation Studio v0.1.10 / direkte MIDI-Editor-Skalierung
 
 Die Action-basierte Zielskalierung aus v0.1.9 wurde entfernt. REAPER stellt über MIDIEditor_GetSetting_int/SetSetting_int den direkten Wert pixels_per_timebase_unit bereit (1024 * Pixel pro Zeitbasiseinheit). „Lesbarkeit verbessern“ setzt diesen Wert nun direkt. Aus der Notendichte werden 80, 90, 105 oder 120 Pixel pro Viertelnote gewählt. Bei seconds-timebase wird der Zielwert über das aktuelle Tempo in Pixel pro Sekunde umgerechnet. Es werden weder Time Selection noch Zoom-Actions verändert.
+
+
+## 2026-10-04 – Notation Studio v0.1.11 / echte Seitenansicht
+
+Der gewünschte Referenzlook ist REAPERs native Page View, nicht eine stärker gezoomte Continuous View. „Lesbarkeit verbessern“ schaltet daher die Action „Notation: Continuous view always, regardless of zoom level“ ausdrücklich aus und überlässt REAPER den mehrzeiligen Systemumbruch. Die horizontale Skalierung wird auf einen ruhigen festen Zielwert von ca. 55 px pro Viertelnote gesetzt. Laut REAPER-Verhalten funktioniert der automatische Page View nur bei einem sichtbaren Track; bei mehreren sichtbaren Tracks bleibt die Notation absichtlich kontinuierlich.
