@@ -341,3 +341,8 @@ v0.1.12 suchte fälschlich nach einer eigenständigen „Page view“-Action. La
 ## 2026-10-04 – Notation Studio v0.1.14 / robuster Updater
 
 Der bisherige Notation-Studio-Updater verwendete ausschließlich raw.githubusercontent.com und konnte dadurch eine gecachte ältere Datei sehen. v0.1.14 verwendet primär die GitHub Contents API mit Accept: application/vnd.github.raw+json und Cache-Buster; raw.githubusercontent.com bleibt nur Fallback. HTTP-Status, Versionsnummer, Dateityp und Lua-Syntax werden vor Installation geprüft; die vorherige Version wird als .backup gesichert.
+
+
+## 2026-10-04 – Notation Studio v0.1.15 / größere Page View + Instrumentprofil
+
+Page-View-Skalierung von 42 auf 70 px pro Viertelnote erhöht; Ziel sind ca. 4–5 Takte pro System statt einer zu kleinen Gesamtübersicht. Zusätzlich erkennt Notation Studio aus Trackname und Tonlage ein Clef-Profil (treble, alto, bass, grand). Es versucht passende MIDI-Editor-Actions für Default Clef zu finden. Da REAPER laut ReaScript-API keinen dokumentierten direkten Default-Clef-Setting-Parameter anbietet, wird bei nicht verfügbarer Action eine konkrete manuelle Anweisung im Status ausgegeben, statt eine erfolgreiche automatische Änderung vorzutäuschen.
