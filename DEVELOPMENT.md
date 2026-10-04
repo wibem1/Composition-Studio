@@ -198,3 +198,8 @@ Offen: echte Tonart, Single-Staff-Renderer, Stimmenanalyse, taktübergreifende H
 Zwei strukturelle Korrekturen:
 - ScoreFlow wurde als kleiner MIT-konformer Renderer-Fork unter web/scoreflow-cs-render.js übernommen. Ergänzt wurde staffMode = single-treble / single-bass / grand. Einzelinstrumente bekommen damit erstmals wirklich nur einen Notenständer statt eines erzwungenen Klavier-Grand-Staffs.
 - Notationsdauer wird bei kurzen artikulierten MIDI-Tönen aus dem Abstand zum nächsten Anschlag rekonstruiert. MIDI Note-Off bleibt relevant, ist aber nicht mehr automatisch gleichbedeutend mit dem geschriebenen Notenwert. Das verhindert viele falsche 16/32tel plus Mikro-Pausen.
+
+
+## 2026-10-04 – v1.0.27 / Blank Renderer Fix
+
+v1.0.26 band den lokalen Renderer-Fork über raw.githubusercontent.com als ES-Modul ein. WKWebView lädt Raw-GitHub nicht zuverlässig mit einem für ES-Module akzeptierten MIME-Typ; dadurch wurde das Modulskript gar nicht ausgeführt und die Partitur blieb komplett leer. Import jetzt über jsDelivr, auf Commit 5e7c7c5ef5a95d2a29ef8a8f9f13a2e2d5d364ed gepinnt. Laufzeitfehler des Renderers werden sichtbar im Notationsfenster ausgegeben.
