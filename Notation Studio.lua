@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.19
+-- @version 0.1.20
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.19"
+local VERSION="0.1.20"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -472,9 +472,9 @@ local function cleanup_notation()
    {"notation","1/16"}
  },false)
 
- execute_found("Mindestnotenlänge 1/16",{
-   {"notation","minimum","1/16"},
-   {"notation","mindest","1/16"}
+ execute_found("Mindestnotenlänge 1/64",{
+   {"notation","minimum","1/64"},
+   {"notation","mindest","1/64"}
  },false)
 
  execute_found("Triolenerkennung",{
@@ -482,12 +482,22 @@ local function cleanup_notation()
    {"notation","triol"}
  },true)
 
- execute_found("automatische Stimmenzuordnung",{
+ local profile,instrument=selected_track_profile()
+
+ -- Für Solo-Streicher sind MIDI-Überlappungen meist Legato/Performance-Daten
+ -- und sollen nicht automatisch als zusätzliche Notationsstimmen erscheinen.
+ local voice_cmd,voice_txt=find_action_variants({
    {"notation","voice","overlapping"},
    {"notation","stimm"}
- },true)
-
- local profile,instrument=selected_track_profile()
+ })
+ if voice_cmd then
+  local want_voice=(profile=="grand")
+  local vst=reaper.GetToggleCommandStateEx(32060,voice_cmd)
+  if vst~=-1 and (vst==1)~=want_voice then reaper.MIDIEditor_OnCommand(ed,voice_cmd) end
+  done[#done+1]="automatische Stimmenzuordnung "..(want_voice and "EIN" or "AUS").." ["..tostring(voice_txt).."]"
+ else
+  missing[#missing+1]="automatische Stimmenzuordnung"
+ end
  local clef_ok,clef_info=set_default_clef_chunk(profile)
  if clef_ok then
   done[#done+1]="Notensystem: "..instrument.." → "..profile.." ["..tostring(clef_info).."]"
@@ -644,7 +654,7 @@ local function draw()
    reaper.ImGui_TextWrapped(ctx,"Für den mehrzeiligen Seitenumbruch darf in REAPER nur ein Track sichtbar sein.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
    if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
-   reaper.ImGui_TextWrapped(ctx,"Erzeugt eine größere Seitenansicht mit adaptiver Skalierung: dichte Musik erhält automatisch mehr horizontalen Raum. Die übrigen Lesbarkeitseinstellungen bleiben erhalten.")
+   reaper.ImGui_TextWrapped(ctx,"Seitendarstellung mit adaptiver Skalierung. Für Solo-Streicher: Mindestnotenlänge 1/64 und automatische Überlappungs-Stimmen AUS, damit kurze Läufe und Legato-Überlappungen nicht künstlich verdichtet werden.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
