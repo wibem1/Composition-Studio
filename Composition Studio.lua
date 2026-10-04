@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.32
+-- @version 1.0.33
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.32"
+local VERSION="1.0.33"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1332,6 +1332,29 @@ function allNoteIdsInRect(rect){
  }
  return out;
 }
+function previewMove(dx,dy){
+ for(const id of window.csSelectedIds||[]){
+  const el=noteEl(id); if(!el)continue;
+  el.style.transform='translate('+dx+'px,'+dy+'px)';
+  el.style.transformOrigin='center';
+  el.style.transformBox='fill-box';
+ }
+ refreshSelection();
+}
+function clearPreview(){
+ for(const id of window.csSelectedIds||[]){
+  const el=noteEl(id); if(!el)continue;
+  el.style.transform='';
+  el.style.transformOrigin='';
+  el.style.transformBox='';
+ }
+ refreshSelection();
+}
+function dragQuant(dx,dy){
+ const dp=Math.round(-dy/5);
+ const dq=Math.round((dx/28)/0.25)*0.25;
+ return {dp,dq};
+}
 function bindInteraction(){
  container.onpointerdown=(e)=>{
   if(e.button!==0)return;
@@ -1351,7 +1374,9 @@ function bindInteraction(){
    const cr=container.getBoundingClientRect(),x0=drag.startX-cr.left,y0=drag.startY-cr.top,x=e.clientX-cr.left,y=e.clientY-cr.top;
    box.style.left=Math.min(x0,x)+'px';box.style.top=Math.min(y0,y)+'px';box.style.width=Math.abs(x-x0)+'px';box.style.height=Math.abs(y-y0)+'px';
   }else if(drag.mode==='move'&&drag.moved){
-   const dp=Math.round(-dy/7),dq=Math.round((dx/35)/0.25)*0.25;csSetStatus('Verschieben: '+(dp>=0?'+':'')+dp+' HT · '+(dq>=0?'+':'')+dq+' Viertel');
+   previewMove(dx,dy);
+   const q=dragQuant(dx,dy);
+   csSetStatus('Verschieben: '+(q.dp>=0?'+':'')+q.dp+' HT · '+(q.dq>=0?'+':'')+q.dq+' Viertel');
   }
  };
  container.onpointerup=(e)=>{
@@ -1359,9 +1384,12 @@ function bindInteraction(){
   const d=drag;drag=null;box.style.display='none';
   if(d.mode==='move'){
    if(d.moved){
-    const dp=Math.round(-(e.clientY-d.startY)/7),dq=Math.round(((e.clientX-d.startX)/35)/0.25)*0.25;
-    if(dp!==0||dq!==0)csSend({type:'move',csids:(window.csSelectedIds||[]).join(','),dpitch:dp,dqn:dq});
+    const dx=e.clientX-d.startX,dy=e.clientY-d.startY;
+    const q=dragQuant(dx,dy);
+    clearPreview();
+    if(q.dp!==0||q.dq!==0)csSend({type:'move',csids:(window.csSelectedIds||[]).join(','),dpitch:q.dp,dqn:q.dq});
    }else if(d.id){
+    clearPreview();
     window.csSelectedIds=[d.id];refreshSelection();csSend({type:'select',csids:String(d.id)});
    }
   }else{
@@ -1372,6 +1400,10 @@ function bindInteraction(){
     window.csSelectedIds=[];refreshSelection();
    }
   }
+ };
+ container.onpointercancel=()=>{
+  if(drag&&drag.mode==='move')clearPreview();
+  drag=null;box.style.display='none';
  };
 }
 function renderCurrent(){
@@ -1785,7 +1817,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• ScoreFlow als sichtbarer Notationsrenderer durch Verovio 6.3.0 ersetzt.\n• Verovio übernimmt ausschließlich den professionellen Notensatz; die Editierlogik bleibt in Composition Studio.\n• Jede REAPER-Note erhält eine feste MEI/SVG-ID csn… und bleibt damit eindeutig auf das MIDI rückführbar.\n• Einzelklick, Rechteckauswahl, Drag, ±1 Halbton, Daueränderung, REAPER Undo und Playerleiste bleiben erhalten.\n• Mehrere REAPER-Tracks werden als getrennte MEI-Staves/Parts ausgegeben; Klavier kann als Grand Staff ausgegeben werden.\n• Änderungen aktualisieren die bestehende Verovio-Partitur per WEBVIEW_Eval, ohne App-Wechsel.\n\nWICHTIG\n\nVerovios eigene Editor-API ist experimentell und wird bewusst nicht zur Grundlage unserer Bearbeitung gemacht. Composition Studio bleibt Eigentümer des Score-Modells und schreibt Änderungen direkt ins REAPER-MIDI.\n\nZU TESTEN\n\n1. Ein und mehrere MIDI-Tracks auswählen → Notation.\n2. Notenbild mit der letzten ScoreFlow-Version vergleichen.\n3. Note anklicken, transponieren und ziehen.\n4. Mehrfachauswahl per Drag.\n5. Prüfen, dass nur die entsprechenden REAPER-Noten geändert werden." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Noten-Drag reagiert jetzt unmittelbar: markierte Note(n) folgen während des Ziehens grafisch der Maus.\n• Erst beim Loslassen wird die Bewegung auf das musikalische Raster quantisiert und nach REAPER geschrieben.\n• Vertikale Bewegung ist empfindlicher: ca. 5 px pro Halbton.\n• Horizontale Bewegung ist empfindlicher: ca. 28 px pro Viertel, weiterhin auf 1/16-Raster gerundet.\n• Bei Abbruch eines Drags wird die Vorschau sauber zurückgesetzt.\n\nZU TESTEN\n\nEine einzelne Note und anschließend eine Mehrfachauswahl ziehen. Die Grafik muss während des Drags direkt mitlaufen; nach Loslassen muss REAPER-MIDI aktualisiert und die Verovio-Partitur sauber neu gesetzt werden." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
