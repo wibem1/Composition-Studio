@@ -223,3 +223,10 @@ ScoreFlow bleibt als historische Testbasis im Repository, wird aber nicht mehr a
 ## 2026-10-04 – v1.0.33 / Flüssiger Noten-Drag
 
 Verovio-Drag erhielt eine lokale SVG-Vorschau: während pointermove werden die aktuell markierten csn-Elemente per CSS transform unmittelbar mit der Maus bewegt. Erst bei pointerup werden die Pixelwege in musikalische Delta-Werte quantisiert und über csBridge nach REAPER geschrieben. Sensitivität: ca. 5 px/Halbton, 28 px/Viertel, horizontal weiterhin 0.25 QN Raster. pointercancel setzt Vorschau zurück.
+
+
+## 2026-10-04 – v1.0.34 / Drag-Overlay + metrische Balken
+
+Drag-Performance: echte Verovio-SVG-Noten werden während pointermove nicht mehr transformiert und ihre Bounding-Boxes nicht ständig neu gelesen. Beim pointerdown werden einmalig leichte Overlay-Rechtecke erzeugt; pointermove ändert nur transform des Overlay-Containers. Status wird nur bei Änderung des quantisierten Ziels aktualisiert. Overlay bleibt nach pointerup bis zum erfolgreichen Neurender sichtbar.
+
+MEI-Transkription: Achtel und kürzere Ereignisse werden nun in <beam>-Gruppen innerhalb metrischer Beats kodiert. Simple Meter: Viertelbeat (4/den); Compound Meter 6/8, 9/8, 12/8: punktierte Viertel (1.5 QN). Pausen unterbrechen Balkengruppen.
