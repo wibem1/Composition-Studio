@@ -166,8 +166,8 @@ function renderParts(score, forcedWidth) {
         for (let pi = 0; pi < parts.length; pi++) {
             const part = parts[pi], mode = part.staffMode || 'single-treble';
             const pTop = y;
-            // Part label at system start.
-            if (ctx.fillText) {
+            // Part label only once at the beginning of the score, not on every system.
+            if (ri === 0 && ctx.fillText) {
                 try {
                     ctx.save && ctx.save();
                     ctx.setFont && ctx.setFont('Arial', 12, '');
