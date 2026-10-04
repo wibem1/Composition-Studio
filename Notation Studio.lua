@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.20
+-- @version 0.1.21
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.20"
+local VERSION="0.1.21"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -462,20 +462,28 @@ local function cleanup_notation()
   return true
  end
 
+ local function execute_exact(label,name)
+  local cmd=midi_action_by_name(name)
+  if not cmd then missing[#missing+1]=label.." ["..name.."]"; return false end
+  reaper.MIDIEditor_OnCommand(ed,cmd)
+  done[#done+1]=label.." ["..name.."]"
+  return true
+ end
+
  execute_found("proportionale Abstände",{
    {"notation","proportional"},
    {"proportional","spacing"}
  },true)
 
- execute_found("Anzeigequantisierung 1/16",{
-   {"notation","1/16","quant"},
-   {"notation","1/16"}
- },false)
+ execute_exact(
+  "Anzeigequantisierung 1/16",
+  "Notation: Set display quantization to 1/16 (default)"
+ )
 
- execute_found("Mindestnotenlänge 1/64",{
-   {"notation","minimum","1/64"},
-   {"notation","mindest","1/64"}
- },false)
+ execute_exact(
+  "Mindestnotenlänge 1/16",
+  "Notation: Set minimum display quantization note length to 1/16"
+ )
 
  execute_found("Triolenerkennung",{
    {"notation","triplet"},
@@ -654,7 +662,7 @@ local function draw()
    reaper.ImGui_TextWrapped(ctx,"Für den mehrzeiligen Seitenumbruch darf in REAPER nur ein Track sichtbar sein.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
    if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
-   reaper.ImGui_TextWrapped(ctx,"Seitendarstellung mit adaptiver Skalierung. Für Solo-Streicher: Mindestnotenlänge 1/64 und automatische Überlappungs-Stimmen AUS, damit kurze Läufe und Legato-Überlappungen nicht künstlich verdichtet werden.")
+   reaper.ImGui_TextWrapped(ctx,"Seitendarstellung mit adaptiver Skalierung. Anzeigequantisierung und Mindestnotenlänge werden beim Aufräumen über REAPERs native Notationsaktionen auf 1/16 gesetzt. Für Solo-Streicher bleibt die automatische Überlappungs-Stimmenzuordnung AUS.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
