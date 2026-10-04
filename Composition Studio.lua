@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.30
+-- @version 1.0.31
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.30"
+local VERSION="1.0.31"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1133,7 +1133,7 @@ window.flutter_inappwebview={callHandler:function(name,data){
 }};
 </script>
 <script type="module">
-import { render } from 'https://cdn.jsdelivr.net/gh/wibem1/Composition-Studio@6a97529326452cd7e3691e0b2f85724e4540b92a/web/scoreflow-cs-render.js';
+import { render } from 'https://cdn.jsdelivr.net/gh/wibem1/Composition-Studio@73dfcb307c6448ba5e19fc851262627808fd0c07/web/scoreflow-cs-render.js';
 import { state } from ']]..base..[[js/utils/state.js';
 let score=]]..score_json..[[;
 window.csScore=score;
@@ -1453,7 +1453,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Instrument-/Schlüsselerkennung korrigiert: musikalische Tonlage hat jetzt Vorrang vor Track-/Take-/Plugin-Namen.\n• Ein veralteter Name wie „SWAM Cello 3“ kann eine hoch liegende Violinstimme nicht mehr in den Bassschlüssel zwingen.\n• Instrumentnamen dienen nur noch als sekundäre Hinweise und werden gegen die tatsächliche Tonlage plausibilisiert.\n• Widersprüchliche oder leere Partnamen werden neutral als „Part 1“, „Part 2“ usw. angezeigt.\n• Doppelte Tracknamen werden unterscheidbar beschriftet.\n\nZU TESTEN\n\nDie beiden Violinen erneut gemeinsam auswählen. Beide Parts müssen nun im Violinschlüssel erscheinen; kein Part darf nur wegen des Textes „SWAM Cello 3“ als Cello behandelt werden." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Mehrspur-Layout orientiert sich jetzt an Dorico/MuseScore-Grundsätzen statt maximaler Verdichtung.\n• Rhythmische Werte erhalten proportionale Horizontalabstände; kurze Werte behalten einen Mindestabstand.\n• Dichte Takte bekommen deutlich mehr Breite.\n• Pro System werden bei dichtem Material weniger Takte gesetzt.\n• Letzte, dünn gefüllte Systeme werden nicht mehr zwanghaft auf volle Breite gedehnt.\n• Vertikale Abstände zwischen Parts und Systemen wurden vergrößert.\n\nZIEL\n\nLesbarkeit vor maximaler Kompaktheit. Das ist weiterhin kein vollständiger Dorico-Satz, aber die Partitur soll nicht mehr als dichtes MIDI-Raster wirken." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
