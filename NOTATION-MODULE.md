@@ -69,3 +69,10 @@ Implementiert:
 6. REAPER Undo/Redo testen.
 
 Erst nach erfolgreichem Test wird Phase 2 begonnen.
+
+
+## Phase 1b – v1.0.7 / Notenbild
+
+Der erste reale Test zeigte, dass korrekte Darstellungsquantisierung bei zu geringer horizontaler Notendichte nicht genügt. Die Lesbarkeit des Notenbilds hat daher Vorrang.
+
+Implementiert: Lesbar machen, Breiter, Schmaler, Auswahl einpassen, Inhalt einpassen. Diese Funktionen steuern REAPERs vorhandene MIDI-Editor-Zoom-Aktionen; sie verändern keine Musikdaten.
