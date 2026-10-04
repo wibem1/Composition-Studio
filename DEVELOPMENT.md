@@ -213,3 +213,8 @@ Mehrere ausgewählte REAPER-Tracks werden nicht mehr in einen gemeinsamen Notenp
 ## 2026-10-04 – v1.0.29 / Instrumenterkennung
 
 Fehler: Track-/Take-Namen wie „SWAM Cello 3“ wurden als harte Instrumentangabe verwendet. Bei tatsächlich hohen Violinstimmen führte das zu Bassschlüssel und falschen Labels. Neue Regel: tatsächliche MIDI-Lage (low/high/average pitch) hat Vorrang; Namen sind nur sekundäre Hinweise und müssen zur Lage passen. Widersprüchliche Labels werden neutralisiert, doppelte Namen disambiguiert.
+
+
+## 2026-10-04 – v1.0.32 / Verovio Prototype 0.1
+
+ScoreFlow bleibt als historische Testbasis im Repository, wird aber nicht mehr als sichtbarer Notationsrenderer verwendet. Composition Studio erzeugt nun MEI direkt aus dem REAPER-MIDI-Modell und rendert es mit Verovio 6.3.0 im bestehenden WebView. Jede MIDI-Note trägt eine stabile xml:id csn<csid>, die Verovio in die SVG-Element-IDs übernimmt. Dadurch bleiben Klick, Rechteckauswahl, Drag, Transposition und Daueränderung als Composition-Studio-Funktionen erhalten. Verovios eigene experimentelle Editor-API wird nicht zur Abhängigkeit. Mehrere Tracks werden als getrennte staffDef/staff-Partien kodiert; Piano kann als zweistaviges staffGrp ausgegeben werden.
