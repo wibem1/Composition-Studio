@@ -301,3 +301,8 @@ Notation Studio besitzt jetzt einen eigenständigen Update-Menüpunkt im Drei-Pu
 ## 2026-10-04 – Notation Studio v0.1.6 / Lesbarkeit diagnostizierbar
 
 Die automatische Clef-Umschaltung aus v0.1.5 wurde zurückgenommen, weil REAPER Default Clef über das Track/Measure-Kontextmenü bereitstellt und nicht zuverlässig als normale MIDI-Editor-Action exponiert. „Lesbarkeit verbessern“ führt jetzt nur noch tatsächlich gefundene Aktionen aus und zeigt danach deren konkrete Action-Namen an. Der Zoom verwendet stabile native MIDI-Editor-Command-IDs: 40466 (Zoom to content) und 40111 (vertikal hineinzoomen, dreimal). Für Proportional Spacing, Display Quantization 1/16, Mindestnotenlänge, Triolenerkennung und automatische Stimmenzuordnung werden mehrere englische/deutsche Suchvarianten verwendet. Die Oberfläche zeigt außerdem sichtbar, ob ein MIDI-Editor gebunden ist.
+
+
+## 2026-10-04 – Notation Studio v0.1.7 / kein destruktives Einpassen mehr
+
+Der automatische Zoom von „Lesbarkeit verbessern“ wurde korrigiert. v0.1.6 führte zuerst „Zoom to content“ aus und komprimierte dadurch bei längeren/dichten Passagen die gesamte Notation in ein Fenster. v0.1.7 lässt die aktuelle Ansicht unangetastet und führt nur noch zwei horizontale Zoom-in-Schritte sowie optional einen leichten vertikalen Zoom-in-Schritt aus. „Auswahl komplett einpassen“ und „Gesamten Inhalt einpassen“ bleiben ausschließlich manuelle Buttons und werden von „Lesbarkeit verbessern“ nicht mehr aufgerufen.
