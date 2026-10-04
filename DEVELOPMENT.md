@@ -326,3 +326,8 @@ Die Action-basierte Zielskalierung aus v0.1.9 wurde entfernt. REAPER stellt übe
 ## 2026-10-04 – Notation Studio v0.1.11 / echte Seitenansicht
 
 Der gewünschte Referenzlook ist REAPERs native Page View, nicht eine stärker gezoomte Continuous View. „Lesbarkeit verbessern“ schaltet daher die Action „Notation: Continuous view always, regardless of zoom level“ ausdrücklich aus und überlässt REAPER den mehrzeiligen Systemumbruch. Die horizontale Skalierung wird auf einen ruhigen festen Zielwert von ca. 55 px pro Viertelnote gesetzt. Laut REAPER-Verhalten funktioniert der automatische Page View nur bei einem sichtbaren Track; bei mehreren sichtbaren Tracks bleibt die Notation absichtlich kontinuierlich.
+
+
+## 2026-10-04 – Notation Studio v0.1.12 / echte Page-View-Action
+
+Die v0.1.11 verwendete indirekt „Continuous view always“. v0.1.12 verwendet stattdessen die explizite REAPER-MIDI-Editor-Action „Notation: Page view (whole measures, multiple staff rows, when one track is visible)“ und schaltet sie gezielt ein. Zusätzlich wird die Zahl der im MIDI-Editor sichtbaren Tracks ermittelt; bei mehr als einem sichtbaren Track meldet Notation Studio ausdrücklich, dass REAPER Page View nicht aktivieren kann. Die Partiturskalierung wurde auf 48 px pro Viertelnote beruhigt.
