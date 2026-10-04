@@ -35,7 +35,7 @@ jobs:
           cmake --build build-webview --config Release --target reaper_webview -j 3
           file build-webview/reaper_webview.dylib
           lipo -info build-webview/reaper_webview.dylib
-          lipo -verify_arch x86_64 build-webview/reaper_webview.dylib
+          lipo build-webview/reaper_webview.dylib -verify_arch x86_64
 
       - name: Package
         run: |
