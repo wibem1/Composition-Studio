@@ -235,3 +235,10 @@ MEI-Transkription: Achtel und kürzere Ereignisse werden nun in <beam>-Gruppen i
 ## 2026-10-04 – v1.0.35 / Sichtbares Drag-Ziel
 
 Das reine Rechteck-Overlay war zwar schnell, aber musikalisch nicht orientierend. Beim Drag wird jetzt einmalig die tatsächliche SVG-Gruppe jeder markierten Verovio-Note geklont und in ein separates Overlay-SVG gelegt. pointermove transformiert nur den gemeinsamen Ghost-Container. Die Vorschau snappt bereits während des Ziehens auf dieselben quantisierten dpitch/dqn-Werte, die bei pointerup nach REAPER geschrieben werden. Damit entspricht die sichtbare Ghost-Position dem tatsächlichen Ziel.
+
+
+## 2026-10-04 – v1.0.36 / Notation Studio Palette
+
+Strategiewechsel zurück zum nativen REAPER-Notationseditor. Das WebView/Verovio-Fenster wird aus dem sichtbaren Workflow entfernt; die experimentellen Funktionen bleiben vorerst im Code, werden aber nicht mehr über den Hauptbutton geöffnet.
+
+Neue Oberfläche: kompaktes ReaImGui-Fenster „Notation Studio“ mit CollapsingHeader-Gruppen. Standardmäßig offen ist nur „Lesbarkeit“. Weitere Gruppen: Darstellung/Quantisierung, Stimmen/Notation, Artikulation, Dynamik, Spielweise/SWAM. Zielworkflow: Auswahl im nativen REAPER-Notationseditor -> Rechtsklick -> ein einziger Eintrag „Notation Studio…“ -> Werkzeugpalette.
