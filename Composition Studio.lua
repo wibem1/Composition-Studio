@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.29
+-- @version 1.0.30
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.29"
+local VERSION="1.0.30"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1133,7 +1133,7 @@ window.flutter_inappwebview={callHandler:function(name,data){
 }};
 </script>
 <script type="module">
-import { render } from 'https://cdn.jsdelivr.net/gh/wibem1/Composition-Studio@7671d4ebd368f4b3b322caf97d5f7302c41b1977/web/scoreflow-cs-render.js';
+import { render } from 'https://cdn.jsdelivr.net/gh/wibem1/Composition-Studio@6a97529326452cd7e3691e0b2f85724e4540b92a/web/scoreflow-cs-render.js';
 import { state } from ']]..base..[[js/utils/state.js';
 let score=]]..score_json..[[;
 window.csScore=score;
