@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.17
+-- @version 0.1.18
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.17"
+local VERSION="0.1.18"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -317,19 +317,31 @@ local function apply_readable_scale(ed)
  local first_qn,last_qn,count=selected_note_stats()
  if not first_qn or count==0 then return false,"keine markierten Noten" end
 
- -- In page view REAPER performs the system wrapping. We only choose a calm notation scale.
- -- Around 55 px per quarter note gives roughly 4–6 bars per system on a normal desktop window.
- local px_per_qn=70
+ local first_measure=reaper.TimeMap_QNToMeasures(0,first_qn)
+ local last_measure=reaper.TimeMap_QNToMeasures(0,last_qn)
+ local measures=math.max(1,last_measure-first_measure+1)
+ local density=count/measures
+
+ -- Bewährte adaptive Skalierung aus v0.1.10 wiederhergestellt.
+ -- Dichte Musik bekommt deutlich mehr horizontalen Raum.
+ local px_per_qn=80
+ if density>=28 then px_per_qn=120
+ elseif density>=18 then px_per_qn=105
+ elseif density>=10 then px_per_qn=90 end
+
  local unit=reaper.MIDIEditor_GetSetting_int(ed,"timebase_unit")
  local px_per_unit=px_per_qn
  if unit==0 then
   local bpm=reaper.Master_GetTempo()
   px_per_unit=px_per_qn*(bpm/60.0)
  end
+
  local setting=math.floor(px_per_unit*1024+0.5)
  local ok=reaper.MIDIEditor_SetSetting_int(ed,"pixels_per_timebase_unit",setting)
- if not ok then return false,"REAPER hat die Partiturskalierung nicht übernommen" end
- return true,string.format("%.0f px/Viertelnote",px_per_qn)
+ if not ok then return false,"REAPER hat pixels_per_timebase_unit nicht übernommen" end
+
+ local actual=reaper.MIDIEditor_GetSetting_int(ed,"pixels_per_timebase_unit")
+ return true,string.format("%.0f px/Viertelnote · %.1f markierte Noten/Takt · REAPER-Wert %d",px_per_qn,density,actual or -1)
 end
 
 local function selected_track_profile()
@@ -619,7 +631,7 @@ local function draw()
    reaper.ImGui_TextWrapped(ctx,"Für den mehrzeiligen Seitenumbruch darf in REAPER nur ein Track sichtbar sein.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
    if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
-   reaper.ImGui_TextWrapped(ctx,"Erzeugt eine größere Seitenansicht (ca. 4–5 Takte/System) und versucht, für Einzelinstrumente ein einzelnes passendes Notensystem statt Piano-Grand-Staff zu wählen.")
+   reaper.ImGui_TextWrapped(ctx,"Erzeugt eine größere Seitenansicht mit adaptiver Skalierung: dichte Musik erhält automatisch mehr horizontalen Raum. Die übrigen Lesbarkeitseinstellungen bleiben erhalten.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
