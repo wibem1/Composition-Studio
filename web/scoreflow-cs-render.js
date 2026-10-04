@@ -92,6 +92,46 @@ function csFormatAndDraw(VF, ctx, voices, staves, measureW, beats, beatValue, pa
     }
 }
 
+
+function csDurationUnits(n) {
+    const d = String((n && n.duration) || 'q');
+    if (d === 'w') return 4.0;
+    if (d === 'h') return 2.0;
+    if (d === 'q') return 1.0;
+    if (d === '8') return 0.5;
+    if (d === '16') return 0.25;
+    if (d === '32') return 0.125;
+    if (d === '64') return 0.0625;
+    return 1.0;
+}
+function csRhythmicSpacing(n) {
+    // Dorico/MuseScore-like principle: duration-proportional spacing, but
+    // short values still retain a readable minimum.
+    const u = csDurationUnits(n);
+    const ratio = 1.5;
+    const q = 25; // quarter-note nominal width
+    const scaled = q * Math.pow(ratio, Math.log(u) / Math.log(2));
+    let w = Math.max(15, scaled);
+    const keys = (n && n.keys) || [];
+    for (const k of keys) if (String(k).includes('#') || String(k).includes('b')) w += 4;
+    if (n && n.dots) w += 3;
+    return w;
+}
+function csVoiceNaturalWidth(notes) {
+    let w = 0, real = 0;
+    for (const n of (notes || [])) {
+        w += csRhythmicSpacing(n);
+        if (!n.rest) real++;
+    }
+    return Math.max(54, w + Math.min(30, real * 1.5));
+}
+function csMeasureNaturalWidth(m, mode) {
+    if (mode === 'grand') {
+        return Math.max(csVoiceNaturalWidth(m.treble || []), csVoiceNaturalWidth(m.bass || []));
+    }
+    const v = mode === 'single-bass' ? 'bass' : 'treble';
+    return csVoiceNaturalWidth(m[v] || []);
+}
 function renderParts(score, forcedWidth) {
     if (typeof Vex === 'undefined' || !Vex.Flow) return;
     const VF = Vex.Flow;
@@ -104,15 +144,16 @@ function renderParts(score, forcedWidth) {
 
     const measures = parts[0].measures || [];
     const width = forcedWidth || Math.max(520, container.clientWidth);
-    const margin = 10, labelW = 105, usableW = width - margin * 2 - labelW;
+    const margin = 14, labelW = 115, usableW = width - margin * 2 - labelW;
     const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
     renderer.resize(width, 200);
     const ctx = renderer.getContext();
     const effTs = effectiveTimeSignatures(measures, score.timeSignature || '4/4');
     const tsStr = effTs.map((t) => t.beats + '/' + t.beatValue);
 
-    // Common measure widths: maximum notation width required by any part.
-    const cm = new Array(measures.length).fill(70);
+    // Common measure widths: combine VexFlow collision width with a
+    // duration-proportional musical spacing model. This avoids dense "black bars".
+    const cm = new Array(measures.length).fill(92);
     for (let mi = 0; mi < measures.length; mi++) {
         for (let pi = 0; pi < parts.length; pi++) {
             const part = parts[pi], m = (part.measures || [])[mi] || {};
@@ -126,24 +167,29 @@ function renderParts(score, forcedWidth) {
                 const clef = mode === 'single-bass' ? 'bass' : 'treble';
                 voices.push(buildVoice(VF, m[v] || [], clef, effTs[mi].beats, effTs[mi].beatValue, -1, mi, v));
             }
-            try { cm[mi] = Math.max(cm[mi], measureMinWidth(VF, voices) + 55); } catch (_) {}
+            let collisionW = 92;
+            try { collisionW = measureMinWidth(VF, voices) + 70; } catch (_) {}
+            const musicalW = csMeasureNaturalWidth(m, mode) + 60;
+            cm[mi] = Math.max(cm[mi], collisionW, musicalW);
         }
     }
 
-    // Common row packing for every part.
+    // Common row packing for every part. Dense material deliberately casts off
+    // earlier; readable parts are preferred over maximal measures-per-system.
     const rows = [];
     for (let mi = 0; mi < measures.length;) {
         const row = []; let used = 0;
         while (mi < measures.length) {
             const w = cm[mi];
-            if (row.length && used + w > usableW) break;
+            const hardCap = parts.length >= 4 ? 3 : 4;
+            if (row.length && (used + w > usableW || row.length >= hardCap)) break;
             row.push(mi); used += w; mi++;
         }
         rows.push(row);
     }
 
-    const partHeights = parts.map((p) => (p.staffMode === 'grand' ? 170 : 95));
-    const rowGap = 28;
+    const partHeights = parts.map((p) => (p.staffMode === 'grand' ? 188 : 112));
+    const rowGap = 46;
     let totalH = margin;
     for (let ri = 0; ri < rows.length; ri++) {
         for (let pi = 0; pi < parts.length; pi++) totalH += partHeights[pi];
@@ -156,7 +202,13 @@ function renderParts(score, forcedWidth) {
     for (let ri = 0; ri < rows.length; ri++) {
         const row = rows[ri];
         let totalMin = 0; row.forEach((mi) => totalMin += cm[mi]);
-        const scale = totalMin > 0 ? usableW / totalMin : 1;
+        const isLastRow = ri === rows.length - 1;
+        // Like Dorico/MuseScore: justify ordinary systems, but keep a sparse
+        // final system ragged-right instead of stretching it grotesquely.
+        const fullness = totalMin / usableW;
+        let scale = 1;
+        if (!isLastRow) scale = Math.min(1.22, Math.max(1, usableW / Math.max(1,totalMin)));
+        else if (fullness > 0.72) scale = Math.min(1.12, usableW / Math.max(1,totalMin));
         let x0 = margin + labelW;
         row.forEach((mi) => {
             geom[mi] = { row: ri, x: x0, w: cm[mi] * scale };
@@ -183,7 +235,7 @@ function renderParts(score, forcedWidth) {
 
                 if (mode === 'grand') {
                     const t = new VF.Stave(g.x, pTop, g.w);
-                    const b = new VF.Stave(g.x, pTop + 78, g.w);
+                    const b = new VF.Stave(g.x, pTop + 88, g.w);
                     if (rowStart) { t.addClef('treble'); b.addClef('bass'); }
                     if (showTs) { t.addTimeSignature(tsStr[mi]); b.addTimeSignature(tsStr[mi]); }
                     setupGrandBarline(VF, t, b);
