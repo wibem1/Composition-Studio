@@ -162,3 +162,10 @@ Korrektur:
 - Klick-Drag: Rechteckauswahl über die Zentren der vorhandenen ScoreFlow-Hitboxes.
 - Auswahl wird als csid-Liste über die WebView-Bridge übertragen.
 - ±1 Halbton und Dauerfaktor werden in einem einzigen REAPER-Undo-Schritt auf die komplette Auswahl angewandt.
+
+
+## 2026-10-04 – v1.0.21 / Drag + Bridge-Diagnose
+
+Zwei getrennte Fehlerbilder:
+- Drag-Selektion wurde korrekt im pointerup erzeugt, danach aber vom normalen ScoreFlow-click-Handler wieder auf eine einzelne Note reduziert. Ein Capture-click-Suppressor unterdrückt nun genau den Folgeclick nach einem echten Drag.
+- Sichtbare Markierung ist reine Browserfunktion und beweist nicht, dass der native csBridge installiert ist. Die ScoreFlow-Toolbar zeigt deshalb nun explizit „Bridge aktiv“ bzw. „Bridge fehlt“. Bearbeitungsbuttons melden ebenfalls sofort, wenn kein nativer Rückkanal vorhanden ist.
