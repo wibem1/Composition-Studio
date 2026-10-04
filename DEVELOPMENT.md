@@ -296,3 +296,8 @@ Notation Studio besitzt jetzt einen eigenständigen Update-Menüpunkt im Drei-Pu
 ## 2026-10-04 – Notation Studio v0.1.5 / Lesbarkeitsprofil
 
 „Lesbarkeit verbessern“ ist jetzt ein kombiniertes Profil statt einer reinen Darstellungsquantisierung. Es aktiviert musikalisch proportionale Abstände, Display-Quantisierung 1/16, eine sinnvolle Mindestnotenlänge, Triolen- und Stimmenautomatik, passt die Auswahl ein und zoomt anschließend moderat horizontal hinein. Zusätzlich wird aus Trackname und Tonumfang ein Score-Profil abgeleitet: treble, bass, alto oder grand. Notation Studio durchsucht die aktuelle MIDI-Editor-Action-Liste nach einer passenden nativen Default-Clef-Action und wendet sie an, sofern REAPER diese als Action exponiert.
+
+
+## 2026-10-04 – Notation Studio v0.1.6 / Lesbarkeit diagnostizierbar
+
+Die automatische Clef-Umschaltung aus v0.1.5 wurde zurückgenommen, weil REAPER Default Clef über das Track/Measure-Kontextmenü bereitstellt und nicht zuverlässig als normale MIDI-Editor-Action exponiert. „Lesbarkeit verbessern“ führt jetzt nur noch tatsächlich gefundene Aktionen aus und zeigt danach deren konkrete Action-Namen an. Der Zoom verwendet stabile native MIDI-Editor-Command-IDs: 40466 (Zoom to content) und 40111 (vertikal hineinzoomen, dreimal). Für Proportional Spacing, Display Quantization 1/16, Mindestnotenlänge, Triolenerkennung und automatische Stimmenzuordnung werden mehrere englische/deutsche Suchvarianten verwendet. Die Oberfläche zeigt außerdem sichtbar, ob ein MIDI-Editor gebunden ist.
