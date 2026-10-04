@@ -84,3 +84,10 @@ Recherche bestätigt `disp_pos` als individuelle REAPER-Notationseigenschaft pro
 - Notation Event bleibt am Note-On gekoppelt
 - tatsächliche MIDI-Position bleibt unverändert
 - erst nach Sichttest wird daraus ein automatischer Abstandalgorithmus entwickelt
+
+
+## 2026-10-04 – v1.0.13 / Notation Workspace 0.1
+
+Architekturwechsel: Notation ist keine Unterseite des Studio-Hauptfensters mehr. Der sichtbare REAPER-Notation-Prototyp (Spacing, Lesbar machen, disp_pos-Messung) wird nicht weitergeführt. Der Button „Notation“ öffnet ein separates ReaImGui-Fenster innerhalb von REAPER. Dieses Fenster ist der feste Host für den kommenden editierbaren Score-Editor.
+
+Der Workspace 0.1 enthält bewusst noch keinen Score-Renderer. Menüs zeigen nur die geplante Funktionsstruktur und sind deaktiviert. Ziel des Tests ist ausschließlich: eigenes Fenster, unabhängiges Öffnen/Schließen und keine Regression im Hauptfenster.
