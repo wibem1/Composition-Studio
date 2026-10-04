@@ -191,3 +191,10 @@ Der bisherige Konverter war die Hauptursache des schlechten Notenbilds: fester 4
 - Instrument-/Tracknamen-basierte Systemzuweisung für Streicher und typische Orchesterinstrumente
 
 Offen: echte Tonart, Single-Staff-Renderer, Stimmenanalyse, taktübergreifende Haltebögen.
+
+
+## 2026-10-04 – v1.0.26 / Single Staff + Notationsdauer
+
+Zwei strukturelle Korrekturen:
+- ScoreFlow wurde als kleiner MIT-konformer Renderer-Fork unter web/scoreflow-cs-render.js übernommen. Ergänzt wurde staffMode = single-treble / single-bass / grand. Einzelinstrumente bekommen damit erstmals wirklich nur einen Notenständer statt eines erzwungenen Klavier-Grand-Staffs.
+- Notationsdauer wird bei kurzen artikulierten MIDI-Tönen aus dem Abstand zum nächsten Anschlag rekonstruiert. MIDI Note-Off bleibt relevant, ist aber nicht mehr automatisch gleichbedeutend mit dem geschriebenen Notenwert. Das verhindert viele falsche 16/32tel plus Mikro-Pausen.
