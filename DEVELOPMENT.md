@@ -98,3 +98,8 @@ Der Workspace 0.1 enthält bewusst noch keinen Score-Renderer. Menüs zeigen nur
 Bedienprinzip korrigiert: keine „MIDI laden“-Funktion. Beim Klick auf „Notation“ wird die aktuelle REAPER-Auswahl automatisch in den Workspace übernommen. Mehrere ausgewählte MIDI-Items werden gemeinsam erfasst.
 
 Erster funktionaler Datenkern: Notenliste, Notenauswahl, ±1 Halbton und Dauer halbieren/verdoppeln; Änderungen gehen direkt in das zugrunde liegende REAPER-MIDI und sind per REAPER Undo rückgängig. Der grafische Score-Renderer folgt als nächste Stufe.
+
+
+## 2026-10-04 – v1.0.15 / Scope-Fix
+
+Fehler in v1.0.14: `score_capture_selection` wurde durch die Reihenfolge der Lua-Deklarationen nicht als lokale Funktion aufgelöst und beim Klick auf „Notation“ als nil-global aufgerufen. Die gesamte Score-Bridge-Hilfsschicht steht nun vor dem Hauptloop. Zusätzlich geprüft: genau eine Definition von `score_capture_selection`, Definition vor allen Aufrufstellen.
