@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.15
+-- @version 0.1.16
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.15"
+local VERSION="0.1.16"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -364,21 +364,57 @@ local function selected_track_profile()
  return "treble","Einzelstimme"
 end
 
-local function try_default_clef(ed,profile)
- local variants={}
- if profile=="treble" then
-  variants={{"default clef","treble"},{"notation","clef","treble"}}
- elseif profile=="bass" then
-  variants={{"default clef","bass"},{"notation","clef","bass"}}
- elseif profile=="alto" then
-  variants={{"default clef","alto"},{"notation","clef","alto"}}
- elseif profile=="grand" then
-  variants={{"default clef","treble+bass"},{"default clef","treble + bass"}}
+local CLEF_SCORE_VALUE={
+ treble=0,
+ bass=1,
+ alto=2,
+ tenor=3,
+ ["treble-8"]=4,
+ ["treble+8"]=5,
+ ["treble+15"]=6,
+ ["bass-8"]=7,
+ ["bass-15"]=8,
+ percussion=9,
+ ["percussion-oneline"]=10,
+ chart=11
+}
+
+local function active_midi_track()
+ local ed=active_editor()
+ if not ed then return nil end
+ local tk=reaper.MIDIEditor_GetTake(ed)
+ if not tk or not reaper.TakeIsMIDI(tk) then return nil end
+ local item=reaper.GetMediaItemTake_Item(tk)
+ return item and reaper.GetMediaItem_Track(item) or nil
+end
+
+local function set_default_clef_chunk(profile)
+ if profile=="grand" then
+  return false,"Treble+bass ist ein Sonderfall und wird nicht über die numerische SCORE-Reihe gesetzt."
  end
- local cmd,txt=find_action_variants(variants)
- if not cmd then return false,nil end
- reaper.MIDIEditor_OnCommand(ed,cmd)
- return true,txt
+ local value=CLEF_SCORE_VALUE[profile]
+ if value==nil then return false,"Unbekannter Notenschlüssel: "..tostring(profile) end
+
+ local tr=active_midi_track()
+ if not tr then return false,"Aktiver MIDI-Track konnte nicht ermittelt werden." end
+
+ local ok,chunk=reaper.GetTrackStateChunk(tr,"",false)
+ if not ok or not chunk then return false,"Track-State konnte nicht gelesen werden." end
+
+ local newline="SCORE 0 "..tostring(value).." 0 0"
+ local changed=0
+ chunk,changed=chunk:gsub("SCORE%s+[^\r\n]+",newline,1)
+ if changed==0 then
+  local inserted=false
+  chunk,changed=chunk:gsub("(\nVU%s+[^\r\n]+)", "%1\n"..newline,1)
+  inserted=changed>0
+  if not inserted then return false,"Keine geeignete Stelle für die SCORE-Zeile gefunden." end
+ end
+
+ local set_ok=reaper.SetTrackStateChunk(tr,chunk,false)
+ if not set_ok then return false,"REAPER hat den Track-State nicht übernommen." end
+ reaper.UpdateArrange()
+ return true,newline
 end
 
 local function cleanup_notation()
@@ -430,12 +466,13 @@ local function cleanup_notation()
  },true)
 
  local profile,instrument=selected_track_profile()
- local clef_ok,clef_action=try_default_clef(ed,profile)
+ local clef_ok,clef_info=set_default_clef_chunk(profile)
  if clef_ok then
-  done[#done+1]="Notensystem: "..instrument.." → "..profile.." ["..tostring(clef_action).."]"
+  done[#done+1]="Notensystem: "..instrument.." → "..profile.." ["..tostring(clef_info).."]"
+ elseif profile=="grand" then
+  done[#done+1]="Notensystem: "..instrument.." → Treble+bass unverändert"
  else
-  local label=profile=="treble" and "Treble" or profile=="bass" and "Bass" or profile=="alto" and "Alto" or "Treble+bass"
-  missing[#missing+1]="Notensystem: "..instrument.." erkannt; REAPER bietet „Default clef: "..label.."“ hier nicht als Action an. Rechtsklick auf den Schlüssel → Default clef → "..label
+  missing[#missing+1]="Notensystem: "..instrument.." → "..tostring(clef_info)
  end
 
  local visible_tracks=count_visible_tracks(ed)
@@ -621,7 +658,7 @@ local function draw()
   end
 
   if reaper.ImGui_CollapsingHeader(ctx,"Stimmen / Notation") then
-   reaper.ImGui_TextWrapped(ctx,"Default-Clef wird vorerst nicht automatisch geändert: REAPER stellt diese Wahl im Track/Measure-Kontextmenü bereit, nicht zuverlässig als Action.")
+   reaper.ImGui_TextWrapped(ctx,"Default-Clef wird direkt über REAPERs Track-State-Zeile SCORE gesetzt. Solo-Streicher: Violine → Treble, Viola → Alto, Cello/Kontrabass → Bass. Treble+bass bleibt als Sonderfall unverändert.")
    reaper.ImGui_TextWrapped(ctx,"Weitere native Notationsbefehle werden hier gebündelt.")
   end
   if reaper.ImGui_CollapsingHeader(ctx,"Artikulation") then
