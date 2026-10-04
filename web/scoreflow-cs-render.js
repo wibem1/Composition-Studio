@@ -37,12 +37,198 @@ function clearCanvas() {
 // --- Главная функция отрисовки -------------------------------------
 // [forcedWidth] — фиксированная ширина полотна (для экспорта в PDF под
 // печатную ширину A4); иначе берётся ширина контейнера.
+
+function csAnnotateVoice(v, partIndex) {
+    try {
+        const tt = v.getTickables();
+        for (let i = 0; i < tt.length; i++) {
+            if (tt[i].__hit) tt[i].__hit.p = partIndex;
+        }
+    } catch (_) {}
+    return v;
+}
+
+function csFormatAndDraw(VF, ctx, voices, staves, measureW, beats, beatValue, partIndex) {
+    const fmt = new VF.Formatter();
+    voices.forEach((v) => fmt.joinVoices([v]));
+    voices.forEach((v) => csAnnotateVoice(v, partIndex));
+    const tuplets = [];
+    voices.forEach((v) => buildTuplets(VF, v).forEach((t) => tuplets.push(t)));
+    let startX = 0;
+    staves.forEach((s) => { startX = Math.max(startX, s.getNoteStartX()); });
+    staves.forEach((s) => s.setNoteStartX(startX));
+    const staveEnd = staves[0].getX() + staves[0].getWidth();
+    const avail = Math.max(40, staveEnd - startX - 12);
+    const minW = fmt.preCalculateMinTotalWidth(voices);
+    const sx = minW > avail ? avail / minW : 1;
+    fmt.format(voices, sx < 1 ? minW : avail);
+    let grp = null;
+    if (sx < 1 && ctx.openGroup) { ctx.openGroup('sq'); grp = ctx.parent; }
+    const groups = beamGroups(VF, beats, beatValue);
+    voices.forEach((v, idx) => {
+        const beams = VF.Beam.generateBeams(v.getTickables(), {
+            groups: groups, beam_rests: false, maintain_stem_directions: true,
+        });
+        v.draw(ctx, staves[idx]);
+        beams.forEach((b) => { try { b.setContext(ctx).draw(); } catch (_) {} });
+        v.getTickables().forEach((t) => {
+            if (!t.__hit) return;
+            let bb; try { bb = t.getBoundingBox(); } catch (_) { return; }
+            if (!bb) return;
+            const hx = startX + (bb.getX() - startX) * sx;
+            const id = partIndex + ':' + t.__hit.m + ':' + t.__hit.v + ':' + t.__hit.i;
+            state.noteHits.push({
+                id: id, p: partIndex, m: t.__hit.m, v: t.__hit.v, i: t.__hit.i,
+                x: hx, y: bb.getY(), w: bb.getW() * sx, h: bb.getH(),
+            });
+            if (t.__hit.i >= 0) state.noteObjs[id] = t;
+        });
+    });
+    tuplets.forEach((t) => { try { t.setContext(ctx).draw(); } catch (_) {} });
+    if (grp) {
+        ctx.closeGroup();
+        grp.setAttribute('transform',
+            'translate(' + (startX * (1 - sx)) + ',0) scale(' + sx + ',1)');
+    }
+}
+
+function renderParts(score, forcedWidth) {
+    if (typeof Vex === 'undefined' || !Vex.Flow) return;
+    const VF = Vex.Flow;
+    const container = el('notation-container');
+    const oldSvg = container.querySelector('svg'); if (oldSvg) oldSvg.remove();
+    const err = el('engine-error'); if (err) err.remove();
+    state.noteHits = []; state.noteObjs = {}; state.noteTransform = {};
+    const parts = score.parts || [];
+    if (!parts.length) return;
+
+    const measures = parts[0].measures || [];
+    const width = forcedWidth || Math.max(520, container.clientWidth);
+    const margin = 10, labelW = 105, usableW = width - margin * 2 - labelW;
+    const renderer = new VF.Renderer(container, VF.Renderer.Backends.SVG);
+    renderer.resize(width, 200);
+    const ctx = renderer.getContext();
+    const effTs = effectiveTimeSignatures(measures, score.timeSignature || '4/4');
+    const tsStr = effTs.map((t) => t.beats + '/' + t.beatValue);
+
+    // Common measure widths: maximum notation width required by any part.
+    const cm = new Array(measures.length).fill(70);
+    for (let mi = 0; mi < measures.length; mi++) {
+        for (let pi = 0; pi < parts.length; pi++) {
+            const part = parts[pi], m = (part.measures || [])[mi] || {};
+            const mode = part.staffMode || 'single-treble';
+            const voices = [];
+            if (mode === 'grand') {
+                voices.push(buildVoice(VF, m.treble || [], 'treble', effTs[mi].beats, effTs[mi].beatValue, -1, mi, 'treble'));
+                voices.push(buildVoice(VF, m.bass || [], 'bass', effTs[mi].beats, effTs[mi].beatValue, -1, mi, 'bass'));
+            } else {
+                const v = mode === 'single-bass' ? 'bass' : 'treble';
+                const clef = mode === 'single-bass' ? 'bass' : 'treble';
+                voices.push(buildVoice(VF, m[v] || [], clef, effTs[mi].beats, effTs[mi].beatValue, -1, mi, v));
+            }
+            try { cm[mi] = Math.max(cm[mi], measureMinWidth(VF, voices) + 55); } catch (_) {}
+        }
+    }
+
+    // Common row packing for every part.
+    const rows = [];
+    for (let mi = 0; mi < measures.length;) {
+        const row = []; let used = 0;
+        while (mi < measures.length) {
+            const w = cm[mi];
+            if (row.length && used + w > usableW) break;
+            row.push(mi); used += w; mi++;
+        }
+        rows.push(row);
+    }
+
+    const partHeights = parts.map((p) => (p.staffMode === 'grand' ? 170 : 95));
+    const rowGap = 28;
+    let totalH = margin;
+    for (let ri = 0; ri < rows.length; ri++) {
+        for (let pi = 0; pi < parts.length; pi++) totalH += partHeights[pi];
+        totalH += rowGap;
+    }
+    renderer.resize(width, Math.max(180, totalH + margin));
+
+    const geom = new Array(measures.length);
+    let y = margin;
+    for (let ri = 0; ri < rows.length; ri++) {
+        const row = rows[ri];
+        let totalMin = 0; row.forEach((mi) => totalMin += cm[mi]);
+        const scale = totalMin > 0 ? usableW / totalMin : 1;
+        let x0 = margin + labelW;
+        row.forEach((mi) => {
+            geom[mi] = { row: ri, x: x0, w: cm[mi] * scale };
+            x0 += cm[mi] * scale;
+        });
+
+        for (let pi = 0; pi < parts.length; pi++) {
+            const part = parts[pi], mode = part.staffMode || 'single-treble';
+            const pTop = y;
+            // Part label at system start.
+            if (ctx.fillText) {
+                try {
+                    ctx.save && ctx.save();
+                    ctx.setFont && ctx.setFont('Arial', 12, '');
+                    ctx.fillText(part.name || ('Part ' + (pi + 1)), margin + 2, pTop + 32);
+                    ctx.restore && ctx.restore();
+                } catch (_) {}
+            }
+
+            for (let ci = 0; ci < row.length; ci++) {
+                const mi = row[ci], g = geom[mi], m = (part.measures || [])[mi] || {};
+                const rowStart = ci === 0;
+                const showTs = mi === 0 || tsStr[mi] !== tsStr[mi - 1];
+
+                if (mode === 'grand') {
+                    const t = new VF.Stave(g.x, pTop, g.w);
+                    const b = new VF.Stave(g.x, pTop + 78, g.w);
+                    if (rowStart) { t.addClef('treble'); b.addClef('bass'); }
+                    if (showTs) { t.addTimeSignature(tsStr[mi]); b.addTimeSignature(tsStr[mi]); }
+                    setupGrandBarline(VF, t, b);
+                    t.setContext(ctx).draw(); b.setContext(ctx).draw();
+                    drawGrandBarline(VF, ctx, t, b, null);
+                    const tv = buildVoice(VF, m.treble || [], 'treble', effTs[mi].beats, effTs[mi].beatValue, -1, mi, 'treble');
+                    const bv = buildVoice(VF, m.bass || [], 'bass', effTs[mi].beats, effTs[mi].beatValue, -1, mi, 'bass');
+                    csFormatAndDraw(VF, ctx, [tv,bv], [t,b], g.w, effTs[mi].beats, effTs[mi].beatValue, pi);
+                    if (rowStart) {
+                        try {
+                            new VF.StaveConnector(t,b).setType(VF.StaveConnector.type.BRACE).setContext(ctx).draw();
+                            new VF.StaveConnector(t,b).setType(VF.StaveConnector.type.SINGLE_LEFT).setContext(ctx).draw();
+                        } catch (_) {}
+                    }
+                } else {
+                    const voice = mode === 'single-bass' ? 'bass' : 'treble';
+                    const clef = mode === 'single-bass' ? 'bass' : 'treble';
+                    const st = new VF.Stave(g.x, pTop, g.w);
+                    if (rowStart) st.addClef(clef);
+                    if (showTs) st.addTimeSignature(tsStr[mi]);
+                    setupBarline(VF, st, null);
+                    st.setContext(ctx).draw();
+                    const vv = buildVoice(VF, m[voice] || [], clef, effTs[mi].beats, effTs[mi].beatValue, -1, mi, voice);
+                    csFormatAndDraw(VF, ctx, [vv], [st], g.w, effTs[mi].beats, effTs[mi].beatValue, pi);
+                }
+            }
+            y += partHeights[pi];
+        }
+        y += rowGap;
+    }
+
+    state.lastLayout = { width: width, totalH: totalH, rows: rows.length, geom: geom, margin: margin };
+    attachTapListener();
+}
+
 export function render(score, forcedWidth) {
     if (typeof Vex === 'undefined' || !Vex.Flow) {
         showError('Нотный движок не загрузился (assets/www/js/vexflow.js).');
         return;
     }
     const VF = Vex.Flow;
+    if (score && score.parts && score.parts.length > 1) {
+        renderParts(score, forcedWidth);
+        return;
+    }
     // Позицию скролла фиксируем ДО пересборки SVG: удаление полотна
     // схлопывает документ и браузер сбрасывает scrollY в 0.
     const prevScrollY = window.scrollY || document.documentElement.scrollTop || 0;
