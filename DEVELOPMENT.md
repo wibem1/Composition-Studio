@@ -44,3 +44,18 @@ Nach Sichttest von v1.0.7 wird REAPERs eigene Option **Notation: Proportional (m
 - danach Zoom to content + drei horizontale Zoom-in-Schritte
 - MIDI-Daten bleiben unverändert
 - Toggle-State wird über REAPERs MIDI-Editor Action Section abgefragt
+
+
+## 2026-10-04 – Notation-Prototyp 0.4 / v1.0.9
+
+Erste automatische Notensatzbereinigung. Wichtig: `disp_pos` ist als REAPER-Notationseigenschaft nachgewiesen, seine direkte numerische Semantik ist aber nicht ausreichend dokumentiert. Deshalb wird in dieser Stufe **kein eigener disp_pos-Wert geraten**. Stattdessen werden ausschließlich native REAPER-Notation-Aktionen verwendet.
+
+Profil „Notensatz bereinigen“:
+- Proportional (musical) note spacing an
+- Display quantization 1/16
+- Minimum display quantization note length 1/64
+- Automatically detect triplets an
+- Automatically voice overlapping notes an
+- anschließend Ansicht einpassen + moderat vergrößern
+
+MIDI-Performance bleibt unverändert. Alle Änderungen liegen in einem REAPER-Undo-Block.
