@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.6
+-- @version 0.1.7
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.6"
+local VERSION="0.1.7"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -166,11 +166,29 @@ local function find_action_variants(variants)
  return nil,nil
 end
 
-local function run_native_zoom(ed)
- -- Stable native MIDI-editor command IDs.
- reaper.MIDIEditor_OnCommand(ed,40466) -- View: Zoom to content
- for _=1,3 do reaper.MIDIEditor_OnCommand(ed,40111) end -- View: Zoom in vertically
- return true
+local function run_safe_readability_zoom(ed)
+ local done={}
+ local cmd,txt=find_action_variants({
+  {"view","zoom in horizontally"},
+  {"zoom in horizontally"},
+  {"horizontal","zoom in"}
+ })
+ if cmd then
+  -- Do not fit all content first: that compresses dense notation disastrously.
+  reaper.MIDIEditor_OnCommand(ed,cmd)
+  reaper.MIDIEditor_OnCommand(ed,cmd)
+  done[#done+1]="horizontal vergrößert ["..txt.." ×2]"
+ end
+ local vcmd,vtxt=find_action_variants({
+  {"view","zoom in vertically"},
+  {"zoom in vertically"},
+  {"vertical","zoom in"}
+ })
+ if vcmd then
+  reaper.MIDIEditor_OnCommand(ed,vcmd)
+  done[#done+1]="vertikal leicht vergrößert ["..vtxt.." ×1]"
+ end
+ return done
 end
 
 local function active_editor()
@@ -264,8 +282,8 @@ local function cleanup_notation()
    {"notation","stimm"}
  },true)
 
- run_native_zoom(ed)
- done[#done+1]="Zoom to content + vertikal vergrößert [40466 + 40111×3]"
+ local zoom_done=run_safe_readability_zoom(ed)
+ for _,z in ipairs(zoom_done) do done[#done+1]=z end
 
  if #missing==0 then
   status="Ausgeführt:\n• "..table.concat(done,"\n• ")
@@ -395,16 +413,16 @@ local function draw()
 
   if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
-   reaper.ImGui_TextWrapped(ctx,"Führt nur nachweisbar gefundene REAPER-Funktionen aus und meldet anschließend exakt, was angewendet wurde.")
+   reaper.ImGui_TextWrapped(ctx,"Verbessert die Notendarstellung ohne die gesamte Partitur ins Fenster zu quetschen. Die aktuelle Ansicht wird nur moderat vergrößert.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
    if reaper.ImGui_Button(ctx,"Breiter +",h,30) then run_action("View: Zoom in horizontally",1) end
    reaper.ImGui_SameLine(ctx,0,g)
    if reaper.ImGui_Button(ctx,"Schmaler –",h,30) then run_action("View: Zoom out horizontally",1) end
-   if reaper.ImGui_Button(ctx,"Auswahl einpassen",h,30) then run_action("View: Zoom to selected notes/CC",1) end
+   if reaper.ImGui_Button(ctx,"Auswahl komplett einpassen",h,30) then run_action("View: Zoom to selected notes/CC",1) end
    reaper.ImGui_SameLine(ctx,0,g)
-   if reaper.ImGui_Button(ctx,"Inhalt einpassen",h,30) then run_action("View: Zoom to content",1) end
+   if reaper.ImGui_Button(ctx,"Gesamten Inhalt einpassen",h,30) then run_action("View: Zoom to content",1) end
   end
 
   if reaper.ImGui_CollapsingHeader(ctx,"Darstellung / Quantisierung") then
