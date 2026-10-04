@@ -336,6 +336,14 @@ local function draw()
   end
   local _,nsel=selection_context()
   reaper.ImGui_Text(ctx,"Native REAPER-Notation · "..tostring(nsel).." Note(n) markiert")
+  reaper.ImGui_SameLine(ctx)
+  if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##notationstudio_menu") end
+  if reaper.ImGui_BeginPopup(ctx,"##notationstudio_menu") then
+   if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end
+   reaper.ImGui_Separator(ctx)
+   reaper.ImGui_Text(ctx,"Version "..VERSION)
+   reaper.ImGui_EndPopup(ctx)
+  end
   if not active_editor() then reaper.ImGui_TextWrapped(ctx,"Kein MIDI-Editor gebunden – bitte Notation Studio aus dem geöffneten Notationseditor starten.") end
   reaper.ImGui_Separator(ctx)
 
