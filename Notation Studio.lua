@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.14
+-- @version 0.1.15
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.14"
+local VERSION="0.1.15"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -319,7 +319,7 @@ local function apply_readable_scale(ed)
 
  -- In page view REAPER performs the system wrapping. We only choose a calm notation scale.
  -- Around 55 px per quarter note gives roughly 4–6 bars per system on a normal desktop window.
- local px_per_qn=42
+ local px_per_qn=70
  local unit=reaper.MIDIEditor_GetSetting_int(ed,"timebase_unit")
  local px_per_unit=px_per_qn
  if unit==0 then
@@ -330,6 +330,55 @@ local function apply_readable_scale(ed)
  local ok=reaper.MIDIEditor_SetSetting_int(ed,"pixels_per_timebase_unit",setting)
  if not ok then return false,"REAPER hat die Partiturskalierung nicht übernommen" end
  return true,string.format("%.0f px/Viertelnote",px_per_qn)
+end
+
+local function selected_track_profile()
+ local names={}
+ local pitches={}
+ for _,tk in ipairs(selected_takes and selected_takes() or {}) do
+  local item=reaper.GetMediaItemTake_Item(tk)
+  local tr=item and reaper.GetMediaItem_Track(item)
+  local _,tn=tr and reaper.GetTrackName(tr) or false,""
+  names[#names+1]=string.lower(tostring(tn or ""))
+  local i=-1
+  while true do
+   i=reaper.MIDI_EnumSelNotes(tk,i); if i==-1 then break end
+   local ok,_,mut,_,_,_,p=reaper.MIDI_GetNote(tk,i)
+   if ok and not mut then pitches[#pitches+1]=p end
+  end
+ end
+ local name=table.concat(names," ")
+ if name:find("violin",1,true) or name:find("violine",1,true) or name:find("geige",1,true) then return "treble","Violine" end
+ if name:find("viola",1,true) or name:find("bratsche",1,true) then return "alto","Viola" end
+ if name:find("cello",1,true) or name:find("violoncello",1,true) then return "bass","Cello" end
+ if name:find("double bass",1,true) or name:find("kontrabass",1,true) then return "bass","Kontrabass" end
+ if name:find("piano",1,true) or name:find("klavier",1,true) then return "grand","Klavier" end
+ if #pitches>0 then
+  local lo,hi,sum=127,0,0
+  for _,p in ipairs(pitches) do lo=math.min(lo,p); hi=math.max(hi,p); sum=sum+p end
+  local avg=sum/#pitches
+  if hi-lo>30 then return "grand","großer Tonumfang" end
+  if avg>=62 then return "treble","hohe Einzelstimme" end
+  if avg<=55 then return "bass","tiefe Einzelstimme" end
+ end
+ return "treble","Einzelstimme"
+end
+
+local function try_default_clef(ed,profile)
+ local variants={}
+ if profile=="treble" then
+  variants={{"default clef","treble"},{"notation","clef","treble"}}
+ elseif profile=="bass" then
+  variants={{"default clef","bass"},{"notation","clef","bass"}}
+ elseif profile=="alto" then
+  variants={{"default clef","alto"},{"notation","clef","alto"}}
+ elseif profile=="grand" then
+  variants={{"default clef","treble+bass"},{"default clef","treble + bass"}}
+ end
+ local cmd,txt=find_action_variants(variants)
+ if not cmd then return false,nil end
+ reaper.MIDIEditor_OnCommand(ed,cmd)
+ return true,txt
 end
 
 local function cleanup_notation()
@@ -379,6 +428,15 @@ local function cleanup_notation()
    {"notation","voice","overlapping"},
    {"notation","stimm"}
  },true)
+
+ local profile,instrument=selected_track_profile()
+ local clef_ok,clef_action=try_default_clef(ed,profile)
+ if clef_ok then
+  done[#done+1]="Notensystem: "..instrument.." → "..profile.." ["..tostring(clef_action).."]"
+ else
+  local label=profile=="treble" and "Treble" or profile=="bass" and "Bass" or profile=="alto" and "Alto" or "Treble+bass"
+  missing[#missing+1]="Notensystem: "..instrument.." erkannt; REAPER bietet „Default clef: "..label.."“ hier nicht als Action an. Rechtsklick auf den Schlüssel → Default clef → "..label
+ end
 
  local visible_tracks=count_visible_tracks(ed)
  if visible_tracks and visible_tracks>1 then
@@ -524,7 +582,7 @@ local function draw()
    reaper.ImGui_TextWrapped(ctx,"Für den mehrzeiligen Seitenumbruch darf in REAPER nur ein Track sichtbar sein.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
    if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
-   reaper.ImGui_TextWrapped(ctx,"Schaltet „Continuous view always“ aus. Bei genau einem sichtbaren Track wechselt REAPER dann selbst in die mehrzeilige Seitenansicht, sofern mindestens ein ganzer Takt ins Fenster passt.")
+   reaper.ImGui_TextWrapped(ctx,"Erzeugt eine größere Seitenansicht (ca. 4–5 Takte/System) und versucht, für Einzelinstrumente ein einzelnes passendes Notensystem statt Piano-Grand-Staff zu wählen.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
