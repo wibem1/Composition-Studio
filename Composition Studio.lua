@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.33
+-- @version 1.0.34
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.33"
+local VERSION="1.0.34"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1092,8 +1092,9 @@ local function vrv_nearest_duration(qn,grid)
  end
  return best[2],best[3],best[1]
 end
-local function vrv_rest_tokens(out,gap,grid)
+local function vrv_rest_entries(out,gap,grid,startpos)
  gap=scoreflow_quant(math.max(0,tonumber(gap) or 0),grid)
+ local pos=tonumber(startpos) or 0
  local guard=0
  while gap>grid/2 and guard<64 do
   guard=guard+1
@@ -1102,11 +1103,44 @@ local function vrv_rest_tokens(out,gap,grid)
    if d[3]==0 and d[1]>=grid-1e-8 and d[1]<=gap+1e-8 then chosen=d; break end
   end
   chosen=chosen or {grid,grid<=0.125 and "32" or "16",0}
-  out[#out+1]='<rest dur="'..chosen[2]..'"/>'
+  out[#out+1]={xml='<rest dur="'..chosen[2]..'"/>',start=pos,dur=chosen[1],beamable=false}
+  pos=pos+chosen[1]
   gap=scoreflow_quant(gap-chosen[1],grid)
  end
+ return pos
 end
-local function vrv_layer_xml(notes,mstart,mend,mode,staff_kind,grid)
+
+local function vrv_beam_entries(entries,mstart,beatSpan)
+ beatSpan=tonumber(beatSpan) or 1.0
+ local out={}
+ local run={}
+ local runBeat=nil
+ local function flush()
+  if #run>=2 then
+   local xs={}
+   for _,e in ipairs(run) do xs[#xs+1]=e.xml end
+   out[#out+1]="<beam>"..table.concat(xs).."</beam>"
+  else
+   for _,e in ipairs(run) do out[#out+1]=e.xml end
+  end
+  run={}; runBeat=nil
+ end
+ for _,e in ipairs(entries or {}) do
+  local beat=math.floor(((e.start or mstart)-mstart)/beatSpan+1e-7)
+  if e.beamable then
+   if #run>0 and beat~=runBeat then flush() end
+   runBeat=beat
+   run[#run+1]=e
+  else
+   if #run>0 then flush() end
+   out[#out+1]=e.xml
+  end
+ end
+ if #run>0 then flush() end
+ return table.concat(out)
+end
+
+local function vrv_layer_xml(notes,mstart,mend,mode,staff_kind,grid,beatSpan)
  local ev={}
  for _,n in ipairs(notes or {}) do
   local use=true
@@ -1132,12 +1166,11 @@ local function vrv_layer_xml(notes,mstart,mend,mode,staff_kind,grid)
   end
   g.notes[#g.notes+1]=n
  end
- local out={}
+ local entries={}
  local cursor=mstart
  for gi,g in ipairs(groups) do
   if g.start>cursor+grid/2 then
-   vrv_rest_tokens(out,g.start-cursor,grid)
-   cursor=g.start
+   cursor=vrv_rest_entries(entries,g.start-cursor,grid,cursor)
   end
   if g.start>=cursor-grid/2 then
    local rawdur=grid
@@ -1150,11 +1183,12 @@ local function vrv_layer_xml(notes,mstart,mend,mode,staff_kind,grid)
    dur=math.min(dur,mend-g.start)
    local d,dots,repr=vrv_nearest_duration(dur,grid)
    local dotattr=dots>0 and (' dots="'..tostring(dots)..'"') or ""
+   local xml
    if #g.notes==1 then
     local n=g.notes[1]
     local pname,oct,accid=vrv_pitch(n.pitch)
     local acc=accid and (' accid="'..accid..'"') or ""
-    out[#out+1]='<note xml:id="csn'..tostring(n.src.csid)..'" pname="'..pname..'" oct="'..tostring(oct)..'" dur="'..d..'"'..dotattr..acc..'/>'
+    xml='<note xml:id="csn'..tostring(n.src.csid)..'" pname="'..pname..'" oct="'..tostring(oct)..'" dur="'..d..'"'..dotattr..acc..'/>'
    else
     local chord={'<chord dur="'..d..'"'..dotattr..'>'}
     for _,n in ipairs(g.notes) do
@@ -1163,18 +1197,16 @@ local function vrv_layer_xml(notes,mstart,mend,mode,staff_kind,grid)
      chord[#chord+1]='<note xml:id="csn'..tostring(n.src.csid)..'" pname="'..pname..'" oct="'..tostring(oct)..'"'..acc..'/>'
     end
     chord[#chord+1]='</chord>'
-    out[#out+1]=table.concat(chord)
+    xml=table.concat(chord)
    end
+   -- Beam eighths and shorter metrically, never across the current beat group.
+   entries[#entries+1]={xml=xml,start=g.start,dur=repr,beamable=(repr<=0.5+1e-8)}
    cursor=math.max(cursor,g.start+repr)
   end
  end
- if cursor<mend-grid/2 then vrv_rest_tokens(out,mend-cursor,grid) end
- if #out==0 then
-  local cap=mend-mstart
-  local d,dots=vrv_nearest_duration(cap,grid)
-  out[#out+1]='<mRest/>'
- end
- return table.concat(out)
+ if cursor<mend-grid/2 then vrv_rest_entries(entries,mend-cursor,grid,cursor) end
+ if #entries==0 then return '<mRest/>' end
+ return vrv_beam_entries(entries,mstart,beatSpan or 1.0)
 end
 local function verovio_score_mei()
  local notes=score_state.notes or {}
@@ -1251,6 +1283,7 @@ local function verovio_score_mei()
   local _,ms,me,num,den=reaper.TimeMap_GetMeasureInfo(0,mi)
   ms=tonumber(ms) or mi*4; me=tonumber(me) or ms+4
   num=tonumber(num) or prev_num; den=tonumber(den) or prev_den
+  local beatSpan=(den==8 and num>3 and num%3==0) and 1.5 or (4.0/den)
   if mi>m0 and (num~=prev_num or den~=prev_den) then
    head[#head+1]='<scoreDef meter.count="'..tostring(num)..'" meter.unit="'..tostring(den)..'"/>'
   end
@@ -1258,11 +1291,11 @@ local function verovio_score_mei()
   head[#head+1]='<measure n="'..tostring(mi-m0+1)..'">'
   for _,sp in ipairs(staves) do
    if sp.kind=="piano" then
-    head[#head+1]='<staff n="'..sp.treble..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,"piano","treble",sp.grid)..'</layer></staff>'
-    head[#head+1]='<staff n="'..sp.bass..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,"piano","bass",sp.grid)..'</layer></staff>'
+    head[#head+1]='<staff n="'..sp.treble..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,"piano","treble",sp.grid,beatSpan)..'</layer></staff>'
+    head[#head+1]='<staff n="'..sp.bass..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,"piano","bass",sp.grid,beatSpan)..'</layer></staff>'
    else
     local k=sp.mode=="bass" and "bass" or "treble"
-    head[#head+1]='<staff n="'..sp.staff..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,sp.mode,k,sp.grid)..'</layer></staff>'
+    head[#head+1]='<staff n="'..sp.staff..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,sp.mode,k,sp.grid,beatSpan)..'</layer></staff>'
    end
   end
   head[#head+1]='</measure>'
@@ -1284,7 +1317,9 @@ html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacS
 #notation-container{position:relative;padding:10px 14px 28px 14px;background:#fff;min-height:300px}
 #notation-container svg{display:block;max-width:100%;height:auto}
 #selection-layer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
+#drag-preview{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:25}
 .cs-sel{position:absolute;background:rgba(0,102,204,.16);border:2px solid rgba(0,102,204,.75);border-radius:4px;box-sizing:border-box}
+.cs-ghost{position:absolute;background:rgba(0,102,204,.22);border:2px solid rgba(0,102,204,.9);border-radius:4px;box-sizing:border-box}
 #drag-box{position:absolute;border:1px dashed #0066cc;background:rgba(0,102,204,.08);pointer-events:none;display:none;z-index:30}
 #error{padding:16px;color:#b00020}
 </style></head><body>
@@ -1292,7 +1327,7 @@ html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacS
 <div class="cs-row"><button onclick="csTransport('start')">|◀</button><button onclick="csTransport('play')">▶</button><button onclick="csTransport('pause')">Ⅱ</button><button onclick="csTransport('stop')">■</button><span class="cs-label">REAPER Player</span></div>
 <div class="cs-row"><button onclick="csCmd('pitch',-1)">−1 Halbton</button><button onclick="csCmd('pitch',1)">+1 Halbton</button><button onclick="csCmd('duration',0.5)">½ Dauer</button><button onclick="csCmd('duration',2)">2× Dauer</button><span id="cs-status">Verovio wird geladen …</span></div>
 </div>
-<div id="notation-container"><div id="selection-layer"></div><div id="drag-box"></div></div>
+<div id="notation-container"><div id="selection-layer"></div><div id="drag-preview"></div><div id="drag-box"></div></div>
 <script>
 window.csSelectedIds=[];
 function csBridgeReady(){return !!(window.compositionStudioBridge&&window.compositionStudioBridge.postMessage);}
@@ -1309,6 +1344,7 @@ let mei=]]..encoded..[[;
 let toolkit=null,drag=null;
 const container=document.getElementById('notation-container');
 const layer=document.getElementById('selection-layer');
+const preview=document.getElementById('drag-preview');
 const box=document.getElementById('drag-box');
 
 function idFromEl(el){const g=el&&el.closest?el.closest('[id^="csn"]'):null;if(!g)return null;const m=g.id.match(/^csn(\d+)$/);return m?Number(m[1]):null;}
@@ -1332,23 +1368,26 @@ function allNoteIdsInRect(rect){
  }
  return out;
 }
-function previewMove(dx,dy){
+function beginMovePreview(){
+ preview.innerHTML='';
+ const cr=container.getBoundingClientRect();
  for(const id of window.csSelectedIds||[]){
   const el=noteEl(id); if(!el)continue;
-  el.style.transform='translate('+dx+'px,'+dy+'px)';
-  el.style.transformOrigin='center';
-  el.style.transformBox='fill-box';
+  const r=el.getBoundingClientRect();
+  const d=document.createElement('div');d.className='cs-ghost';
+  d.style.left=(r.left-cr.left+container.scrollLeft-3)+'px';
+  d.style.top=(r.top-cr.top+container.scrollTop-3)+'px';
+  d.style.width=(r.width+6)+'px';d.style.height=(r.height+6)+'px';
+  preview.appendChild(d);
  }
- refreshSelection();
+ preview.style.transform='translate(0px,0px)';
+}
+function previewMove(dx,dy){
+ preview.style.transform='translate('+dx+'px,'+dy+'px)';
 }
 function clearPreview(){
- for(const id of window.csSelectedIds||[]){
-  const el=noteEl(id); if(!el)continue;
-  el.style.transform='';
-  el.style.transformOrigin='';
-  el.style.transformBox='';
- }
- refreshSelection();
+ preview.innerHTML='';
+ preview.style.transform='';
 }
 function dragQuant(dx,dy){
  const dp=Math.round(-dy/5);
@@ -1363,6 +1402,7 @@ function bindInteraction(){
   if(id){
    if(!(window.csSelectedIds||[]).includes(id))window.csSelectedIds=[id];
    refreshSelection();
+   beginMovePreview();
   }else{
    box.style.display='block';box.style.left=(e.clientX-container.getBoundingClientRect().left)+'px';box.style.top=(e.clientY-container.getBoundingClientRect().top)+'px';box.style.width='0';box.style.height='0';
   }
@@ -1376,7 +1416,11 @@ function bindInteraction(){
   }else if(drag.mode==='move'&&drag.moved){
    previewMove(dx,dy);
    const q=dragQuant(dx,dy);
-   csSetStatus('Verschieben: '+(q.dp>=0?'+':'')+q.dp+' HT · '+(q.dq>=0?'+':'')+q.dq+' Viertel');
+   const key=q.dp+':'+q.dq;
+   if(drag.lastQ!==key){
+    drag.lastQ=key;
+    csSetStatus('Verschieben: '+(q.dp>=0?'+':'')+q.dp+' HT · '+(q.dq>=0?'+':'')+q.dq+' Viertel');
+   }
   }
  };
  container.onpointerup=(e)=>{
@@ -1386,8 +1430,9 @@ function bindInteraction(){
    if(d.moved){
     const dx=e.clientX-d.startX,dy=e.clientY-d.startY;
     const q=dragQuant(dx,dy);
-    clearPreview();
-    if(q.dp!==0||q.dq!==0)csSend({type:'move',csids:(window.csSelectedIds||[]).join(','),dpitch:q.dp,dqn:q.dq});
+    if(q.dp!==0||q.dq!==0){
+     if(!csSend({type:'move',csids:(window.csSelectedIds||[]).join(','),dpitch:q.dp,dqn:q.dq}))clearPreview();
+    }else clearPreview();
    }else if(d.id){
     clearPreview();
     window.csSelectedIds=[d.id];refreshSelection();csSend({type:'select',csids:String(d.id)});
@@ -1408,6 +1453,7 @@ function bindInteraction(){
 }
 function renderCurrent(){
  if(!toolkit)return;
+ clearPreview();
  toolkit.loadData(mei);
  toolkit.setOptions({pageWidth:2800,pageHeight:5000,scale:42,adjustPageHeight:true,breaks:'auto',header:'none',footer:'none',spacingStaff:8,spacingSystem:12,justifyVertically:false});
  const pages=toolkit.getPageCount();let html='';
@@ -1817,7 +1863,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Noten-Drag reagiert jetzt unmittelbar: markierte Note(n) folgen während des Ziehens grafisch der Maus.\n• Erst beim Loslassen wird die Bewegung auf das musikalische Raster quantisiert und nach REAPER geschrieben.\n• Vertikale Bewegung ist empfindlicher: ca. 5 px pro Halbton.\n• Horizontale Bewegung ist empfindlicher: ca. 28 px pro Viertel, weiterhin auf 1/16-Raster gerundet.\n• Bei Abbruch eines Drags wird die Vorschau sauber zurückgesetzt.\n\nZU TESTEN\n\nEine einzelne Note und anschließend eine Mehrfachauswahl ziehen. Die Grafik muss während des Drags direkt mitlaufen; nach Loslassen muss REAPER-MIDI aktualisiert und die Verovio-Partitur sauber neu gesetzt werden." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Drag-Vorschau belastet das Verovio-SVG nicht mehr: statt echte Notengruppen bei jedem Mausereignis zu transformieren, bewegt sich nur noch ein leichtes Overlay.\n• Bounding-Boxes werden nur einmal beim Beginn des Drags berechnet.\n• Statusanzeige wird während des Ziehens nur aktualisiert, wenn sich der quantisierte Zielwert ändert.\n• Die Vorschau bleibt bis zum neuen REAPER/Verovio-Render am Ziel stehen und verdeckt dadurch die Renderlatenz.\n• MEI erzeugt jetzt metrische Balkengruppen für Achtel und kürzere Noten.\n• In 4/4 und 3/4 wird pro Viertelschlag gruppiert; in zusammengesetzten 6/8-, 9/8-, 12/8-Takten pro punktierter Viertel.\n\nZU TESTEN\n\n1. Note oder Mehrfachauswahl ziehen: Vorschau muss unmittelbar und flüssig folgen.\n2. Nach Loslassen soll die Vorschau bis zum fertigen Neusatz stehen bleiben.\n3. Achtel/Sechzehntel müssen deutlich häufiger sinnvoll gebalkt erscheinen statt als einzelne Fähnchen." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
