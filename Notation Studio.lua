@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.5
+-- @version 0.1.6
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.5"
+local VERSION="0.1.6"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -137,83 +137,40 @@ local function midi_action_by_name(name)
  return fallback[name]
 end
 
-local function midi_action_by_terms(terms)
+local function all_midi_actions()
+ local out={}
  local section=midi_section()
- if not section or type(reaper.kbd_enumerateActions)~="function" then return nil,nil end
+ if not section or type(reaper.kbd_enumerateActions)~="function" then return out end
  local i=0
  while true do
   local cmd,txt=reaper.kbd_enumerateActions(section,i)
   if not cmd or cmd==0 then break end
-  local low=tostring(txt or ""):lower()
-  local ok=true
-  for _,term in ipairs(terms or {}) do
-   if not low:find(tostring(term):lower(),1,true) then ok=false; break end
-  end
-  if ok then return cmd,txt end
+  out[#out+1]={cmd=cmd,text=tostring(txt or "")}
   i=i+1
+ end
+ return out
+end
+
+local function find_action_variants(variants)
+ local acts=all_midi_actions()
+ for _,terms in ipairs(variants or {}) do
+  for _,a in ipairs(acts) do
+   local low=a.text:lower()
+   local ok=true
+   for _,term in ipairs(terms) do
+    if not low:find(tostring(term):lower(),1,true) then ok=false; break end
+   end
+   if ok then return a.cmd,a.text end
+  end
  end
  return nil,nil
 end
 
-local function selection_profile()
- local takes=selected_takes and selected_takes() or {}
- local lo,hi,sum,n=127,0,0,0
- local names={}
- for _,tk in ipairs(takes) do
-  local item=reaper.GetMediaItemTake_Item(tk)
-  local tr=item and reaper.GetMediaItem_Track(item)
-  local _,tn=tr and reaper.GetTrackName(tr) or false,""
-  names[#names+1]=string.lower(tostring(tn or ""))
-  local i=-1
-  while true do
-   i=reaper.MIDI_EnumSelNotes(tk,i); if i==-1 then break end
-   local ok,_,mut,_,_,_,p=reaper.MIDI_GetNote(tk,i)
-   if ok and not mut then lo=math.min(lo,p); hi=math.max(hi,p); sum=sum+p; n=n+1 end
-  end
- end
- local name=table.concat(names," ")
- local avg=n>0 and sum/n or 60
- if name:find("piano",1,true) or name:find("klavier",1,true) or name:find("keyboard",1,true) then
-  return "grand","Klavier / Grand Staff"
- end
- if name:find("viola",1,true) or name:find("bratsche",1,true) then return "alto","Viola / Altschlüssel" end
- if name:find("violin",1,true) or name:find("violine",1,true) or name:find("geige",1,true)
-    or name:find("flute",1,true) or name:find("flöte",1,true) or name:find("oboe",1,true)
-    or name:find("clarinet",1,true) or name:find("klarinette",1,true) then
-  return "treble","hohes Melodieinstrument / Violinschlüssel"
- end
- if name:find("cello",1,true) or name:find("violoncello",1,true) or name:find("bassoon",1,true)
-    or name:find("fagott",1,true) or name:find("kontrabass",1,true) or name:find("double bass",1,true) then
-  return "bass","tiefes Instrument / Bassschlüssel"
- end
- if n>0 then
-  if lo>=55 and avg>=64 then return "treble","Tonlage → Violinschlüssel" end
-  if hi<=67 and avg<=56 then return "bass","Tonlage → Bassschlüssel" end
-  if hi-lo>28 then return "grand","großer Tonumfang → Grand Staff" end
- end
- return "treble","Standard → Violinschlüssel"
-end
-
-local function apply_score_profile(ed)
- local profile,label=selection_profile()
- local candidates
- if profile=="grand" then
-  candidates={{"notation","default clef","treble + bass"},{"notation","default clef","treble+bass"},{"notation","treble + bass"}}
- elseif profile=="alto" then
-  candidates={{"notation","default clef","alto"},{"notation","alto clef"}}
- elseif profile=="bass" then
-  candidates={{"notation","default clef","bass"},{"notation","bass clef"}}
- else
-  candidates={{"notation","default clef","treble"},{"notation","treble clef"}}
- end
- for _,terms in ipairs(candidates) do
-  local cmd,txt=midi_action_by_terms(terms)
-  if cmd then
-   reaper.MIDIEditor_OnCommand(ed,cmd)
-   return true,label,txt
-  end
- end
- return false,label,nil
+local function run_native_zoom(ed)
+ -- Stable native MIDI-editor command IDs.
+ reaper.MIDIEditor_OnCommand(ed,40466) -- View: Zoom to content
+ for _=1,3 do reaper.MIDIEditor_OnCommand(ed,40111) end -- View: Zoom in vertically
+ return true
 end
 
 local function active_editor()
@@ -261,58 +218,59 @@ end
 
 local function cleanup_notation()
  local ed=active_editor()
- if not ed then status="Kein MIDI-Editor gefunden. Notation Studio bitte aus dem geöffneten Notationseditor starten."; return end
+ if not ed then
+  status="Keine Verbindung zum MIDI-/Notationseditor. Notation Studio bitte direkt aus dem geöffneten MIDI-Editor starten."
+  return
+ end
+
+ local done={}
  local missing={}
- local applied={}
- local function act(name)
-  local cmd=midi_action_by_name(name)
-  if cmd then reaper.MIDIEditor_OnCommand(ed,cmd); applied[#applied+1]=name
-  else missing[#missing+1]=name end
+
+ local function execute_found(label,variants,toggle_on)
+  local cmd,txt=find_action_variants(variants)
+  if not cmd then missing[#missing+1]=label; return false end
+  if toggle_on then
+   local st=reaper.GetToggleCommandStateEx(32060,cmd)
+   if st~=1 then reaper.MIDIEditor_OnCommand(ed,cmd) end
+  else
+   reaper.MIDIEditor_OnCommand(ed,cmd)
+  end
+  done[#done+1]=label.." ["..txt.."]"
+  return true
  end
 
- local spacing_cmd=midi_action_by_name("Notation: Proportional (musical) note spacing")
- if spacing_cmd then
-  if reaper.GetToggleCommandStateEx(32060,spacing_cmd)~=1 then reaper.MIDIEditor_OnCommand(ed,spacing_cmd) end
-  applied[#applied+1]="musikalische Abstände"
- else missing[#missing+1]="musikalische Abstände" end
+ execute_found("proportionale Abstände",{
+   {"notation","proportional"},
+   {"proportional","spacing"}
+ },true)
 
- act("Notation: Set display quantization to 1/16 (default)")
- local mincmd=midi_action_by_name("Notation: Set minimum display quantization note length to 1/16")
- if mincmd then reaper.MIDIEditor_OnCommand(ed,mincmd); applied[#applied+1]="Mindestnotenlänge 1/16"
+ execute_found("Anzeigequantisierung 1/16",{
+   {"notation","1/16","quant"},
+   {"notation","1/16"}
+ },false)
+
+ execute_found("Mindestnotenlänge 1/16",{
+   {"notation","minimum","1/16"},
+   {"notation","mindest","1/16"}
+ },false)
+
+ execute_found("Triolenerkennung",{
+   {"notation","triplet"},
+   {"notation","triol"}
+ },true)
+
+ execute_found("automatische Stimmenzuordnung",{
+   {"notation","voice","overlapping"},
+   {"notation","stimm"}
+ },true)
+
+ run_native_zoom(ed)
+ done[#done+1]="Zoom to content + vertikal vergrößert [40466 + 40111×3]"
+
+ if #missing==0 then
+  status="Ausgeführt:\n• "..table.concat(done,"\n• ")
  else
-  -- älteren/default Namen versuchen
-  mincmd=midi_action_by_name("Notation: Set minimum display quantization note length to 1/64 (default)")
-  if mincmd then reaper.MIDIEditor_OnCommand(ed,mincmd); applied[#applied+1]="Mindestnotenlänge" end
- end
-
- local trip=midi_action_by_name("Notation: Automatically detect triplets")
- if trip then
-  if reaper.GetToggleCommandStateEx(32060,trip)~=1 then reaper.MIDIEditor_OnCommand(ed,trip) end
-  applied[#applied+1]="Triolen"
- end
- local voice=midi_action_by_name("Notation: Automatically voice overlapping notes")
- if voice then
-  if reaper.GetToggleCommandStateEx(32060,voice)~=1 then reaper.MIDIEditor_OnCommand(ed,voice) end
-  applied[#applied+1]="Stimmenautomatik"
- end
-
- local clef_ok,profile_label=apply_score_profile(ed)
-
- -- Erst Auswahl einpassen, danach moderat vergrößern.
- local zsel=midi_action_by_name("View: Zoom to selected notes/CC")
- local zcontent=midi_action_by_name("View: Zoom to content")
- if zsel then reaper.MIDIEditor_OnCommand(ed,zsel)
- elseif zcontent then reaper.MIDIEditor_OnCommand(ed,zcontent) end
- local zin=midi_action_by_name("View: Zoom in horizontally")
- if zin then
-  reaper.MIDIEditor_OnCommand(ed,zin)
-  reaper.MIDIEditor_OnCommand(ed,zin)
- end
-
- if clef_ok then
-  status="Lesbarkeit verbessert: 1/16-Darstellung, musikalische Abstände, passende Vergrößerung · "..profile_label.."."
- else
-  status="Lesbarkeit verbessert: 1/16-Darstellung, musikalische Abstände und Vergrößerung. Score-Profil erkannt: "..profile_label..", aber passende REAPER-Clef-Action wurde nicht gefunden."
+  status="Ausgeführt:\n• "..table.concat(done,"\n• ").."\n\nNicht gefunden:\n• "..table.concat(missing,"\n• ")
  end
 end
 
@@ -423,7 +381,7 @@ local function draw()
    pushed=pcall(reaper.ImGui_PushFont,ctx,ui_font,20)
   end
   local _,nsel=selection_context()
-  reaper.ImGui_Text(ctx,"Native REAPER-Notation · "..tostring(nsel).." Note(n) markiert")
+  reaper.ImGui_Text(ctx,"Native REAPER-Notation · "..tostring(nsel).." Note(n) markiert · Editor "..(active_editor() and "gebunden" or "NICHT gebunden"))
   reaper.ImGui_SameLine(ctx)
   if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##notationstudio_menu") end
   if reaper.ImGui_BeginPopup(ctx,"##notationstudio_menu") then
@@ -437,6 +395,7 @@ local function draw()
 
   if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
+   reaper.ImGui_TextWrapped(ctx,"Führt nur nachweisbar gefundene REAPER-Funktionen aus und meldet anschließend exakt, was angewendet wurde.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
@@ -475,6 +434,7 @@ local function draw()
   end
 
   if reaper.ImGui_CollapsingHeader(ctx,"Stimmen / Notation") then
+   reaper.ImGui_TextWrapped(ctx,"Default-Clef wird vorerst nicht automatisch geändert: REAPER stellt diese Wahl im Track/Measure-Kontextmenü bereit, nicht zuverlässig als Action.")
    reaper.ImGui_TextWrapped(ctx,"Weitere native Notationsbefehle werden hier gebündelt.")
   end
   if reaper.ImGui_CollapsingHeader(ctx,"Artikulation") then
