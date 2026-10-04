@@ -203,3 +203,8 @@ Zwei strukturelle Korrekturen:
 ## 2026-10-04 – v1.0.27 / Blank Renderer Fix
 
 v1.0.26 band den lokalen Renderer-Fork über raw.githubusercontent.com als ES-Modul ein. WKWebView lädt Raw-GitHub nicht zuverlässig mit einem für ES-Module akzeptierten MIME-Typ; dadurch wurde das Modulskript gar nicht ausgeführt und die Partitur blieb komplett leer. Import jetzt über jsDelivr, auf Commit 5e7c7c5ef5a95d2a29ef8a8f9f13a2e2d5d364ed gepinnt. Laufzeitfehler des Renderers werden sichtbar im Notationsfenster ausgegeben.
+
+
+## 2026-10-04 – v1.0.28 / Mehrspur-Partitur
+
+Mehrere ausgewählte REAPER-Tracks werden nicht mehr in einen gemeinsamen Notenpool gemischt. score_capture_selection trägt track_guid in jede Note; scoreflow_score_json gruppiert nach Track und erzeugt score.parts[]. Der Renderer hat einen Mehrspurpfad mit gemeinsamer Taktgeometrie: pro Takt wird die maximale benötigte Breite aller Parts bestimmt, daraus werden gemeinsame Zeilenumbrüche und X-Positionen berechnet. Jeder Part wird anschließend in diese Geometrie gezeichnet. Trackname erscheint links. Klavier kann grand staff bleiben, Einzelinstrumente single staff.
