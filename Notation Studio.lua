@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.2
+-- @version 0.1.3
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.2"
+local VERSION="0.1.3"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local KEY_NAMES={openai="OpenAIAPIKey",anthropic="AnthropicAPIKey",google="GoogleAPIKey"}
 local MODELS={
@@ -24,6 +24,12 @@ end
 
 local midi_editor=reaper.MIDIEditor_GetActive()
 local ctx=reaper.ImGui_CreateContext("Notation Studio",reaper.ImGui_ConfigFlags_DockingEnable())
+local ui_font=nil
+if type(reaper.ImGui_CreateFont)=="function" then
+ local ok,f=pcall(reaper.ImGui_CreateFont,"sans-serif",20)
+ if ok then ui_font=f end
+end
+if ui_font and type(reaper.ImGui_Attach)=="function" then pcall(reaper.ImGui_Attach,ctx,ui_font) end
 local open=true
 local status=""
 local ai_input=""
@@ -289,10 +295,14 @@ local function poll_ai_result()
 end
 
 local function draw()
- reaper.ImGui_SetNextWindowSize(ctx,450,600,reaper.ImGui_Cond_FirstUseEver())
+ reaper.ImGui_SetNextWindowSize(ctx,520,680,reaper.ImGui_Cond_FirstUseEver())
  local visible
  visible,open=reaper.ImGui_Begin(ctx,"Notation Studio v"..VERSION.."###NotationStudio",open)
  if visible then
+  local pushed=false
+  if ui_font and type(reaper.ImGui_PushFont)=="function" then
+   pushed=pcall(reaper.ImGui_PushFont,ctx,ui_font,20)
+  end
   local _,nsel=selection_context()
   reaper.ImGui_Text(ctx,"Native REAPER-Notation · "..tostring(nsel).." Note(n) markiert")
   if not active_editor() then reaper.ImGui_TextWrapped(ctx,"Kein MIDI-Editor gebunden – bitte Notation Studio aus dem geöffneten Notationseditor starten.") end
@@ -354,6 +364,7 @@ local function draw()
    reaper.ImGui_Separator(ctx)
    reaper.ImGui_TextWrapped(ctx,status)
   end
+  if pushed then reaper.ImGui_PopFont(ctx) end
   reaper.ImGui_End(ctx)
  end
 end
