@@ -103,3 +103,16 @@ Erster funktionaler Datenkern: Notenliste, Notenauswahl, ±1 Halbton und Dauer h
 ## 2026-10-04 – v1.0.15 / Scope-Fix
 
 Fehler in v1.0.14: `score_capture_selection` wurde durch die Reihenfolge der Lua-Deklarationen nicht als lokale Funktion aufgelöst und beim Klick auf „Notation“ als nil-global aufgerufen. Die gesamte Score-Bridge-Hilfsschicht steht nun vor dem Hauptloop. Zusätzlich geprüft: genau eine Definition von `score_capture_selection`, Definition vor allen Aufrufstellen.
+
+
+## 2026-10-04 – v1.0.16 / Notation Workspace 0.3
+
+Erster grafischer Score-Prototyp in ReaImGui. Aus dem bereits funktionierenden Score-Modell werden zwei Systeme, Taktlinien und Notenköpfe gezeichnet. Die Darstellung ist ausdrücklich noch kein endgültiger Notensatz, sondern ein Interaktions-Prototyp.
+
+Neu:
+- grafische Note ↔ Score-Note ↔ REAPER-MIDI Zuordnung
+- Klick auf Notenkopf setzt dieselbe Auswahl wie die Diagnose-Liste
+- vorhandene Tonhöhen-/Dauer-Befehle wirken auf grafisch gewählte Note
+- grafische Ansicht aktualisiert sich nach MIDI-Änderung
+
+Erst wenn diese Zuordnung stabil ist, wird der hochwertige Renderer eingebettet.
