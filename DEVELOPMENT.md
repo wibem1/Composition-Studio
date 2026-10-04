@@ -306,3 +306,8 @@ Die automatische Clef-Umschaltung aus v0.1.5 wurde zurückgenommen, weil REAPER 
 ## 2026-10-04 – Notation Studio v0.1.7 / kein destruktives Einpassen mehr
 
 Der automatische Zoom von „Lesbarkeit verbessern“ wurde korrigiert. v0.1.6 führte zuerst „Zoom to content“ aus und komprimierte dadurch bei längeren/dichten Passagen die gesamte Notation in ein Fenster. v0.1.7 lässt die aktuelle Ansicht unangetastet und führt nur noch zwei horizontale Zoom-in-Schritte sowie optional einen leichten vertikalen Zoom-in-Schritt aus. „Auswahl komplett einpassen“ und „Gesamten Inhalt einpassen“ bleiben ausschließlich manuelle Buttons und werden von „Lesbarkeit verbessern“ nicht mehr aufgerufen.
+
+
+## 2026-10-04 – Notation Studio v0.1.8 / Zoom vollständig aus Lesbarkeit entfernt
+
+Auf Nutzerwunsch führt „Lesbarkeit verbessern“ keinerlei Zoom-, Fit-to-content- oder Fit-to-selection-Funktion mehr aus. Die Funktion beschränkt sich ausschließlich auf Notationsdarstellung und Anzeigeparameter. Vorhandene manuelle Zoom-/Einpass-Bedienelemente bleiben davon unabhängig.
