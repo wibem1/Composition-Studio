@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.22
+-- @version 1.0.23
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.22"
+local VERSION="1.0.23"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -901,7 +901,7 @@ local function scoreflow_host_html(score_json)
 <script src="]]..base..[[js/vexflow.js"></script>
 <style>
 html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#111}
-#top{position:sticky;top:0;z-index:10;background:#f5f5f5;border-bottom:1px solid #bbb;padding:8px 12px;font-size:13px;display:flex;gap:8px;align-items:center} #top button{font-size:14px;padding:6px 14px} #cs-status{margin-left:8px;color:#444}
+#top{position:sticky;top:0;z-index:10;background:#f5f5f5;border-bottom:1px solid #bbb;padding:7px 10px;font-size:13px;display:flex;flex-direction:column;gap:6px;align-items:stretch} .cs-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap} #top button{font-size:14px;padding:5px 13px;min-width:42px} .cs-label{color:#555;margin-left:4px} #cs-status{margin-left:8px;color:#444}
 #notation-container{position:relative;width:100%;box-sizing:border-box;padding:8px;background:#fff}
 #notation-container svg{display:block}
 #playhead{position:absolute;top:8px;width:2px;background:#1687d9;opacity:0;pointer-events:none}
@@ -910,11 +910,20 @@ html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacS
 #print-root{position:fixed;left:-10000px;top:0}
 </style></head><body>
 <div id="top">
+<div class="cs-row cs-player">
+<button onclick="csTransport('start')">|◀</button>
+<button onclick="csTransport('play')">▶</button>
+<button onclick="csTransport('pause')">Ⅱ</button>
+<button onclick="csTransport('stop')">■</button>
+<span class="cs-label">REAPER Player</span>
+</div>
+<div class="cs-row cs-edit">
 <button onclick="csCmd('pitch',-1)">−1 Halbton</button>
 <button onclick="csCmd('pitch',1)">+1 Halbton</button>
 <button onclick="csCmd('duration',0.5)">½ Dauer</button>
 <button onclick="csCmd('duration',2)">2× Dauer</button>
 <span id="cs-status">Note im Notenbild anklicken</span>
+</div>
 </div>
 <div id="notation-container"><div id="playhead"></div></div><div id="print-root"></div>
 <script>
@@ -927,6 +936,9 @@ function csSend(obj){
  return false;
 }
 function csSetStatus(t){const el=document.getElementById('cs-status');if(el)el.textContent=t;}
+function csTransport(action){
+ if(!csSend({type:'transport',action:action})) csSetStatus('WebView-Bridge fehlt – Player erreicht REAPER nicht');
+}
 function csCmd(kind,value){
  const ids=window.csSelectedIds||[];
  if(!ids.length){csSetStatus('Zuerst Note(n) markieren');return;}
@@ -1010,10 +1022,28 @@ function idsInRect(x1,y1,x2,y2){
  }
  return out;
 }
+function directHit(px,py){
+ for(const h of state.noteHits||[]){
+  if(px>=h.x-6&&px<=h.x+h.w+6&&py>=h.y-8&&py<=h.y+h.h+8) return h;
+ }
+ return null;
+}
+function dragDeltas(hit,dx,dy){
+ let qn=0;
+ try{
+  const g=state.lastLayout&&state.lastLayout.geom&&state.lastLayout.geom[hit.m];
+  if(g&&g.w>40){
+   const usable=Math.max(40,g.w-55);
+   qn=Math.round((dx/usable)*16)/4;
+  }
+ }catch(e){}
+ const dpitch=Math.round(-dy/6);
+ return {dpitch:dpitch,dqn:qn};
+}
 function installSelection(){
  const c=document.getElementById('notation-container'); if(!c||c.dataset.csSelection==='1') return;
  c.dataset.csSelection='1';
- let down=false,sx=0,sy=0,drag=false,box=null,suppressNextClick=false;
+ let down=false,sx=0,sy=0,drag=false,box=null,suppressNextClick=false,mode='select',startHit=null;
  c.addEventListener('click',e=>{
   if(suppressNextClick){
    suppressNextClick=false;
@@ -1024,21 +1054,54 @@ function installSelection(){
  c.addEventListener('pointerdown',e=>{
   if(e.button!==0)return; const svg=c.querySelector('svg'); if(!svg)return;
   const r=svg.getBoundingClientRect(); sx=e.clientX-r.left; sy=e.clientY-r.top; down=true; drag=false;
-  box=document.createElement('div'); box.style.position='absolute'; box.style.pointerEvents='none';
-  box.style.border='1px dashed #0066cc'; box.style.background='rgba(0,102,204,.08)';
-  box.style.left=(8+sx)+'px'; box.style.top=(8+sy)+'px'; box.style.display='none';
-  c.appendChild(box); c.setPointerCapture&&c.setPointerCapture(e.pointerId);
+  startHit=directHit(sx,sy);
+  mode=startHit?'move':'select';
+  if(mode==='move'){
+   const n=noteByHit(startHit);
+   if(n&&n.csid){
+    const id=Number(n.csid);
+    if(!(window.csSelectedIds||[]).includes(id)){
+      window.csSelectedIds=[id]; drawSelected(window.csSelectedIds);
+      csSend({type:'select',csids:String(id)});
+    }
+   }
+   csSetStatus((window.csSelectedIds||[]).length+' Note(n) · ziehen zum Verschieben');
+  }else{
+   box=document.createElement('div'); box.style.position='absolute'; box.style.pointerEvents='none';
+   box.style.border='1px dashed #0066cc'; box.style.background='rgba(0,102,204,.08)';
+   box.style.left=(8+sx)+'px'; box.style.top=(8+sy)+'px'; box.style.display='none';
+   c.appendChild(box);
+  }
+  c.setPointerCapture&&c.setPointerCapture(e.pointerId);
  },true);
  c.addEventListener('pointermove',e=>{
   if(!down)return; const svg=c.querySelector('svg'); if(!svg)return;
   const r=svg.getBoundingClientRect(); const x=e.clientX-r.left,y=e.clientY-r.top;
   if(Math.abs(x-sx)>5||Math.abs(y-sy)>5)drag=true;
-  if(drag&&box){box.style.display='block';box.style.left=(8+Math.min(sx,x))+'px';box.style.top=(8+Math.min(sy,y))+'px';box.style.width=Math.abs(x-sx)+'px';box.style.height=Math.abs(y-sy)+'px';}
+  if(!drag)return;
+  if(mode==='select'&&box){
+   box.style.display='block';box.style.left=(8+Math.min(sx,x))+'px';box.style.top=(8+Math.min(sy,y))+'px';
+   box.style.width=Math.abs(x-sx)+'px';box.style.height=Math.abs(y-sy)+'px';
+  }else if(mode==='move'&&startHit){
+   const d=dragDeltas(startHit,x-sx,y-sy);
+   csSetStatus('Verschieben: '+(d.dpitch>=0?'+':'')+d.dpitch+' HT · '+(d.dqn>=0?'+':'')+d.dqn+' Viertel');
+  }
  },true);
  c.addEventListener('pointerup',e=>{
   if(!down)return; down=false; const svg=c.querySelector('svg'); if(!svg)return;
   const r=svg.getBoundingClientRect(); const x=e.clientX-r.left,y=e.clientY-r.top;
   if(box){box.remove();box=null;}
+  if(mode==='move'&&startHit){
+   if(drag){
+    suppressNextClick=true;
+    const d=dragDeltas(startHit,x-sx,y-sy);
+    if(d.dpitch!==0||Math.abs(d.dqn)>0.0001){
+     const ids=window.csSelectedIds||[];
+     if(!csSend({type:'move',csids:ids.join(','),dpitch:d.dpitch,dqn:d.dqn})) csSetStatus('Bridge fehlt – Verschieben nicht übertragen');
+    }else csSetStatus('Keine Verschiebung');
+   }
+   startHit=null; return;
+  }
   let ids=[];
   if(drag){
    suppressNextClick=true;
@@ -1048,9 +1111,7 @@ function installSelection(){
   }
   if(ids.length){
    window.csSelectedIds=ids; drawSelected(ids);
-   if(!csSend({type:'select',csids:ids.join(',')})){
-    csSetStatus(ids.length+' Note(n) markiert · Bridge fehlt');
-   }
+   if(!csSend({type:'select',csids:ids.join(',')})) csSetStatus(ids.length+' Note(n) markiert · Bridge fehlt');
   } else if(drag){
    window.csSelectedIds=[]; drawSelected([]);
    csSetStatus('Keine Note im Auswahlrechteck');
@@ -1128,6 +1189,46 @@ local function score_bridge_apply_command(ids,kind,value)
  notation_status="ScoreFlow: "..tostring(#ids).." Note(n) bearbeitet."
  score_bridge_rerender()
 end
+local function score_bridge_move(ids,dpitch,dqn)
+ ids=ids or {}; dpitch=tonumber(dpitch) or 0; dqn=tonumber(dqn) or 0
+ if #ids==0 then return end
+ reaper.Undo_BeginBlock2(0)
+ local touched={}
+ for _,csid in ipairs(ids) do
+  local n=score_state.notes[csid]
+  if n and reaper.ValidatePtr2(0,n.take,"MediaItem_Take*") then
+   local ok,sel,mut,sp,ep,ch,pitch,vel=reaper.MIDI_GetNote(n.take,n.note_idx)
+   if ok then
+    local newPitch=math.max(0,math.min(127,pitch+dpitch))
+    local st=reaper.MIDI_GetProjTimeFromPPQPos(n.take,sp)
+    local q0=reaper.TimeMap2_timeToQN(0,st)
+    local t1=reaper.TimeMap2_QNToTime(0,q0+dqn)
+    local newSp=reaper.MIDI_GetPPQPosFromProjTime(n.take,t1)
+    local shift=newSp-sp
+    reaper.MIDI_SetNote(n.take,n.note_idx,sel,mut,sp+shift,ep+shift,ch,newPitch,vel,true)
+    touched[n.take]=true
+   end
+  end
+ end
+ for tk in pairs(touched) do reaper.MIDI_Sort(tk) end
+ reaper.Undo_EndBlock2(0,"Composition Studio Notation – Noten verschieben",-1)
+ reaper.UpdateArrange()
+ score_capture_selection()
+ score_bridge_rerender()
+end
+local function score_bridge_transport(action)
+ if action=="play" then
+  reaper.OnPlayButton()
+ elseif action=="pause" then
+  reaper.OnPauseButton()
+ elseif action=="stop" then
+  reaper.OnStopButton()
+ elseif action=="start" then
+  local q=nil
+  for _,n in ipairs(score_state.notes or {}) do q=q and math.min(q,n.start_qn) or n.start_qn end
+  if q then reaper.SetEditCurPos(reaper.TimeMap2_QNToTime(0,q),true,false) end
+ end
+end
 local function score_bridge_poll()
  local seq=reaper.GetExtState("CompositionStudio","ScoreBridgeSeq") or ""
  if seq=="" or seq==score_bridge_seq then return end
@@ -1138,15 +1239,21 @@ local function score_bridge_poll()
  local ids=score_bridge_parse_ids(csv)
  if typ=="select" and #ids>0 then
   score_state.selected=ids[1]
-  notation_status="ScoreFlow: "..tostring(#ids).." Note(n) markiert."
  elseif typ=="command" and #ids>0 then
   local kind=msg:match('"kind"%s*:%s*"([^"]+)"')
   local value=tonumber(msg:match('"value"%s*:%s*([%-]?[%d%.]+)'))
   score_bridge_apply_command(ids,kind,value)
+ elseif typ=="move" and #ids>0 then
+  local dpitch=tonumber(msg:match('"dpitch"%s*:%s*([%-]?[%d%.]+)')) or 0
+  local dqn=tonumber(msg:match('"dqn"%s*:%s*([%-]?[%d%.]+)')) or 0
+  score_bridge_move(ids,dpitch,dqn)
+ elseif typ=="transport" then
+  local action=msg:match('"action"%s*:%s*"([^"]+)"')
+  score_bridge_transport(action)
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Drag-Auswahl korrigiert: Der nach pointerup ausgelöste normale ScoreFlow-Klick darf eine Mehrfachauswahl nicht mehr sofort auf eine Note reduzieren.\n• Das Notationsfenster zeigt jetzt ausdrücklich „Bridge aktiv“ oder „Bridge fehlt“. Damit ist sofort sichtbar, ob Bearbeitungsbefehle REAPER überhaupt erreichen können.\n• Einzelklick markiert jetzt sichtbar eine Note; Klick-Drag markiert mehrere Noten in einem Rechteck.\n• ScoreFlow-Rückkanal überträgt Auswahl und Befehle über REAPER ExtState an Composition Studio.\n• ±1 Halbton sowie ½/2× Dauer wirken jetzt auf die gesamte markierte Auswahl.\n• Nach einer Änderung schreibt Composition Studio direkt ins REAPER-MIDI und rendert dieselbe Partitur neu.\n• Dafür wird einmalig der Composition-Studio-Bridge-Build von reaper_webview benötigt; die normale 0.2.0-Version kann nur navigieren und noch keine WebView-Nachrichten an Lua liefern.\n\nZU TESTEN NACH INSTALLATION DER BRIDGE-DYLIB\n\n1. MIDI-Item → Notation.\n2. Eine Note im echten ScoreFlow-Notenbild anklicken.\n3. ±1 Halbton drücken.\n4. Prüfen, dass REAPER-MIDI und Partitur aktualisiert werden.\n5. Dauer halbieren/verdoppeln testen.\n6. REAPER Undo testen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Playerleiste im Notationsfenster: Anfang, Play, Pause und Stop steuern direkt den REAPER-Transport.\n• Noten können direkt mit der Maus verschoben werden. Drag auf einer Note = Verschieben; Drag im freien Bereich = Mehrfachauswahl.\n• Vertikale Bewegung transponiert halbtonweise.\n• Horizontale Bewegung wird auf ein 1/4-QN-Raster (Sechzehntel in 4/4) gerundet.\n• Bei Mehrfachauswahl verschiebt Drag die gesamte markierte Gruppe.\n• Alle Änderungen bleiben REAPER-MIDI mit Undo.\n\nZU TESTEN\n\n1. Playerbuttons im Notationsfenster.\n2. Einzelne Note direkt ziehen: horizontal und vertikal.\n3. Mehrere Noten markieren und eine davon ziehen: komplette Auswahl muss gemeinsam verschoben werden.\n4. Drag im freien Bereich muss weiterhin Auswahlrahmen erzeugen.\n5. REAPER Undo prüfen." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
