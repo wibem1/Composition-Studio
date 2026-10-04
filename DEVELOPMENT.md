@@ -116,3 +116,8 @@ Neu:
 - grafische Ansicht aktualisiert sich nach MIDI-Änderung
 
 Erst wenn diese Zuordnung stabil ist, wird der hochwertige Renderer eingebettet.
+
+
+## 2026-10-04 – v1.0.17 / Partiturfarben
+
+Der technische Score-Prototyp bleibt bewusst funktional statt gravurorientiert. Darstellung geändert auf klassisches Notenbild: weißer Hintergrund, schwarze Linien/Noten/Taktstriche; nur die aktuell ausgewählte Note bleibt farbig markiert.
