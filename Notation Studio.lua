@@ -44,6 +44,35 @@ local function shell_quote(v) return "'"..tostring(v):gsub("'","'\\''").."'" end
 local function json_escape(v) return tostring(v or ""):gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t") end
 local function read_file(p) local f=io.open(p,"rb"); if not f then return nil end; local x=f:read("*a"); f:close(); return x end
 local function write_file(p,x) local f=io.open(p,"wb"); if not f then return false end; f:write(x); f:close(); return true end
+local function version_is_newer(remote,localv)
+ local a,b,c=tostring(remote or ""):match("^(%d+)%.(%d+)%.(%d+)$")
+ local x,y,z=tostring(localv or ""):match("^(%d+)%.(%d+)%.(%d+)$")
+ if not (a and x) then return false end
+ a,b,c,x,y,z=tonumber(a),tonumber(b),tonumber(c),tonumber(x),tonumber(y),tonumber(z)
+ if a~=x then return a>x end
+ if b~=y then return b>y end
+ return c>z
+end
+local function install_update()
+ if ai_busy then status="Update erst möglich, wenn die KI fertig ist."; return end
+ status="Update wird geladen …"
+ local tmp=os.tmpname()..".lua"
+ local cmd="/usr/bin/curl -sS -L --max-time 60 -H 'Cache-Control: no-cache' -o "..shell_quote(tmp).." "..shell_quote(UPDATE_URL.."?nocache="..tostring(os.time()))
+ local rc=os.execute(cmd)
+ local fresh=read_file(tmp); os.remove(tmp)
+ if not fresh or #fresh<500 then status="Update fehlgeschlagen."; return end
+ local rv=fresh:match("%-%- @version%s+([%w%.%-]+)")
+ if not rv or not fresh:find("%-%- @description Notation Studio") then status="Update abgebrochen: ungültige Datei."; return end
+ if rv==VERSION then status="Bereits aktuell: "..VERSION; return end
+ if not version_is_newer(rv,VERSION) then status="Kein neueres Update verfügbar. Lokal: "..VERSION..", GitHub: "..rv; return end
+ local compiled,err=load(fresh,"@Notation Studio update","t")
+ if not compiled then status="Update abgebrochen: Lua-Syntaxfehler: "..tostring(err); return end
+ local previous=read_file(SCRIPT_PATH)
+ if not previous or not write_file(SCRIPT_PATH..".backup",previous) or not write_file(SCRIPT_PATH,fresh) then status="Update konnte nicht sicher installiert werden."; return end
+ status="Update auf "..rv.." installiert. Neustart …"
+ open=false
+ reaper.defer(function() pcall(dofile,SCRIPT_PATH) end)
+end
 local function read_json_string(raw,q)
  local out,i={},q+1
  while i<=#raw do
