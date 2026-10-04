@@ -276,3 +276,8 @@ Zwei Refactoringfehler aus v1.0.40 wurden korrigiert: (1) `version_parts()` und 
 ## 2026-10-04 – v1.0.42 / Vollständige Trennung
 
 Notation Studio wurde vollständig aus `Composition Studio.lua` entfernt: kein Menüpunkt, kein Button, kein Companion-Installer und kein ExtState-KI-Dienst mehr. `Notation Studio.lua` v0.1.1 arbeitet eigenständig, verwendet die gemeinsam gespeicherten Provider-/Modell-/API-Key-Einstellungen direkt und führt seine KI-Aufrufe selbst aus. Beide ReaScripts sind damit unabhängig startbar.
+
+
+## 2026-10-04 – Notation Studio v0.1.2 / native actions actually execute
+
+Two concrete bugs fixed. First, `kbd_enumerateActions()` was incorrectly called with numeric section id 32060; REAPER requires a `KbdSectionInfo` from `SectionFromUniqueID(32060)`. Second, clicking the modeless Notation Studio window removes focus from the MIDI editor, so repeated `MIDIEditor_GetActive()` calls can return nil. The MIDI editor HWND is now captured at script startup and reused. Readability profile now explicitly applies proportional spacing, display quantization 1/16, minimum display note length 1/16, triplet detection and automatic voicing, then zooms to content.
