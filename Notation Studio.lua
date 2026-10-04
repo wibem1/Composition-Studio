@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.16
+-- @version 0.1.17
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.16"
+local VERSION="0.1.17"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -365,18 +365,18 @@ local function selected_track_profile()
 end
 
 local CLEF_SCORE_VALUE={
- treble=0,
- bass=1,
- alto=2,
- tenor=3,
- ["treble-8"]=4,
- ["treble+8"]=5,
- ["treble+15"]=6,
- ["bass-8"]=7,
- ["bass-15"]=8,
- percussion=9,
- ["percussion-oneline"]=10,
- chart=11
+ treble=1,
+ bass=2,
+ alto=3,
+ tenor=4,
+ ["treble-8"]=5,
+ ["treble+8"]=6,
+ ["treble+15"]=7,
+ ["bass-8"]=8,
+ ["bass-15"]=9,
+ percussion=10,
+ ["percussion-oneline"]=11,
+ chart=12
 }
 
 local function active_midi_track()
