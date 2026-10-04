@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.37
+-- @version 1.0.38
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.37"
+local VERSION="1.0.38"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -84,77 +84,10 @@ local function ensure_notation_studio_launcher()
   notation_context_status="Notation-Studio-Aktion konnte im MIDI-Editor nicht registriert werden."
   return nil
  end
- local named=type(reaper.ReverseNamedCommandLookup)=="function" and reaper.ReverseNamedCommandLookup(cmd) or ""
- if named=="" then
-  notation_context_status="Notation-Studio-Aktion registriert, Command-ID konnte aber nicht ermittelt werden."
-  return cmd
- end
-
- -- Safe auto-install only when REAPER already has a customized notation-note menu.
- -- Creating that section from scratch would replace REAPER's complete factory menu.
- local menu_path=reaper.GetResourcePath().."/reaper-menu.ini"
- local raw=read_file(menu_path) or ""
- local lo=raw:lower()
- local h1="[midi notation note context]"
- local a=lo:find(h1,1,true)
- if a then
-  local b=lo:find("\n[",a+#h1,true) or (#raw+1)
-  local block=raw:sub(a,b-1)
-  if not block:find(named,1,true) then
-   local max=-1
-   for n in block:gmatch("item_(%d+)%s*=") do max=math.max(max,tonumber(n) or -1) end
-   local item="\nitem_"..tostring(max+1).."="..named.." Notation Studio..."
-   local patched=raw:sub(1,b-1)..item..raw:sub(b)
-   local backup=menu_path..".composition-studio-backup"
-   if not read_file(backup) then write_file(backup,raw) end
-   if write_file(menu_path,patched) then
-    notation_context_status="Rechtsklick: „Notation Studio...“ im Noten-Kontextmenü installiert. REAPER-Menüs ggf. einmal neu laden."
-   else
-    notation_context_status="Aktion registriert; Kontextmenü konnte nicht geschrieben werden."
-   end
-  else
-   notation_context_status="Rechtsklick „Notation Studio...“ ist installiert."
-  end
- else
-  notation_context_status="Aktion „Notation Studio...“ ist registriert. Das Noten-Kontextmenü ist noch REAPER-Standard; aus Sicherheitsgründen wird es nicht komplett überschrieben."
- end
+ notation_context_status="Action „Notation Studio...“ ist im MIDI-Editor registriert. Einmalig über Options → Customize menus/toolbars → MIDI notation note context → Add... hinzufügen."
  return cmd
 end
 
-local function version_parts(v) local a,b,c=v:match("^(%d+)%.(%d+)%.(%d+)$"); if a then return tonumber(a),tonumber(b),tonumber(c) end; local x,y,t=v:match("^(%d+)%.(%d+)%-test(%d+)$"); return tonumber(x),tonumber(y),tonumber(t) end
-local function version_is_newer(r,l) local a,b,c=version_parts(r); local x,y,z=version_parts(l); if not(a and x) then return false end; if a~=x then return a>x end; if b~=y then return b>y end; return c>z end
-local function fetch_update(url,extra_headers)
- local tmp=os.tmpname()..".lua"; local code=os.tmpname()..".code"
- local headers=extra_headers or ""
- local cmd="/usr/bin/curl -sS -L --max-time 60 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "..headers.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code)
- os.execute(cmd)
- local status=trim(read_file(code)); local fresh=read_file(tmp); os.remove(code); os.remove(tmp)
- return status,fresh
-end
-local function install_update()
- if busy then return end
- busy=true; update_status="Update wird geladen …"
- local url=UPDATE_URL.."?version_check="..tostring(os.time())
- local status,fresh=fetch_update(url)
- local rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
- -- Falls raw.githubusercontent.com eine alte CDN-Kopie liefert, über GitHub Contents API erneut abrufen.
- if status=="200" and fresh and rv==VERSION then
-  local api="https://api.github.com/repos/wibem1/Composition-Studio/contents/Composition%20Studio.lua?ref=main&nocache="..tostring(os.time())
-  local s2,f2=fetch_update(api,"-H 'Accept: application/vnd.github.raw+json'")
-  local r2=f2 and f2:match("%-%- @version%s+([%w%.%-]+)") or nil
-  if s2=="200" and f2 and r2 then status,fresh,rv=s2,f2,r2 end
- end
- if status~="200" or not fresh or #fresh<1000 then update_status="Update fehlgeschlagen (HTTP "..tostring(status)..")."; busy=false; return end
- rv=rv or fresh:match("%-%- @version%s+([%w%.%-]+)")
- if not rv or not fresh:find('local SCRIPT_NAME="Composition Studio"',1,true) then update_status="Update abgebrochen: heruntergeladene Datei ist ungültig."; busy=false; return end
- if rv==VERSION then update_status="Bereits aktuell: "..VERSION; busy=false; return end
- if not version_is_newer(rv,VERSION) then update_status="Kein neueres Update verfügbar. Lokal: "..VERSION..", GitHub: "..rv; busy=false; return end
- local compiled,syntax_error=load(fresh,"@Composition Studio update","t")
- if not compiled then update_status="Update abgebrochen: Lua-Syntaxfehler: "..tostring(syntax_error); busy=false; return end
- local previous=read_file(SCRIPT_PATH)
- if SCRIPT_PATH=="" or not previous or not write_file(SCRIPT_PATH..".backup",previous) or not write_file(SCRIPT_PATH,fresh) then update_status="Update konnte nicht sicher installiert werden."; busy=false; return end
- update_status="Update auf "..rv.." installiert. Neustart …"; restarting=true; open=false; reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"1",true); reaper.defer(function() pcall(dofile,SCRIPT_PATH) end)
-end
 local function utf8(cp) if cp<=0x7f then return string.char(cp) elseif cp<=0x7ff then return string.char(0xc0+math.floor(cp/64),0x80+cp%64) elseif cp<=0xffff then return string.char(0xe0+math.floor(cp/4096),0x80+math.floor(cp/64)%64,0x80+cp%64) else return string.char(0xf0+math.floor(cp/262144),0x80+math.floor(cp/4096)%64,0x80+cp%64) end end
 local function read_json_string(raw,q) local out,i={},q+1; while i<=#raw do local c=raw:sub(i,i); if c=='"' then return table.concat(out) end; if c=="\\" then i=i+1; local e=raw:sub(i,i); if e=="n" then out[#out+1]="\n" elseif e=="r" then out[#out+1]="\r" elseif e=="t" then out[#out+1]="\t" elseif e=='"' then out[#out+1]='"' elseif e=="\\" then out[#out+1]="\\" elseif e=="u" then local h=raw:sub(i+1,i+4); local cp=tonumber(h,16); if cp then i=i+4; out[#out+1]=utf8(cp) end else out[#out+1]=e end else out[#out+1]=c end; i=i+1 end; return table.concat(out) end
 local function response_text(raw) local s,e=raw:find('"type"%s*:%s*"output_text"'); if not s then return nil end; local ts,te=raw:find('"text"%s*:',e+1); if not ts then return nil end; local q=raw:find('"',te+1,true); return q and read_json_string(raw,q) or nil end
@@ -2039,7 +1972,7 @@ local function score_bridge_poll()
 end
 
 ensure_notation_studio_launcher()
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation Studio besitzt jetzt einen eigenen aufklappbaren KI-Bereich.\n• KI-Aufträge erhalten die exakt im nativen MIDI-/Notationseditor markierten Noten als Kontext.\n• Direkt verfügbar: Auswahl analysieren, Artikulation/Dynamik beurteilen, freier KI-Auftrag zur Auswahl und SWAM-Interpretation.\n• Ein separates ReaScript „Notation Studio.lua“ wird automatisch in der MIDI-Editor-Aktionssektion registriert.\n• Ist das Notations-Noten-Kontextmenü bereits angepasst, wird „Notation Studio...“ automatisch und mit Sicherungskopie in dieses Rechtsklick-Menü eingetragen.\n• Ein unverändertes REAPER-Standard-Kontextmenü wird bewusst nicht komplett überschrieben, weil REAPER dafür keine API zum verlustfreien Ergänzen des Factory-Menüs anbietet.\n\nRECHTSKLICK-STATUS\n\n"..notation_context_status.."\n\nWORKFLOW\n\nNote(n) im nativen REAPER-Notationseditor markieren → Rechtsklick → Notation Studio... → gewünschten Bereich aufklappen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Die direkte Bearbeitung von reaper-menu.ini wurde wieder entfernt.\n• Composition Studio registriert nur noch sauber die MIDI-Editor-Action „Notation Studio...“.\n• REAPERs vorhandene Menüstruktur bleibt vollständig unangetastet.\n• Die Action öffnet das Notation-Studio-Fenster und startet Composition Studio bei Bedarf automatisch.\n• Der KI-Bereich im Notation Studio bleibt unverändert erhalten.\n\nEINMALIGE EINRICHTUNG\n\nOptions → Customize menus/toolbars → MIDI notation note context → Add... → „Notation Studio...“\n\nDanach: Note(n) markieren → Rechtsklick → Notation Studio...\n\nSTATUS\n\n"..notation_context_status end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,430,520,reaper.ImGui_Cond_FirstUseEver())
