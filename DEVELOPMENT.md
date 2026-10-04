@@ -59,3 +59,8 @@ Profil „Notensatz bereinigen“:
 - anschließend Ansicht einpassen + moderat vergrößern
 
 MIDI-Performance bleibt unverändert. Alle Änderungen liegen in einem REAPER-Undo-Block.
+
+
+## 2026-10-04 – v1.0.10 Updater-Fix
+
+Praxisfehler: lokale v1.0.8 meldete trotz v1.0.9 auf main „Bereits aktuell“. Diagnose: der Raw-GitHub-Abruf lieferte offenbar eine veraltete Kopie. Der Updater verwendet nun Cache-Control/Pragma no-cache und bei verdächtig identischer Remote-Version einen zweiten Abruf über die GitHub Contents API mit Raw-Accept-Header.
