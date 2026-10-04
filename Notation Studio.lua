@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.18
+-- @version 0.1.19
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.18"
+local VERSION="0.1.19"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -313,6 +313,16 @@ local function count_visible_tracks(ed)
  return n
 end
 
+local function enlarge_notation_vertically(ed)
+ local cmd=midi_action_by_name("View: Zoom in vertically") or 40111
+ if not cmd then return false,"Vertikale Zoom-Aktion nicht gefunden." end
+ -- Drei Schritte waren bereits in v0.1.6 der bewährte REAPER-native Wert.
+ -- Anders als damals wird KEIN "Zoom to content" mehr davor ausgeführt:
+ -- die horizontale Seitenskalierung bleibt dadurch unangetastet.
+ for _=1,3 do reaper.MIDIEditor_OnCommand(ed,cmd) end
+ return true,"vertikal ×3"
+end
+
 local function apply_readable_scale(ed)
  local first_qn,last_qn,count=selected_note_stats()
  if not first_qn or count==0 then return false,"keine markierten Noten" end
@@ -497,9 +507,12 @@ local function cleanup_notation()
  else missing[#missing+1]=page_info end
 
  local scaled,scale_info=apply_readable_scale(ed)
- if scaled then done[#done+1]="lesbare Zielskalierung ["..scale_info.."]"
- else missing[#missing+1]="Zielskalierung: "..tostring(scale_info) end
+ if scaled then done[#done+1]="lesbare horizontale Zielskalierung ["..scale_info.."]"
+ else missing[#missing+1]="Horizontale Zielskalierung: "..tostring(scale_info) end
 
+ local vertical_ok,vertical_info=enlarge_notation_vertically(ed)
+ if vertical_ok then done[#done+1]="größere Notensysteme ["..vertical_info.."]"
+ else missing[#missing+1]="Vertikale Skalierung: "..tostring(vertical_info) end
 
  if #missing==0 then
   status="Ausgeführt:\n• "..table.concat(done,"\n• ")
@@ -641,6 +654,9 @@ local function draw()
    if reaper.ImGui_Button(ctx,"Auswahl komplett einpassen",h,30) then run_action("View: Zoom to selected notes/CC",1) end
    reaper.ImGui_SameLine(ctx,0,g)
    if reaper.ImGui_Button(ctx,"Gesamten Inhalt einpassen",h,30) then run_action("View: Zoom to content",1) end
+   if reaper.ImGui_Button(ctx,"Systeme größer",h,30) then run_action("View: Zoom in vertically",1) end
+   reaper.ImGui_SameLine(ctx,0,g)
+   if reaper.ImGui_Button(ctx,"Systeme kleiner",h,30) then run_action("View: Zoom out vertically",1) end
   end
 
   if reaper.ImGui_CollapsingHeader(ctx,"Darstellung / Quantisierung") then
