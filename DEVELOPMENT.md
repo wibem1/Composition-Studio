@@ -249,3 +249,8 @@ Neue Oberfläche: kompaktes ReaImGui-Fenster „Notation Studio“ mit Collapsin
 Notation Studio enthält jetzt eine eigene KI-Gruppe. Die aktive Notenauswahl im MIDI-/Notationseditor wird als NOTATION_SELECTION/SELNOTE-Kontext an den Controller übergeben. Buttons: Auswahl analysieren, Artikulation/Dynamik beurteilen, freier KI-Auftrag zur Auswahl, SWAM-Interpretation.
 
 Zusätzlich erzeugt Composition Studio automatisch Scripts/Composition Studio/Notation Studio.lua und registriert es via AddRemoveReaScript in Section 32060 (MIDI Editor). Das Launcher-Script setzt ExtState OpenNotationStudio und startet Composition Studio bei Bedarf. Wenn in reaper-menu.ini bereits ein [MIDI notation note context]-Block existiert, wird der Launcher dort verlustfrei angehängt; vorher wird eine Backup-Datei geschrieben. Fehlt der Block, wird er absichtlich nicht neu erzeugt, weil ein neu erzeugter Custom-Block REAPERs vollständiges Factory-Kontextmenü ersetzen würde.
+
+
+## 2026-10-04 – v1.0.38 / Saubere Rechtsklick-Integration
+
+Die automatische Manipulation von reaper-menu.ini aus v1.0.37 wurde entfernt. Composition Studio erzeugt weiterhin Scripts/Composition Studio/Notation Studio.lua und registriert es via AddRemoveReaScript in MIDI-Editor Section 32060. Die Einbindung in „MIDI notation note context“ erfolgt einmalig über REAPERs offiziellen Menü-Customizer. Dadurch bleibt REAPERs Standardmenü vollständig unangetastet.
