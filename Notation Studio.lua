@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.4
+-- @version 0.1.5
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.4"
+local VERSION="0.1.5"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -38,6 +38,7 @@ local ai_input=""
 local ai_answer=""
 local ai_job=nil
 local ai_busy=false
+local selected_takes
 
 local function trim(s) return (s or ""):gsub("^%s+",""):gsub("%s+$","") end
 local function shell_quote(v) return "'"..tostring(v):gsub("'","'\\''").."'" end
@@ -136,6 +137,85 @@ local function midi_action_by_name(name)
  return fallback[name]
 end
 
+local function midi_action_by_terms(terms)
+ local section=midi_section()
+ if not section or type(reaper.kbd_enumerateActions)~="function" then return nil,nil end
+ local i=0
+ while true do
+  local cmd,txt=reaper.kbd_enumerateActions(section,i)
+  if not cmd or cmd==0 then break end
+  local low=tostring(txt or ""):lower()
+  local ok=true
+  for _,term in ipairs(terms or {}) do
+   if not low:find(tostring(term):lower(),1,true) then ok=false; break end
+  end
+  if ok then return cmd,txt end
+  i=i+1
+ end
+ return nil,nil
+end
+
+local function selection_profile()
+ local takes=selected_takes and selected_takes() or {}
+ local lo,hi,sum,n=127,0,0,0
+ local names={}
+ for _,tk in ipairs(takes) do
+  local item=reaper.GetMediaItemTake_Item(tk)
+  local tr=item and reaper.GetMediaItem_Track(item)
+  local _,tn=tr and reaper.GetTrackName(tr) or false,""
+  names[#names+1]=string.lower(tostring(tn or ""))
+  local i=-1
+  while true do
+   i=reaper.MIDI_EnumSelNotes(tk,i); if i==-1 then break end
+   local ok,_,mut,_,_,_,p=reaper.MIDI_GetNote(tk,i)
+   if ok and not mut then lo=math.min(lo,p); hi=math.max(hi,p); sum=sum+p; n=n+1 end
+  end
+ end
+ local name=table.concat(names," ")
+ local avg=n>0 and sum/n or 60
+ if name:find("piano",1,true) or name:find("klavier",1,true) or name:find("keyboard",1,true) then
+  return "grand","Klavier / Grand Staff"
+ end
+ if name:find("viola",1,true) or name:find("bratsche",1,true) then return "alto","Viola / Altschlüssel" end
+ if name:find("violin",1,true) or name:find("violine",1,true) or name:find("geige",1,true)
+    or name:find("flute",1,true) or name:find("flöte",1,true) or name:find("oboe",1,true)
+    or name:find("clarinet",1,true) or name:find("klarinette",1,true) then
+  return "treble","hohes Melodieinstrument / Violinschlüssel"
+ end
+ if name:find("cello",1,true) or name:find("violoncello",1,true) or name:find("bassoon",1,true)
+    or name:find("fagott",1,true) or name:find("kontrabass",1,true) or name:find("double bass",1,true) then
+  return "bass","tiefes Instrument / Bassschlüssel"
+ end
+ if n>0 then
+  if lo>=55 and avg>=64 then return "treble","Tonlage → Violinschlüssel" end
+  if hi<=67 and avg<=56 then return "bass","Tonlage → Bassschlüssel" end
+  if hi-lo>28 then return "grand","großer Tonumfang → Grand Staff" end
+ end
+ return "treble","Standard → Violinschlüssel"
+end
+
+local function apply_score_profile(ed)
+ local profile,label=selection_profile()
+ local candidates
+ if profile=="grand" then
+  candidates={{"notation","default clef","treble + bass"},{"notation","default clef","treble+bass"},{"notation","treble + bass"}}
+ elseif profile=="alto" then
+  candidates={{"notation","default clef","alto"},{"notation","alto clef"}}
+ elseif profile=="bass" then
+  candidates={{"notation","default clef","bass"},{"notation","bass clef"}}
+ else
+  candidates={{"notation","default clef","treble"},{"notation","treble clef"}}
+ end
+ for _,terms in ipairs(candidates) do
+  local cmd,txt=midi_action_by_terms(terms)
+  if cmd then
+   reaper.MIDIEditor_OnCommand(ed,cmd)
+   return true,label,txt
+  end
+ end
+ return false,label,nil
+end
+
 local function active_editor()
  local cur=type(reaper.MIDIEditor_GetActive)=="function" and reaper.MIDIEditor_GetActive() or nil
  if cur then midi_editor=cur end
@@ -186,49 +266,57 @@ local function cleanup_notation()
  local applied={}
  local function act(name)
   local cmd=midi_action_by_name(name)
-  if cmd then
-   local ok=reaper.MIDIEditor_OnCommand(ed,cmd)
-   if ok==false then missing[#missing+1]=name.." (nicht ausführbar)" else applied[#applied+1]=name end
-  else
-   missing[#missing+1]=name
-  end
+  if cmd then reaper.MIDIEditor_OnCommand(ed,cmd); applied[#applied+1]=name
+  else missing[#missing+1]=name end
  end
 
- -- REAPER 7.81: exact MIDI-editor notation actions.
  local spacing_cmd=midi_action_by_name("Notation: Proportional (musical) note spacing")
  if spacing_cmd then
-  local state=reaper.GetToggleCommandStateEx(32060,spacing_cmd)
-  if state~=1 then reaper.MIDIEditor_OnCommand(ed,spacing_cmd) end
-  applied[#applied+1]="Proportional spacing"
- else
-  missing[#missing+1]="Notation: Proportional (musical) note spacing"
- end
+  if reaper.GetToggleCommandStateEx(32060,spacing_cmd)~=1 then reaper.MIDIEditor_OnCommand(ed,spacing_cmd) end
+  applied[#applied+1]="musikalische Abstände"
+ else missing[#missing+1]="musikalische Abstände" end
 
  act("Notation: Set display quantization to 1/16 (default)")
- act("Notation: Set minimum display quantization note length to 1/16")
+ local mincmd=midi_action_by_name("Notation: Set minimum display quantization note length to 1/16")
+ if mincmd then reaper.MIDIEditor_OnCommand(ed,mincmd); applied[#applied+1]="Mindestnotenlänge 1/16"
+ else
+  -- älteren/default Namen versuchen
+  mincmd=midi_action_by_name("Notation: Set minimum display quantization note length to 1/64 (default)")
+  if mincmd then reaper.MIDIEditor_OnCommand(ed,mincmd); applied[#applied+1]="Mindestnotenlänge" end
+ end
+
  local trip=midi_action_by_name("Notation: Automatically detect triplets")
  if trip then
   if reaper.GetToggleCommandStateEx(32060,trip)~=1 then reaper.MIDIEditor_OnCommand(ed,trip) end
-  applied[#applied+1]="Triplet detection"
- else missing[#missing+1]="Notation: Automatically detect triplets" end
-
+  applied[#applied+1]="Triolen"
+ end
  local voice=midi_action_by_name("Notation: Automatically voice overlapping notes")
  if voice then
   if reaper.GetToggleCommandStateEx(32060,voice)~=1 then reaper.MIDIEditor_OnCommand(ed,voice) end
-  applied[#applied+1]="Automatic voicing"
- else missing[#missing+1]="Notation: Automatically voice overlapping notes" end
+  applied[#applied+1]="Stimmenautomatik"
+ end
 
- local zoom=midi_action_by_name("View: Zoom to content")
- if zoom then reaper.MIDIEditor_OnCommand(ed,zoom) end
+ local clef_ok,profile_label=apply_score_profile(ed)
 
- if #missing==0 then
-  status="Lesbarkeit verbessert: proportionale Abstände, Anzeige 1/16, Mindestlänge 1/16, Triolen- und Stimmenautomatik."
+ -- Erst Auswahl einpassen, danach moderat vergrößern.
+ local zsel=midi_action_by_name("View: Zoom to selected notes/CC")
+ local zcontent=midi_action_by_name("View: Zoom to content")
+ if zsel then reaper.MIDIEditor_OnCommand(ed,zsel)
+ elseif zcontent then reaper.MIDIEditor_OnCommand(ed,zcontent) end
+ local zin=midi_action_by_name("View: Zoom in horizontally")
+ if zin then
+  reaper.MIDIEditor_OnCommand(ed,zin)
+  reaper.MIDIEditor_OnCommand(ed,zin)
+ end
+
+ if clef_ok then
+  status="Lesbarkeit verbessert: 1/16-Darstellung, musikalische Abstände, passende Vergrößerung · "..profile_label.."."
  else
-  status="Teilweise ausgeführt. Nicht gefunden: "..table.concat(missing," | ")
+  status="Lesbarkeit verbessert: 1/16-Darstellung, musikalische Abstände und Vergrößerung. Score-Profil erkannt: "..profile_label..", aber passende REAPER-Clef-Action wurde nicht gefunden."
  end
 end
 
-local function selected_takes()
+selected_takes=function()
  local out={}
  local ed=active_editor()
  if not ed then return out end
