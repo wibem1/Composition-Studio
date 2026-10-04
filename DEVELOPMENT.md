@@ -230,3 +230,8 @@ Verovio-Drag erhielt eine lokale SVG-Vorschau: während pointermove werden die a
 Drag-Performance: echte Verovio-SVG-Noten werden während pointermove nicht mehr transformiert und ihre Bounding-Boxes nicht ständig neu gelesen. Beim pointerdown werden einmalig leichte Overlay-Rechtecke erzeugt; pointermove ändert nur transform des Overlay-Containers. Status wird nur bei Änderung des quantisierten Ziels aktualisiert. Overlay bleibt nach pointerup bis zum erfolgreichen Neurender sichtbar.
 
 MEI-Transkription: Achtel und kürzere Ereignisse werden nun in <beam>-Gruppen innerhalb metrischer Beats kodiert. Simple Meter: Viertelbeat (4/den); Compound Meter 6/8, 9/8, 12/8: punktierte Viertel (1.5 QN). Pausen unterbrechen Balkengruppen.
+
+
+## 2026-10-04 – v1.0.35 / Sichtbares Drag-Ziel
+
+Das reine Rechteck-Overlay war zwar schnell, aber musikalisch nicht orientierend. Beim Drag wird jetzt einmalig die tatsächliche SVG-Gruppe jeder markierten Verovio-Note geklont und in ein separates Overlay-SVG gelegt. pointermove transformiert nur den gemeinsamen Ghost-Container. Die Vorschau snappt bereits während des Ziehens auf dieselben quantisierten dpitch/dqn-Werte, die bei pointerup nach REAPER geschrieben werden. Damit entspricht die sichtbare Ghost-Position dem tatsächlichen Ziel.
