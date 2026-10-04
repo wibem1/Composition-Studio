@@ -291,3 +291,8 @@ Notation Studio verwendet jetzt eine eigene 20-pt-ReaImGui-Schrift für das gesa
 ## 2026-10-04 – Notation Studio v0.1.4 / eigener Updater
 
 Notation Studio besitzt jetzt einen eigenständigen Update-Menüpunkt im Drei-Punkte-Menü. Das Skript lädt die aktuelle Version direkt aus dem Repository, prüft Versionsnummer und Lua-Syntax, sichert die vorherige Datei als .backup und startet nach erfolgreichem Update automatisch neu. Damit ist Notation Studio vollständig unabhängig vom Composition-Studio-Updater.
+
+
+## 2026-10-04 – Notation Studio v0.1.5 / Lesbarkeitsprofil
+
+„Lesbarkeit verbessern“ ist jetzt ein kombiniertes Profil statt einer reinen Darstellungsquantisierung. Es aktiviert musikalisch proportionale Abstände, Display-Quantisierung 1/16, eine sinnvolle Mindestnotenlänge, Triolen- und Stimmenautomatik, passt die Auswahl ein und zoomt anschließend moderat horizontal hinein. Zusätzlich wird aus Trackname und Tonumfang ein Score-Profil abgeleitet: treble, bass, alto oder grand. Notation Studio durchsucht die aktuelle MIDI-Editor-Action-Liste nach einer passenden nativen Default-Clef-Action und wendet sie an, sofern REAPER diese als Action exponiert.
