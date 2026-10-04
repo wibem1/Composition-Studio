@@ -75,3 +75,12 @@ Fix:
 - Lesbar machen = musikalische Abstände aktivieren + View: Zoom to content
 - wiederholtes Klicken soll dieselbe Ansicht ergeben
 - Breiter/Schmaler bleibt ausschließlich manuelle Feineinstellung
+
+
+## 2026-10-04 – Notation-Prototyp 0.5 / v1.0.12
+
+Recherche bestätigt `disp_pos` als individuelle REAPER-Notationseigenschaft pro Note. Eine belastbare öffentliche Beschreibung der numerischen Einheit wurde nicht gefunden. Deshalb kein geratenes Spacing, sondern ein Mess-Prototyp:
+- ausgewählte Note(n): -0.50, -0.25, 0, +0.25, +0.50, +1.00
+- Notation Event bleibt am Note-On gekoppelt
+- tatsächliche MIDI-Position bleibt unverändert
+- erst nach Sichttest wird daraus ein automatischer Abstandalgorithmus entwickelt
