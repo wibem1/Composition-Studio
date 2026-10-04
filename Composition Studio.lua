@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.10
+-- @version 1.0.11
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.10"
+local VERSION="1.0.11"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -375,13 +375,11 @@ end
 local function notation_make_readable()
  local ed=type(reaper.MIDIEditor_GetActive)=="function" and reaper.MIDIEditor_GetActive() or nil
  if not ed then update_status="Notation: Kein aktiver MIDI-Editor."; return end
- -- Erst musikalische Abstände aktivieren, dann reproduzierbaren Ausgangspunkt herstellen und moderat vergrößern.
+ -- Idempotent: wiederholtes Klicken darf die Ansicht nicht weiter vergrößern.
  if not notation_set_musical_spacing(true) then return end
- if not notation_run_view_action("View: Zoom to content",1) then return end
- local zin=midi_action_by_name("View: Zoom in horizontally")
- if not zin then update_status="Notation: Horizontales Vergrößern ist in dieser REAPER-Version nicht auffindbar."; return end
- for _=1,3 do reaper.MIDIEditor_OnCommand(ed,zin) end
- update_status="Notation: Musikalische Abstände + lesbare Arbeitsansicht eingestellt. Mit Breiter/Schmaler fein anpassen."
+ local ok=notation_run_view_action("View: Zoom to content",1)
+ if not ok then return end
+ update_status="Notation: Musikalische Abstände aktiviert und Inhalt eingepasst. Breiter/Schmaler nur bei Bedarf verwenden."
 end
 
 local function notation_takes()
@@ -536,7 +534,7 @@ local function draw_notation_panel()
  if reaper.ImGui_Button(ctx,"1/32##notation32",bw,30) then notation_quantize_lengths(32) end
  if reaper.ImGui_Button(ctx,"Originale Darstellung##notation_reset",-1,30) then notation_reset_lengths() end
  reaper.ImGui_Separator(ctx)
- reaper.ImGui_TextWrapped(ctx,"Notensatz bereinigen nutzt REAPERs eigene Notationslogik: musikalische Abstände, 1/16-Darstellungsquantisierung, 1/64 Mindestlänge, automatische Triolenerkennung und Stimmenzuordnung bei Überlappungen. Lesbar machen verändert nur Ansicht/Zoom.")
+ reaper.ImGui_TextWrapped(ctx,"Notensatz bereinigen nutzt REAPERs eigene Notationslogik: musikalische Abstände, 1/16-Darstellungsquantisierung, 1/64 Mindestlänge, automatische Triolenerkennung und Stimmenzuordnung bei Überlappungen. Lesbar machen aktiviert musikalische Abstände und passt den Inhalt ein; wiederholtes Klicken zoomt nicht weiter hinein.")
 end
 
 local CONTROLLER=[[Du bist der Controller von Composition Studio in REAPER. Der Benutzer spricht frei; es gibt KEINE Triggerwörter. Interpretiere nur, was eindeutig gemeint ist. Bei Unklarheit FRAGE nach.
@@ -669,7 +667,7 @@ local function text_context_menu(id,text,editable)
  end
  return text
 end
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation-Prototyp 0.4: erste automatische Notensatzbereinigung.\n• „Notensatz bereinigen“ aktiviert musikalische Abstände, 1/16-Darstellungsquantisierung, 1/64 Mindestlänge, automatische Triolenerkennung und Stimmenzuordnung bei Überlappungen.\n• „Lesbar machen“ bleibt die reine Ansichts-/Zoomfunktion.\n• Keine MIDI-Noten werden verschoben oder in ihrer Wiedergabe verändert.\n• Darstellungsquantisierung ausgewählter Noten auf Auto, 1/8, 1/16 oder 1/32; die MIDI-Performance bleibt unverändert.\n• Originale Notendarstellung kann für die Auswahl wiederhergestellt werden.\n• Zielarchitektur dokumentiert: KI-Komposition + KI-Notensatz + bidirektionale Spielanweisungen + Mehrspur-SWAM + MusicXML/PDF-Export.\n\nZU TESTEN\n\n1. Dasselbe Klavierbeispiel öffnen.\n2. Vorher-Screenshot merken.\n3. Notation → „Notensatz bereinigen“ drücken.\n4. Prüfen: weniger rhythmisches Durcheinander, sinnvollere Stimmen bei Überlappungen, Triolen korrekt erkannt.\n5. Danach mit „Lesbar machen“ bzw. Breiter/Schmaler nur die Ansicht fein einstellen.\n6. Prüfen, dass sich die MIDI-Wiedergabe nicht verändert hat.\n7. Bei Verschlechterung REAPER Undo testen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Notation-Prototyp 0.4: erste automatische Notensatzbereinigung.\n• „Notensatz bereinigen“ aktiviert musikalische Abstände, 1/16-Darstellungsquantisierung, 1/64 Mindestlänge, automatische Triolenerkennung und Stimmenzuordnung bei Überlappungen.\n• Fehler behoben: „Lesbar machen“ zoomt bei wiederholtem Klicken nicht mehr schrittweise weiter hinein.\n• „Lesbar machen“ aktiviert musikalische Abstände und passt nur noch den Inhalt ein; Breiter/Schmaler ist die bewusste manuelle Feineinstellung.\n• Keine MIDI-Noten werden verschoben oder in ihrer Wiedergabe verändert.\n• Darstellungsquantisierung ausgewählter Noten auf Auto, 1/8, 1/16 oder 1/32; die MIDI-Performance bleibt unverändert.\n• Originale Notendarstellung kann für die Auswahl wiederhergestellt werden.\n• Zielarchitektur dokumentiert: KI-Komposition + KI-Notensatz + bidirektionale Spielanweisungen + Mehrspur-SWAM + MusicXML/PDF-Export.\n\nZU TESTEN\n\n1. Dasselbe Klavierbeispiel öffnen.\n2. Vorher-Screenshot merken.\n3. Notation → „Notensatz bereinigen“ drücken.\n4. Prüfen: weniger rhythmisches Durcheinander, sinnvollere Stimmen bei Überlappungen, Triolen korrekt erkannt.\n5. Danach mit „Lesbar machen“ bzw. Breiter/Schmaler nur die Ansicht fein einstellen.\n6. Prüfen, dass sich die MIDI-Wiedergabe nicht verändert hat.\n7. Bei Verschlechterung REAPER Undo testen." end
 local function draw_history() if notation_visible then draw_notation_panel(); return end; if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(48,math.min(260,lines*22+12)); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
