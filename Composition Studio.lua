@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.20
+-- @version 1.0.21
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.20"
+local VERSION="1.0.21"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -919,11 +919,22 @@ html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacS
 <div id="notation-container"><div id="playhead"></div></div><div id="print-root"></div>
 <script>
 window.csSelectedIds=[];
-function csSend(obj){try{if(window.compositionStudioBridge&&window.compositionStudioBridge.postMessage){window.compositionStudioBridge.postMessage(JSON.stringify(obj));}}catch(e){}}
+function csBridgeReady(){return !!(window.compositionStudioBridge&&window.compositionStudioBridge.postMessage);}
+function csSend(obj){
+ try{
+  if(csBridgeReady()){window.compositionStudioBridge.postMessage(JSON.stringify(obj));return true;}
+ }catch(e){}
+ return false;
+}
+function csSetStatus(t){const el=document.getElementById('cs-status');if(el)el.textContent=t;}
 function csCmd(kind,value){
  const ids=window.csSelectedIds||[];
- if(!ids.length){document.getElementById('cs-status').textContent='Zuerst Note(n) markieren';return;}
- csSend({type:'command',csids:ids.join(','),kind:kind,value:value});
+ if(!ids.length){csSetStatus('Zuerst Note(n) markieren');return;}
+ if(!csSend({type:'command',csids:ids.join(','),kind:kind,value:value})){
+   csSetStatus('WebView-Bridge fehlt – Bearbeitung erreicht REAPER nicht');
+ }else{
+   csSetStatus(ids.length+' Note(n) · Befehl an REAPER gesendet');
+ }
 }
 window.flutter_inappwebview={callHandler:function(name,data){
  if(name==='onNoteTap'&&data){
@@ -941,6 +952,10 @@ import { render } from ']]..base..[[js/render/render.js';
 import { state } from ']]..base..[[js/utils/state.js';
 const score=]]..score_json..[[;
 window.csScore=score;
+setTimeout(function(){
+ if(csBridgeReady()) csSetStatus('Bridge aktiv · Note(n) markieren');
+ else csSetStatus('Bridge fehlt · Markieren geht, Bearbeiten nicht');
+},0);
 
 function noteByHit(h){
  try{return score.measures[h.m][h.v][h.i];}catch(e){return null;}
@@ -967,7 +982,10 @@ function drawSelected(ids){
   layer.appendChild(d);
  }
  const st=document.getElementById('cs-status');
- if(st) st.textContent=set.size===1?'1 Note markiert':(set.size+' Noten markiert');
+ if(st){
+  const suffix=csBridgeReady()?' · Bridge aktiv':' · Bridge fehlt';
+  st.textContent=(set.size===1?'1 Note markiert':(set.size+' Noten markiert'))+suffix;
+ }
 }
 window.csSelectSingle=function(id){
  window.csSelectedIds=[Number(id)]; drawSelected(window.csSelectedIds);
@@ -995,7 +1013,14 @@ function idsInRect(x1,y1,x2,y2){
 function installSelection(){
  const c=document.getElementById('notation-container'); if(!c||c.dataset.csSelection==='1') return;
  c.dataset.csSelection='1';
- let down=false,sx=0,sy=0,drag=false,box=null;
+ let down=false,sx=0,sy=0,drag=false,box=null,suppressNextClick=false;
+ c.addEventListener('click',e=>{
+  if(suppressNextClick){
+   suppressNextClick=false;
+   e.preventDefault();
+   e.stopImmediatePropagation();
+  }
+ },true);
  c.addEventListener('pointerdown',e=>{
   if(e.button!==0)return; const svg=c.querySelector('svg'); if(!svg)return;
   const r=svg.getBoundingClientRect(); sx=e.clientX-r.left; sy=e.clientY-r.top; down=true; drag=false;
@@ -1015,11 +1040,20 @@ function installSelection(){
   const r=svg.getBoundingClientRect(); const x=e.clientX-r.left,y=e.clientY-r.top;
   if(box){box.remove();box=null;}
   let ids=[];
-  if(drag) ids=idsInRect(sx,sy,x,y);
-  else {const h=hitAt(x,y); if(h){const n=noteByHit(h);if(n&&n.csid)ids=[Number(n.csid)];}}
+  if(drag){
+   suppressNextClick=true;
+   ids=idsInRect(sx,sy,x,y);
+  } else {
+   const h=hitAt(x,y); if(h){const n=noteByHit(h);if(n&&n.csid)ids=[Number(n.csid)];}
+  }
   if(ids.length){
    window.csSelectedIds=ids; drawSelected(ids);
-   csSend({type:'select',csids:ids.join(',')});
+   if(!csSend({type:'select',csids:ids.join(',')})){
+    csSetStatus(ids.length+' Note(n) markiert · Bridge fehlt');
+   }
+  } else if(drag){
+   window.csSelectedIds=[]; drawSelected([]);
+   csSetStatus('Keine Note im Auswahlrechteck');
   }
  },true);
 }
@@ -1112,7 +1146,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Fehler behoben: ScoreFlow-Klickzugriff sah das Modul-lokale score-Objekt nicht; deshalb blieb Anklicken wirkungslos.\n• Einzelklick markiert jetzt sichtbar eine Note; Klick-Drag markiert mehrere Noten in einem Rechteck.\n• ScoreFlow-Rückkanal überträgt Auswahl und Befehle über REAPER ExtState an Composition Studio.\n• ±1 Halbton sowie ½/2× Dauer wirken jetzt auf die gesamte markierte Auswahl.\n• Nach einer Änderung schreibt Composition Studio direkt ins REAPER-MIDI und rendert dieselbe Partitur neu.\n• Dafür wird einmalig der Composition-Studio-Bridge-Build von reaper_webview benötigt; die normale 0.2.0-Version kann nur navigieren und noch keine WebView-Nachrichten an Lua liefern.\n\nZU TESTEN NACH INSTALLATION DER BRIDGE-DYLIB\n\n1. MIDI-Item → Notation.\n2. Eine Note im echten ScoreFlow-Notenbild anklicken.\n3. ±1 Halbton drücken.\n4. Prüfen, dass REAPER-MIDI und Partitur aktualisiert werden.\n5. Dauer halbieren/verdoppeln testen.\n6. REAPER Undo testen." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..".\n\nWAS IST NEU? – "..VERSION.."\n\n• Drag-Auswahl korrigiert: Der nach pointerup ausgelöste normale ScoreFlow-Klick darf eine Mehrfachauswahl nicht mehr sofort auf eine Note reduzieren.\n• Das Notationsfenster zeigt jetzt ausdrücklich „Bridge aktiv“ oder „Bridge fehlt“. Damit ist sofort sichtbar, ob Bearbeitungsbefehle REAPER überhaupt erreichen können.\n• Einzelklick markiert jetzt sichtbar eine Note; Klick-Drag markiert mehrere Noten in einem Rechteck.\n• ScoreFlow-Rückkanal überträgt Auswahl und Befehle über REAPER ExtState an Composition Studio.\n• ±1 Halbton sowie ½/2× Dauer wirken jetzt auf die gesamte markierte Auswahl.\n• Nach einer Änderung schreibt Composition Studio direkt ins REAPER-MIDI und rendert dieselbe Partitur neu.\n• Dafür wird einmalig der Composition-Studio-Bridge-Build von reaper_webview benötigt; die normale 0.2.0-Version kann nur navigieren und noch keine WebView-Nachrichten an Lua liefern.\n\nZU TESTEN NACH INSTALLATION DER BRIDGE-DYLIB\n\n1. MIDI-Item → Notation.\n2. Eine Note im echten ScoreFlow-Notenbild anklicken.\n3. ±1 Halbton drücken.\n4. Prüfen, dass REAPER-MIDI und Partitur aktualisiert werden.\n5. Dauer halbieren/verdoppeln testen.\n6. REAPER Undo testen." end
 local function draw_notation_workspace()
  if not notation_window_open then return end
  reaper.ImGui_SetNextWindowSize(ctx,720,360,reaper.ImGui_Cond_FirstUseEver())
