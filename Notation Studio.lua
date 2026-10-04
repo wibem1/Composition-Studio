@@ -1,11 +1,13 @@
 -- @description Notation Studio
--- @version 0.1.3
+-- @version 0.1.4
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.3"
+local VERSION="0.1.4"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
+local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
+local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
 local KEY_NAMES={openai="OpenAIAPIKey",anthropic="AnthropicAPIKey",google="GoogleAPIKey"}
 local MODELS={
  openai={{"GPT-5.6 Sol","gpt-5.6-sol"},{"GPT-5.6 Terra","gpt-5.6-terra"},{"GPT-5.6 Luna","gpt-5.6-luna"}},
