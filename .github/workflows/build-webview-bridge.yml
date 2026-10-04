@@ -1,0 +1,40 @@
+name: Build Composition Studio WebView Bridge
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'tools/patch_reaper_webview_bridge.py'
+      - '.github/workflows/build-webview-bridge.yml'
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone reaper_webview v0.2.0
+        run: |
+          git clone --branch v0.2.0 --depth 1 --recurse-submodules https://github.com/SadFrozz/reaper_webview.git reaper_webview
+
+      - name: Apply Composition Studio bridge
+        run: python3 tools/patch_reaper_webview_bridge.py
+
+      - name: Build universal dylib
+        run: |
+          cmake -S reaper_webview -B build-webview -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-webview --config Release --target reaper_webview -j 3
+
+      - name: Package
+        run: |
+          mkdir -p artifact
+          cp build-webview/reaper_webview.dylib artifact/reaper_webview.dylib
+          printf '%s\n' "Composition Studio bridge build based on reaper_webview v0.2.0" > artifact/README.txt
+          shasum -a 256 artifact/reaper_webview.dylib > artifact/SHA256SUMS.txt
+          cd artifact && zip -r ../Composition-Studio-WebView-Bridge-macos-universal.zip .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Composition-Studio-WebView-Bridge-macos-universal
+          path: Composition-Studio-WebView-Bridge-macos-universal.zip
+          retention-days: 30
