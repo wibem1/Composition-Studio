@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.9
+-- @version 1.0.10
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.9"
+local VERSION="1.0.10"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -64,12 +64,30 @@ local function read_file(p) local f=io.open(p,"rb"); if not f then return nil en
 local function write_file(p,s) local f=io.open(p,"wb"); if not f then return false end; f:write(s); f:close(); return true end
 local function version_parts(v) local a,b,c=v:match("^(%d+)%.(%d+)%.(%d+)$"); if a then return tonumber(a),tonumber(b),tonumber(c) end; local x,y,t=v:match("^(%d+)%.(%d+)%-test(%d+)$"); return tonumber(x),tonumber(y),tonumber(t) end
 local function version_is_newer(r,l) local a,b,c=version_parts(r); local x,y,z=version_parts(l); if not(a and x) then return false end; if a~=x then return a>x end; if b~=y then return b>y end; return c>z end
-local function install_update()
- if busy then return end; busy=true; update_status="Update wird geladen …"; local tmp=os.tmpname()..".lua"; local code=os.tmpname()..".code"; local url=UPDATE_URL.."?version_check="..tostring(os.time())
- os.execute("/usr/bin/curl -sS -L --max-time 60 -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code))
+local function fetch_update(url,extra_headers)
+ local tmp=os.tmpname()..".lua"; local code=os.tmpname()..".code"
+ local headers=extra_headers or ""
+ local cmd="/usr/bin/curl -sS -L --max-time 60 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "..headers.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code)
+ os.execute(cmd)
  local status=trim(read_file(code)); local fresh=read_file(tmp); os.remove(code); os.remove(tmp)
+ return status,fresh
+end
+local function install_update()
+ if busy then return end
+ busy=true; update_status="Update wird geladen …"
+ local url=UPDATE_URL.."?version_check="..tostring(os.time())
+ local status,fresh=fetch_update(url)
+ local rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
+ -- Falls raw.githubusercontent.com eine alte CDN-Kopie liefert, über GitHub Contents API erneut abrufen.
+ if status=="200" and fresh and rv==VERSION then
+  local api="https://api.github.com/repos/wibem1/Composition-Studio/contents/Composition%20Studio.lua?ref=main&nocache="..tostring(os.time())
+  local s2,f2=fetch_update(api,"-H 'Accept: application/vnd.github.raw+json'")
+  local r2=f2 and f2:match("%-%- @version%s+([%w%.%-]+)") or nil
+  if s2=="200" and f2 and r2 then status,fresh,rv=s2,f2,r2 end
+ end
  if status~="200" or not fresh or #fresh<1000 then update_status="Update fehlgeschlagen (HTTP "..tostring(status)..")."; busy=false; return end
- local rv=fresh:match("%-%- @version%s+([%w%.%-]+)"); if not rv or not fresh:find('local SCRIPT_NAME="Composition Studio"',1,true) then update_status="Update abgebrochen: heruntergeladene Datei ist ungültig."; busy=false; return end
+ rv=rv or fresh:match("%-%- @version%s+([%w%.%-]+)")
+ if not rv or not fresh:find('local SCRIPT_NAME="Composition Studio"',1,true) then update_status="Update abgebrochen: heruntergeladene Datei ist ungültig."; busy=false; return end
  if rv==VERSION then update_status="Bereits aktuell: "..VERSION; busy=false; return end
  if not version_is_newer(rv,VERSION) then update_status="Kein neueres Update verfügbar. Lokal: "..VERSION..", GitHub: "..rv; busy=false; return end
  local compiled,syntax_error=load(fresh,"@Composition Studio update","t")
