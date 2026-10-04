@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.11
+-- @version 0.1.12
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.11"
+local VERSION="0.1.12"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -233,15 +233,37 @@ end
 
 local function force_page_view(ed)
  local cmd,txt=find_action_variants({
-  {"notation","continuous view always"},
-  {"continuous view always","zoom level"}
+  {"notation","page view","whole measures","multiple staff rows"},
+  {"page view","whole measures","multiple staff rows"},
+  {"notation","page view"}
  })
- if not cmd then return false,"REAPER-Aktion „Continuous view always“ nicht gefunden" end
+ if not cmd then
+  return false,"REAPER-Action „Notation: Page view (whole measures, multiple staff rows, when one track is visible)“ nicht gefunden"
+ end
  local st=reaper.GetToggleCommandStateEx(32060,cmd)
- if st==1 then reaper.MIDIEditor_OnCommand(ed,cmd) end
+ if st~=1 then reaper.MIDIEditor_OnCommand(ed,cmd) end
  local after=reaper.GetToggleCommandStateEx(32060,cmd)
- if after==1 then return false,"Continuous view konnte nicht ausgeschaltet werden" end
+ if after~=1 then return false,"Page View konnte nicht eingeschaltet werden ["..tostring(txt).."]" end
  return true,txt
+end
+
+local function count_visible_tracks(ed)
+ local tracks={}
+ if type(reaper.MIDIEditor_EnumTakes)~="function" then return nil end
+ local i=0
+ while true do
+  local tk=reaper.MIDIEditor_EnumTakes(ed,i,false)
+  if not tk then break end
+  if reaper.ValidatePtr2(0,tk,"MediaItem_Take*") and reaper.TakeIsMIDI(tk) then
+   local item=reaper.GetMediaItemTake_Item(tk)
+   local tr=item and reaper.GetMediaItem_Track(item)
+   if tr then tracks[tostring(tr)]=true end
+  end
+  i=i+1
+ end
+ local n=0
+ for _ in pairs(tracks) do n=n+1 end
+ return n
 end
 
 local function apply_readable_scale(ed)
@@ -250,7 +272,7 @@ local function apply_readable_scale(ed)
 
  -- In page view REAPER performs the system wrapping. We only choose a calm notation scale.
  -- Around 55 px per quarter note gives roughly 4–6 bars per system on a normal desktop window.
- local px_per_qn=55
+ local px_per_qn=48
  local unit=reaper.MIDIEditor_GetSetting_int(ed,"timebase_unit")
  local px_per_unit=px_per_qn
  if unit==0 then
@@ -310,6 +332,11 @@ local function cleanup_notation()
    {"notation","voice","overlapping"},
    {"notation","stimm"}
  },true)
+
+ local visible_tracks=count_visible_tracks(ed)
+ if visible_tracks and visible_tracks>1 then
+  missing[#missing+1]="Page View benötigt genau einen sichtbaren Track; aktuell sichtbar: "..tostring(visible_tracks)
+ end
 
  local page_ok,page_info=force_page_view(ed)
  if page_ok then done[#done+1]="Seitenansicht / mehrzeiliger Umbruch ["..page_info.."]"
@@ -449,7 +476,7 @@ local function draw()
   if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
    reaper.ImGui_TextWrapped(ctx,"Für den mehrzeiligen Seitenumbruch darf in REAPER nur ein Track sichtbar sein.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
-   reaper.ImGui_TextWrapped(ctx,"Erzeugt eine Partituransicht mit mehrzeiligem Umbruch wie auf einer Notenseite: Continuous View wird ausgeschaltet, die Notation proportional gesetzt und auf eine ruhige Partiturskalierung gebracht.")
+   reaper.ImGui_TextWrapped(ctx,"Schaltet REAPERs echte Page View ein: ganze Takte, mehrere Systemzeilen, ein sichtbarer Track. Danach wird eine ruhige Partiturskalierung gesetzt.")
    local on=select(1,spacing_state())
    if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
