@@ -1,4 +1,4 @@
-name: Build Composition Studio WebView Bridge
+name: Build Composition Studio WebView Bridge x86_64
 
 on:
   workflow_dispatch:
@@ -22,11 +22,11 @@ jobs:
 
       - name: Build universal dylib
         run: |
-          cmake -S reaper_webview -B build-webview -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES='arm64;x86_64'
+          cmake -S reaper_webview -B build-webview -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
           cmake --build build-webview --config Release --target reaper_webview -j 3
           file build-webview/reaper_webview.dylib
           lipo -info build-webview/reaper_webview.dylib
-          lipo -verify_arch arm64 x86_64 build-webview/reaper_webview.dylib
+          lipo -verify_arch x86_64 build-webview/reaper_webview.dylib
 
       - name: Package
         run: |
@@ -34,10 +34,10 @@ jobs:
           cp build-webview/reaper_webview.dylib artifact/reaper_webview.dylib
           printf '%s\n' "Composition Studio bridge build based on reaper_webview v0.2.0" > artifact/README.txt
           shasum -a 256 artifact/reaper_webview.dylib > artifact/SHA256SUMS.txt
-          cd artifact && zip -r ../Composition-Studio-WebView-Bridge-macos-universal.zip .
+          cd artifact && zip -r ../Composition-Studio-WebView-Bridge-macos-x86_64.zip .
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Composition-Studio-WebView-Bridge-macos-universal
-          path: Composition-Studio-WebView-Bridge-macos-universal.zip
+          name: Composition-Studio-WebView-Bridge-macos-x86_64
+          path: Composition-Studio-WebView-Bridge-macos-x86_64.zip
           retention-days: 30
