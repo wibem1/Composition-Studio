@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.50
+-- @version 1.0.51
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.50"
+local VERSION="1.0.51"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -51,7 +51,14 @@ reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"1",true)
 local open,input,busy=true,"",false; local last_made={}; local swam_last_made={}; local last_diag={}; local restarting=false; local update_status=""; local history={}; local chat_start=1; local info_visible=false; local history_mode=false; local notation_status=""; local score_state={items={},notes={},selected=0,selection_signature=""}; local score_bridge_seq=""; local current_project=reaper.EnumProjects(-1,""); local font=nil
 if type(reaper.ImGui_CreateFont)=="function" then local ok,f=pcall(reaper.ImGui_CreateFont,"sans-serif"); if ok then font=f end end
 if font and type(reaper.ImGui_Attach)=="function" then pcall(reaper.ImGui_Attach,ctx,font) end
-local function push_font() if not font then return false end; return pcall(reaper.ImGui_PushFont,ctx,font,18) end
+local FONT_SIZE_KEY="InterfaceFontSize"
+local font_size=tonumber(reaper.GetExtState(EXT_SECTION,FONT_SIZE_KEY)) or 14
+font_size=math.max(10,math.min(26,font_size))
+local function set_font_size(n)
+ font_size=math.max(10,math.min(26,n))
+ reaper.SetExtState(EXT_SECTION,FONT_SIZE_KEY,tostring(font_size),true)
+end
+local function push_font() if not font then return false end; return pcall(reaper.ImGui_PushFont,ctx,font,font_size) end
 local function pop_font(x) if x then reaper.ImGui_PopFont(ctx) end end
 local function trim(s) return (s or ""):gsub("^%s+",""):gsub("%s+$","") end
 local function safe_work_title(t)
@@ -98,7 +105,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.50')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.51')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -703,43 +710,68 @@ local function lily_extract_staffs(src)
  return result
 end
 local function lily_parse_staff(src,channel)
- if src:find("\\relative",1,true) then return nil,"Relative Tonhöhen sind nicht zugelassen; \\absolute verwenden." end
+ if src:find("\\relative",1,true) then return nil,"\\relative benötigt einen relativen Tonhöhen-Parser; bitte absolute Tonhöhen ausgeben." end
  src=src:gsub("%%[^\n]*"," "):gsub("\\absolute%s*{"," "):gsub("[{}|]"," ")
  src=src:gsub('\\clef%s+"?[%w]+"?'," ")
  src=src:gsub("\\key%s+[%w']+%s+\\[a-zA-Z]+"," ")
  src=src:gsub("\\time%s+%d+/%d+"," ")
  src=src:gsub("\\tempo%s+[^=\n]+=%s*%d+"," ")
- src=src:gsub("\\bar%s+\"[^\"]*\""," ")
+ src=src:gsub('\\bar%s+"[^"]*"'," ")
  src=src:gsub("\\voiceOne"," "):gsub("\\voiceTwo"," "):gsub("\\oneVoice"," ")
  src=src:gsub("\\ppp"," "):gsub("\\pp"," "):gsub("\\mp"," "):gsub("\\mf"," "):gsub("\\fff"," "):gsub("\\ff"," "):gsub("\\p"," "):gsub("\\f"," ")
  src=src:gsub("[-_^][%.%-+>]"," ")
- local notes,pos,lastdur={},0,1
+ -- Preserve spaces inside chords while splitting the score into tokens.
+ src=src:gsub("<([^<>]+)>%s*(%d*%.?)",function(pitches,tail)
+  return "<"..pitches:gsub("%s+",";")..">"..tail
+ end)
+ local notes,pos,lastdur={},0,4
  local semis={c=0,d=2,e=4,f=5,g=7,a=9,b=11}
+ local function pitch_number(t)
+  local root,alter,oct=t:match("^([a-g])([a-z]*)([',]*)$")
+  if not root then return nil,"Ungültige Tonhöhe: "..t end
+  if alter~="" and alter~="is" and alter~="isis" and alter~="es" and alter~="eses" then return nil,"Unbekanntes Vorzeichen: "..alter end
+  local chrom=({is=1,isis=2,es=-1,eses=-2})[alter] or 0
+  local shift=0
+  for ch in oct:gmatch(".") do shift=shift+(ch=="'" and 1 or -1) end
+  local p=48+12*shift+semis[root]+chrom
+  if p<0 or p>127 then return nil,"Tonhöhe außerhalb des MIDI-Bereichs" end
+  return p
+ end
  for tok in src:gmatch("%S+") do
   if tok:sub(1,1)=="\\" then
-   if not (tok=="\\absolute" or tok=="\\break" or tok=="\\pageBreak" or tok=="\\major" or tok=="\\minor" or tok=="\\numericTimeSignature") then
+   if tok~="\\absolute" and tok~="\\break" and tok~="\\pageBreak" and tok~="\\major" and tok~="\\minor" and tok~="\\numericTimeSignature" then
     return nil,"Nicht unterstützter LilyPond-Befehl: "..tok
    end
-  elseif tok=="~" or tok=="(" or tok==")" or tok=="[" or tok=="]" then
-   -- Slurs and ties have no separate MIDI note here; ties must be resolved explicitly.
-   if tok=="~" then return nil,"Bindebögen über Notengrenzen werden noch nicht unterstützt." end
+  elseif tok=="(" or tok==")" or tok=="[" or tok=="]" then
+   -- Phrasing marks are non-timed events.
+  elseif tok=="~" then
+   return nil,"Haltebogen nicht unterstützt; keine stille Veränderung der Notendauer."
   else
-   local root,alter,oct,dur,dots=tok:match("^([a-g])([a-z]*)([',]*)(%d*)(%.?)$")
+   local pitches,tail=tok:match("^<([^<>]+)>(%d*%.?)$")
    local rest,rdur,rdots=tok:match("^([rs])(%d*)(%.?)$")
-   if root and alter~="" and alter~="is" and alter~="isis" and alter~="es" and alter~="eses" then return nil,"Unbekanntes Vorzeichen: "..alter end
-   if not root and not rest then return nil,"Unbekannter Notenausdruck: "..tok end
-   local dn=tonumber(root and dur or rdur) or lastdur
-   if dn<=0 or dn>128 then return nil,"Ungültiger Notenwert" end
+   local root,alter,oct,dur,dots=tok:match("^([a-g])([a-z]*)([',]*)(%d*)(%.?)$")
+   if not pitches and not rest and not root then return nil,"Unbekannter Notenausdruck: "..tok end
+   local dstr= pitches and tail:match("^(%d*)") or (root and dur or rdur)
+   local dn=tonumber(dstr) or lastdur
+   if dn<=0 or dn>128 or 128%dn~=0 then return nil,"Ungültiger Notenwert" end
    lastdur=dn
    local length=4/dn
-   if (root and dots or rdots)=="." then length=length*1.5 end
-   if root then
-    local alt=({is=1,isis=2,es=-1,eses=-2})[alter] or 0
-    local octave=0
-    for ch in oct:gmatch(".") do octave=octave+(ch=="'" and 1 or -1) end
-    -- LilyPond c' is MIDI 60, LilyPond c is MIDI 48.
-    local pitch=48+12*octave+semis[root]+alt
-    if pitch<0 or pitch>127 then return nil,"Tonhöhe außerhalb MIDI 0–127" end
+   local dotted=pitches and tail:sub(-1)=="." or (root and dots=="." or rdots==".")
+   if dotted then length=length*1.5 end
+   local chord_pitches={}
+   if pitches then
+    for p in pitches:gmatch("[^;]+") do
+     local pitch,err=pitch_number(p)
+     if not pitch then return nil,err end
+     chord_pitches[#chord_pitches+1]=pitch
+    end
+    if #chord_pitches==0 then return nil,"Leerer Akkord" end
+   elseif root then
+    local pitch,err=pitch_number(root..alter..oct)
+    if not pitch then return nil,err end
+    chord_pitches[1]=pitch
+   end
+   for _,pitch in ipairs(chord_pitches) do
     notes[#notes+1]={start_qn=pos,duration_qn=length,pitch=pitch,velocity=80,channel=channel}
    end
    pos=pos+length
@@ -766,27 +798,21 @@ local function lily_to_cs(src)
  return "CSMETA|tempo|0|"..bpm.."\nCSMETA|timesig|0|"..num.."|"..den.."\nCS|new|-|Klavier|0|"..table.concat(all,";"),math.floor(maxdur/measure+0.0001),#all
 end
 local function lily_composition_prompt(request)
- return [[Komponiere direkt das vollständige Musikstück als LilyPond-Partitur, KEINEN Entwurf.
-Gib ausschließlich ausführbaren LilyPond-Code zurück (ohne Markdown-Codezaun).
-Verwende für ein Klavierstück genau zwei \new Staff-Blöcke im \score, rechte und linke Hand.
-Jede Stimme muss \absolute verwenden; benutze ausschließlich absolute LilyPond-Tonhöhen
-(c' ist das mittlere C), Noten c d e f g a b, is/es-Vorzeichen, Oktavstriche,
-Dauern 1,2,4,8,16 mit optionalem Punkt sowie Pausen r und einzelne Taktstriche |.
-Schreibe JEDE Tonhöhe und JEDE Dauer explizit. Verwende keine \relative-Angaben,
-keine Variablen, Wiederholungsbefehle, Triolen, Akkorde, Bindebögen oder
-verschachtelte Stimmen. Halte die beiden Staves taktsynchron.
-Ein Beispiel des erwarteten Aufbaus:
-\version "2.24.3"
-\score { <<
-\new Staff { \absolute { \clef treble \time 4/4 \tempo 4 = 84 c'4 d'4 e'4 f'4 | } }
-\new Staff { \absolute { \clef bass \time 4/4 c4 g4 c4 g4 | } }
->> }
-Entwickle die musikalische Gestalt frei; vermeide mechanische Begleitmuster.
-Keine Erklärungen und keine technischen MIDI-Zeilen.
+ return [[Komponiere ein vollständiges, musikalisch eigenständiges Stück direkt als LilyPond-Partitur.
+Gib nur LilyPond-Code zurück, keinen Entwurf und keinen erklärenden Text.
+Entwickle frei Melodik, Harmonik, Rhythmus, Phrasierung, Dynamik und Charakter.
+Für Klavier: genau zwei \new Staff-Blöcke, rechte und linke Hand.
+Benutze \absolute, vollständige Tonhöhen mit LilyPond-Schreibweise (c' = MIDI 60).
+Der lokale MIDI-Import versteht Einzelnoten, Pausen, Akkorde <c' e' g'>,
+normale und punktierte Dauern von 1 bis 128 sowie Taktstriche.
+Setze notwendige Artikulation und Dynamik als LilyPond-Spielanweisungen,
+verwende aber in dieser Version keine \relative-Tonhöhen, Variablen,
+Wiederholungen, Haltebögen, Triolen oder verschachtelte Stimmen.
+Beide Notensysteme sollen rhythmisch gleich lang sein. Vermeide schematische
+Begleitmuster und mechanische Tonfolgen. Schreibe das Werk vollständig.
 AUFTRAG:
 ]]..request
 end
-
 local function begin_process(request)
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
  local items=selected_items(false); local tracks=selected_tracks(); diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); launch("controller",prompt,key,{request=request,items=items,tracks=tracks})
@@ -2032,5 +2058,13 @@ local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
 local auto_update_at=nil -- manuelles Update verhindert unerwartete Rückkehr zur alten GitHub-Version
-local function loop() if auto_update_at and reaper.time_precise()>=auto_update_at and not busy then auto_update_at=nil; install_update() end; poll_update(); poll_job(); finish_save_panel(); score_bridge_poll(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
+local function loop() if auto_update_at and reaper.time_precise()>=auto_update_at and not busy then auto_update_at=nil; install_update() end; poll_update(); poll_job(); finish_save_panel(); score_bridge_poll(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx)
+if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
+reaper.ImGui_SameLine(ctx)
+if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
+reaper.ImGui_SameLine(ctx)
+if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end;
+if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
+if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
 loop()
