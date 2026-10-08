@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.42
+-- @version 1.0.46
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.42"
+local VERSION="1.0.46"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -23,22 +23,26 @@ local SCOREFLOW_COMMIT="b2d86a085504c5ac85bdf5f302167d4c79de50e2"
 local SCOREFLOW_HOST_PATH=reaper.GetResourcePath().."/Composition-Studio-ScoreFlow.html"
 
 local function ensure_native_startup_hook()
- local p=reaper.GetResourcePath().."/Scripts/__startup.lua"; local mark="-- BEGIN COMPOSITION STUDIO AUTO START"
+ local p=reaper.GetResourcePath().."/Scripts/__startup.lua"
+ local mark="-- BEGIN COMPOSITION STUDIO AUTO START"
  local f=io.open(p,"rb"); local old=f and (f:read("*a") or "") or ""; if f then f:close() end
- if old:find(mark,1,true) then return end
+ -- Replace old hard-coded startup paths rather than preserving a stale hook.
+ old=old:gsub("%-%- BEGIN COMPOSITION STUDIO AUTO START.-%-%- END COMPOSITION STUDIO AUTO START%s*","")
  local block=[[
 -- BEGIN COMPOSITION STUDIO AUTO START
 do
  if reaper.GetExtState("CompositionStudio","WindowOpen")=="1" then
-  local p=reaper.GetResourcePath().."/Scripts/Composition Studio/Composition Studio.lua"
-  local f=io.open(p,"rb")
-  if f then f:close(); pcall(dofile,p) end
+  local script=reaper.GetExtState("CompositionStudio","ActiveScriptPath")
+  local f=script~="" and io.open(script,"rb") or nil
+  if f then f:close(); pcall(dofile,script) end
  end
 end
 -- END COMPOSITION STUDIO AUTO START
 ]]
- local w=io.open(p,"wb"); if w then if old~="" and old:sub(-1)~="\n" then old=old.."\n" end; w:write(old..block); w:close() end
+ local w=io.open(p,"wb")
+ if w then if old~="" and old:sub(-1)~="\n" then old=old.."\n" end; w:write(old..block); w:close() end
 end
+reaper.SetExtState(EXT_SECTION,"ActiveScriptPath",SCRIPT_PATH,true)
 ensure_native_startup_hook()
 if type(reaper.ImGui_CreateContext)~="function" then reaper.ShowMessageBox("Composition Studio benötigt ReaImGui.",SCRIPT_NAME,0); return end
 local ctx=reaper.ImGui_CreateContext(SCRIPT_NAME,reaper.ImGui_ConfigFlags_DockingEnable())
@@ -60,7 +64,59 @@ local function title_from_draft(draft,request)
  t=safe_work_title(t or "")
  return t
 end
-local function shell_quote(s) return "'"..tostring(s):gsub("'","'\\''").."'" end
+local IS_WINDOWS=reaper.GetOS():match("Win")~=nil
+local function shell_quote(s)
+ s=tostring(s)
+ if IS_WINDOWS then return '"'..s:gsub('"','\\"')..'"' end
+ return "'"..s:gsub("'","'\\''").."'"
+end
+local function ps_quote(s) return "'"..tostring(s):gsub("'","''").."'" end
+local TEMP_DIR=reaper.GetResourcePath().."/CompositionStudioTemp"
+reaper.RecursiveCreateDirectory(TEMP_DIR,0)
+local temp_seq=0
+local function temp_path(ext)
+ temp_seq=temp_seq+1
+ return TEMP_DIR.."/cs_"..os.time().."_"..temp_seq..(ext or "")
+end
+-- Launch directly through REAPER: no cmd.exe/start and no PATH-selected curl.
+local function ps_launch(path,background)
+ local root=os.getenv("SystemRoot") or "C:/Windows"
+ local exe=root.."/System32/WindowsPowerShell/v1.0/powershell.exe"
+ local ok,result=pcall(reaper.ExecProcess,shell_quote(exe)..' -NoLogo -NoProfile -NonInteractive -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File '..shell_quote(path),-2)
+ return ok and result~=nil
+end
+local function windows_curl_script(body,request_file,output_file,code_file,method_headers,url,timeout)
+ local script=temp_path(".ps1")
+ local h={"$ErrorActionPreference = 'Stop'", "$code = '000'", "$client = $null", "try {",
+ "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12",
+ "Add-Type -AssemblyName System.Net.Http", "$client = New-Object System.Net.Http.HttpClient",
+ "$client.Timeout = [TimeSpan]::FromSeconds("..tostring(timeout or 180)..")",
+ "$request = New-Object System.Net.Http.HttpRequestMessage",
+ "$request.RequestUri = [Uri]"..ps_quote(url),
+ "$request.Method = [System.Net.Http.HttpMethod]::"..(request_file and "Post" or "Get")}
+ if request_file then
+  h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
+  h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
+ end
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.46')"
+ for _,v in ipairs(method_headers) do
+  local name,value=v:match("^([^:]+):%s*(.*)$")
+  if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
+ end
+ h[#h+1]="$response = $client.SendAsync($request).GetAwaiter().GetResult()"
+ h[#h+1]="$bytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()"
+ h[#h+1]="[IO.File]::WriteAllBytes("..ps_quote(output_file)..",$bytes)"
+ h[#h+1]="$code = [string][int]$response.StatusCode"
+ h[#h+1]="} catch { $code = 'TRANSPORT_ERROR: ' + $_.Exception.Message; [IO.File]::WriteAllText("..ps_quote(output_file)..",($_ | Out-String)) } finally {"
+ h[#h+1]="if ($client) { $client.Dispose() }"
+ h[#h+1]="[IO.File]::WriteAllText("..ps_quote(code_file..".pending")..",$code)"
+ h[#h+1]="Move-Item -LiteralPath "..ps_quote(code_file..".pending").." -Destination "..ps_quote(code_file).." -Force"
+ if request_file then h[#h+1]="Remove-Item -LiteralPath "..ps_quote(request_file).." -ErrorAction SilentlyContinue" end
+ h[#h+1]="Remove-Item -LiteralPath "..ps_quote(script).." -ErrorAction SilentlyContinue"
+ h[#h+1]="}"
+ local f=io.open(script,"wb"); if not f then return nil end
+ f:write("\239\187\191"..table.concat(h,"\r\n")); f:close(); return script
+end
 local function json_escape(s) return tostring(s or ""):gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t") end
 local function read_file(p) local f=io.open(p,"rb"); if not f then return nil end; local s=f:read("*a"); f:close(); return s end
 local function write_file(p,s) local f=io.open(p,"wb"); if not f then return false end; f:write(s); f:close(); return true end
@@ -81,32 +137,31 @@ local function version_is_newer(remote,localv)
  return c>z
 end
 
-local function fetch_update(url,extra_headers)
- local tmp=os.tmpname()..".lua"; local code=os.tmpname()..".code"
- local headers=extra_headers or ""
- local cmd="/usr/bin/curl -sS -L --max-time 60 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' "..headers.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code)
- os.execute(cmd)
- local status=trim(read_file(code)); local fresh=read_file(tmp); os.remove(code); os.remove(tmp)
- return status,fresh
+local update_job=nil
+local function fetch_update(url,raw)
+ local tmp,code=temp_path(".lua"),temp_path(".code")
+ local headers={"Cache-Control: no-cache","Pragma: no-cache"}
+ if raw then headers[#headers+1]="Accept: application/vnd.github.raw+json" end
+ local script
+ if IS_WINDOWS then
+  script=windows_curl_script(nil,nil,tmp,code,headers,url,60)
+  if not script or not ps_launch(script,true) then if script then os.remove(script) end; return nil end
+ else
+  local cmd="/usr/bin/curl -sS -L --connect-timeout 15 --max-time 60"
+  for _,h in ipairs(headers) do cmd=cmd.." -H "..shell_quote(h) end
+  cmd=cmd.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code..".pending").."; mv "..shell_quote(code..".pending").." "..shell_quote(code)
+  reaper.ExecProcess("/bin/sh -c "..shell_quote(cmd),-2)
+ end
+ return {rs=tmp,cd=code,script=script,deadline=reaper.time_precise()+75}
 end
-
 local function install_update()
  if busy then return end
- busy=true
- update_status="Update wird geladen …"
-
- -- Primärquelle: GitHub Contents API mit Raw-Media-Type. Damit umgehen wir raw.githubusercontent.com/CDN-Caches.
- local api="https://api.github.com/repos/wibem1/Composition-Studio/contents/Composition%20Studio.lua?ref=main&nocache="..tostring(os.time())
- local status,fresh=fetch_update(api,"-H 'Accept: application/vnd.github.raw+json'")
+ busy=true; update_status="Update wird im Hintergrund geprüft …"
+ update_job=fetch_update("https://api.github.com/repos/wibem1/Composition-Studio/contents/Composition%20Studio.lua?ref=main&nocache="..os.time(),true)
+ if not update_job then busy=false; update_status="Update-Prozess konnte nicht gestartet werden." end
+end
+local function complete_update(status,fresh)
  local rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
-
- -- Fallback nur wenn die API nicht sauber antwortet.
- if status~="200" or not fresh or not rv then
-  local url=UPDATE_URL.."?version_check="..tostring(os.time())
-  status,fresh=fetch_update(url)
-  rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
- end
-
  if status~="200" or not fresh or #fresh<1000 then
   update_status="Update fehlgeschlagen (HTTP "..tostring(status)..")."
   busy=false
@@ -136,17 +191,37 @@ local function install_update()
  end
 
  local previous=read_file(SCRIPT_PATH)
- if SCRIPT_PATH=="" or not previous or not write_file(SCRIPT_PATH..".backup",previous) or not write_file(SCRIPT_PATH,fresh) then
-  update_status="Update konnte nicht sicher installiert werden."
-  busy=false
-  return
+ local staged=SCRIPT_PATH..".pending"
+ if not previous or not write_file(SCRIPT_PATH..".backup",previous) or not write_file(staged,fresh) or read_file(staged)~=fresh then
+  os.remove(staged); update_status="Update konnte nicht sicher vorbereitet werden."; busy=false; return
  end
-
+ -- Windows cannot rename over an existing file; retain the original until staging passes.
+ local rollback=SCRIPT_PATH..".rollback"
+ os.remove(rollback)
+ local moved=os.rename(SCRIPT_PATH,rollback)
+ local installed=moved and os.rename(staged,SCRIPT_PATH)
+ if not installed then
+  if moved then os.rename(rollback,SCRIPT_PATH) end
+  os.remove(staged); update_status="Update fehlgeschlagen; Rückfallkopie: "..SCRIPT_PATH..".backup"; busy=false; return
+ end
+ os.remove(rollback)
  update_status="Update auf "..rv.." installiert. Neustart …"
- restarting=true
- open=false
+ restarting=true; open=false; busy=false
  reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"1",true)
- reaper.defer(function() pcall(dofile,SCRIPT_PATH) end)
+ reaper.defer(function() local ok,e=pcall(dofile,SCRIPT_PATH); if not ok then reaper.ShowMessageBox(tostring(e),SCRIPT_NAME,0) end end)
+end
+
+local function poll_update()
+ local j=update_job; if not j then return end
+ local status=read_file(j.cd)
+ if not status and reaper.time_precise()<j.deadline then return end
+ local fresh=read_file(j.rs); os.remove(j.rs); os.remove(j.cd)
+ update_job=nil
+ if (trim(status)~="200" or not fresh or not fresh:match("%-%- @version%s+")) and not j.fallback then
+  update_job=fetch_update(UPDATE_URL.."?version_check="..os.time(),false)
+  if update_job then update_job.fallback=true; return end
+ end
+ complete_update(trim(status)=="" and "TIMEOUT" or trim(status),fresh)
 end
 
 local function utf8(cp) if cp<=0x7f then return string.char(cp) elseif cp<=0x7ff then return string.char(0xc0+math.floor(cp/64),0x80+cp%64) elseif cp<=0xffff then return string.char(0xe0+math.floor(cp/4096),0x80+math.floor(cp/64)%64,0x80+cp%64) else return string.char(0xf0+math.floor(cp/262144),0x80+math.floor(cp/4096)%64,0x80+cp%64) end end
@@ -157,22 +232,22 @@ local function model_label() for _,m in ipairs(MODELS[provider] or {}) do if m[2
 local function select_model(pv,id) provider=pv; model=id; reaper.SetExtState(EXT_SECTION,PROVIDER_KEY,provider,true); reaper.SetExtState(EXT_SECTION,MODEL_KEY,model,true) end
 local function get_key() local kn=KEY_NAMES[provider]; local k=trim(reaper.GetExtState(EXT_SECTION,kn)); if k~="" then return k end; local ok,v=reaper.GetUserInputs("Studio – KI-Zugang",1,provider_name().." API-Key:,extrawidth=320",""); if not ok then return nil end; k=trim(v); if k~="" then reaper.SetExtState(EXT_SECTION,kn,k,true); return k end end
 local function edit_key(pv) local kn=KEY_NAMES[pv]; local old=reaper.GetExtState(EXT_SECTION,kn); local name=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; local ok,v=reaper.GetUserInputs("Studio – KI-Zugang",1,name.." API-Key:,extrawidth=320",old or ""); if ok then reaper.SetExtState(EXT_SECTION,kn,trim(v),true) end end
+local diag_json
 local DIAG_STATE_KEY="LastDiagnosisV2"
 local function persist_diag()
  local ok,raw=pcall(function() return diag_json() end)
  if ok and raw then reaper.SetExtState(EXT_SECTION,DIAG_STATE_KEY,raw,true) end
 end
-local diag_json
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
  local raw=read_file(DIAG_CACHE_PATH) or reaper.GetExtState(EXT_SECTION,DIAG_STATE_KEY)
  if not raw or raw=="" then return end
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result"}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error"}
  for _,k in ipairs(keys) do
   local pat='"'..k..'"%s*:%s*"'
   local _,e=raw:find(pat)
@@ -187,17 +262,34 @@ local save_diagnosis
 local save_panel=nil
 local function begin_save_panel(kind,title,default_name,ext)
  if save_panel then update_status="Ein Speichern-Dialog ist bereits geöffnet."; return end
- local script=os.tmpname()..".applescript"; local out=os.tmpname()..".path"; local done=os.tmpname()..".done"
- local function aq(v) return tostring(v or ""):gsub("\\","\\\\"):gsub('"','\\"') end
- local as='try\nset f to choose file name with prompt "'..aq(title)..'" default name "'..aq(default_name)..'"\nreturn POSIX path of f\non error number -128\nreturn ""\nend try\n'
- if not write_file(script,as) then update_status="Speichern-Dialog konnte nicht vorbereitet werden."; return end
- local cmd="(/usr/bin/osascript "..shell_quote(script).." > "..shell_quote(out).." 2>/dev/null; echo done > "..shell_quote(done)..") &"
- os.execute(cmd); save_panel={kind=kind,script=script,out=out,done=done,ext=ext,items=(kind=="swam_midi") and swam_last_made or nil}; update_status="Speicherort wählen …"
+ local script=temp_path(IS_WINDOWS and ".ps1" or ".applescript"); local out=temp_path(".path"); local done=temp_path(".done")
+ if IS_WINDOWS then
+  local ps=[[Add-Type -AssemblyName System.Windows.Forms
+try {
+  $dialog = New-Object System.Windows.Forms.SaveFileDialog
+  ]]
+  ps=ps.."$dialog.Title = "..ps_quote(title).."\r\n$dialog.FileName = "..ps_quote(default_name).."\r\n"
+  ps=ps.."$dialog.Filter = "..ps_quote(string.upper(ext).." (*."..ext..")|*."..ext.."|Alle Dateien (*.*)|*.*").."\r\n"
+  ps=ps.."$result = $dialog.ShowDialog()\r\n"
+  ps=ps.."if ($result -eq [System.Windows.Forms.DialogResult]::OK) { [System.IO.File]::WriteAllText("..ps_quote(out)..",$dialog.FileName) } else { [System.IO.File]::WriteAllText("..ps_quote(out)..",'') }\r\n"
+  ps=ps.."} catch { [System.IO.File]::WriteAllText("..ps_quote(out)..",'ERROR: ' + $_.Exception.Message) } finally { [System.IO.File]::WriteAllText("..ps_quote(done)..",'done') }\r\n"
+  if not write_file(script,"\239\187\191"..ps) then update_status="Speichern-Dialog konnte nicht vorbereitet werden."; return end
+  if not ps_launch(script,true) then os.remove(script); update_status="Windows-Speicherdialog konnte nicht gestartet werden."; return end
+ else
+  local function aq(v) return tostring(v or ""):gsub("\\","\\\\"):gsub('"','\\"') end
+  local as='try\nset f to choose file name with prompt "'..aq(title)..'" default name "'..aq(default_name)..'"\nreturn POSIX path of f\non error number -128\nreturn ""\nend try\n'
+  if not write_file(script,as) then update_status="Speichern-Dialog konnte nicht vorbereitet werden."; return end
+  local cmd="(/usr/bin/osascript "..shell_quote(script).." > "..shell_quote(out).." 2>/dev/null; echo done > "..shell_quote(done)..") &"
+  os.execute(cmd)
+ end
+ save_panel={kind=kind,script=script,out=out,done=done,ext=ext,items=(kind=="swam_midi") and swam_last_made or nil}; update_status="Speicherort wählen …"
 end
+
 local function finish_save_panel()
  if not save_panel or not read_file(save_panel.done) then return end
  local p=save_panel; save_panel=nil; local fn=trim(read_file(p.out)); os.remove(p.script); os.remove(p.out); os.remove(p.done)
- if fn=="" then update_status="Speichern abgebrochen."; return end
+ if fn:match("^ERROR:") then update_status="Windows-Dialog: "..fn; return end
+  if fn=="" then update_status="Speichern abgebrochen."; return end
  if not fn:lower():match("%."..p.ext.."$") then fn=fn.."."..p.ext end
  if p.kind=="swam_midi" then write_last_midi_to(fn,p.items); return end
  if p.kind=="diagnosis" then
@@ -205,8 +297,9 @@ local function finish_save_panel()
  elseif p.kind=="midi" then local ok,msg=write_last_midi_to(fn); update_status=msg end
 end
 save_diagnosis=function()
- if ensure_title_then("diagnosis") then return end
- begin_save_panel("diagnosis","Diagnose speichern",safe_work_title(work_title).." - Diagnose.json","json")
+ local title=safe_work_title(work_title)
+ if title=="" then title="Composition Studio" end
+ begin_save_panel("diagnosis","Diagnose speichern",title.." - Diagnose.json","json")
 end
 
 local function be16(n) return string.char(math.floor(n/256)%256,n%256) end
@@ -294,16 +387,6 @@ local function begin_swam_interpretation()
  launch("swam_interpretation",swam_interpretation_prompt(source),key,{swam_source=source})
 end
 local function first_text_field(raw) local ts,te=(raw or ""):find('"text"%s*:'); if not ts then return nil end; local q=raw:find('"',te+1,true); return q and read_json_string(raw,q) or nil end
-local function run_ai(prompt,key)
- local base=os.tmpname(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers
- if provider=="openai" then body='{"model":"'..json_escape(model)..'","input":"'..json_escape(prompt)..'"}'; url="https://api.openai.com/v1/responses"; headers="-H "..shell_quote("Authorization: Bearer "..key).." -H 'Content-Type: application/json'"
- elseif provider=="anthropic" then body='{"model":"'..json_escape(model)..'","max_tokens":16000,"messages":[{"role":"user","content":"'..json_escape(prompt)..'"}]}'; url="https://api.anthropic.com/v1/messages"; headers="-H "..shell_quote("x-api-key: "..key).." -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json'"
- else body='{"contents":[{"parts":[{"text":"'..json_escape(prompt)..'"}]}]}'; url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key; headers="-H 'Content-Type: application/json'" end
- if not write_file(rq,body) then return nil,"Anfrage konnte nicht geschrieben werden." end
- os.execute("/usr/bin/curl -sS --max-time 180 -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(cd))
- local status=trim(read_file(cd)); local raw=read_file(rs); os.remove(rq); os.remove(rs); os.remove(cd); if status~="200" or not raw then return nil,"KI-Aufruf fehlgeschlagen ("..provider_name()..", HTTP "..tostring(status)..")." end
- local text=provider=="openai" and response_text(raw) or first_text_field(raw); if not text or trim(text)=="" then return nil,"KI-Antwort konnte nicht gelesen werden ("..provider_name()..")." end; return text,nil
-end
 local function enc(s) return (tostring(s or ""):gsub("([^%w%-%._~])",function(c) return string.format("%%%02X",string.byte(c)) end)) end
 local function dec(s) return (tostring(s or ""):gsub("%%(%x%x)",function(h) return string.char(tonumber(h,16)) end)) end
 local function save_history(proj) proj=proj or current_project; if not proj then return end; local rows={}; for _,m in ipairs(history) do rows[#rows+1]=enc(m.role).."\t"..enc(m.text) end; reaper.SetProjExtState(proj,EXT_SECTION,HISTORY_KEY,table.concat(rows,"\n")) end
@@ -478,22 +561,53 @@ NAME muss exakt dem NAME der CS-Zeile entsprechen. CHANNEL 0-15; CONTROLLER, VAL
 end
 local job=nil
 local function ai_command(prompt,key)
- local base=os.tmpname(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers
- if provider=="openai" then body='{\"model\":\"'..json_escape(model)..'\",\"input\":\"'..json_escape(prompt)..'\"}'; url="https://api.openai.com/v1/responses"; headers="-H "..shell_quote("Authorization: Bearer "..key).." -H 'Content-Type: application/json'"
- elseif provider=="anthropic" then body='{\"model\":\"'..json_escape(model)..'\",\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"'..json_escape(prompt)..'\"}]}'; url="https://api.anthropic.com/v1/messages"; headers="-H "..shell_quote("x-api-key: "..key).." -H 'anthropic-version: 2023-06-01' -H 'Content-Type: application/json'"
- else body='{\"contents\":[{\"parts\":[{\"text\":\"'..json_escape(prompt)..'\"}]}]}'; url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key; headers="-H 'Content-Type: application/json'" end
- if not write_file(rq,body) then return nil,"Anfrage konnte nicht geschrieben werden." end
- local cmd="/usr/bin/curl -sS --max-time 180 -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(cd).." 2>/dev/null &"
- os.execute(cmd); return {rq=rq,rs=rs,cd=cd,provider=provider},nil
+ local base=temp_path(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers,win_headers
+ if provider=="openai" then body='{"model":"'..json_escape(model)..'","input":"'..json_escape(prompt)..'"}'; url="https://api.openai.com/v1/responses"; win_headers={"Authorization: Bearer "..key,"Content-Type: application/json"}
+ elseif provider=="anthropic" then body='{"model":"'..json_escape(model)..'","max_tokens":16000,"messages":[{"role":"user","content":"'..json_escape(prompt)..'"}]}'; url="https://api.anthropic.com/v1/messages"; win_headers={"x-api-key: "..key,"anthropic-version: 2023-06-01","Content-Type: application/json"}
+ else body='{"contents":[{"parts":[{"text":"'..json_escape(prompt)..'"}]}]}'; url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key; win_headers={"Content-Type: application/json"} end
+ if not write_file(rq,body) then return nil,"Anfrage konnte nicht geschrieben werden: "..rq end
+ if IS_WINDOWS then
+  local script=windows_curl_script(nil,rq,rs,cd,win_headers,url,180)
+  if not script then return nil,"PowerShell-Aufruf konnte nicht vorbereitet werden." end
+  if not ps_launch(script,true) then os.remove(script); os.remove(rq); return nil,"Windows-Hintergrundprozess konnte nicht gestartet werden." end
+ else
+  headers=""; for _,h in ipairs(win_headers) do headers=headers.." -H "..shell_quote(h) end
+  local cmd="/usr/bin/curl -sS --max-time 180 -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(cd).." 2>/dev/null &"
+  os.execute(cmd)
+ end
+ return {rq=rq,rs=rs,cd=cd,provider=provider,deadline=reaper.time_precise()+200},nil
 end
+
 local function ai_poll(a)
- local status=read_file(a.cd); if not status or trim(status)=="" then return nil,nil,false end
- status=trim(status); local raw=read_file(a.rs); os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
- if status~="200" or not raw then return nil,"KI-Aufruf fehlgeschlagen (HTTP "..tostring(status)..").",true end
- local text=a.provider=="openai" and response_text(raw) or first_text_field(raw); if not text or trim(text)=="" then return nil,"KI-Antwort konnte nicht gelesen werden.",true end
- return text,nil,true
+ local status=read_file(a.cd)
+ if not status or trim(status)=="" then
+  if reaper.time_precise()<a.deadline then return nil,nil,false end
+  diag_set("api_error","Zeitlimit / Hintergrundprozess ohne Statusdatei")
+  return nil,"KI-Zeitlimit erreicht; siehe Diagnose und CompositionStudioTemp.",true
+ end
+ status=trim(status)
+ local raw=read_file(a.rs)
+ -- Don't retain access credentials: API responses do not include submitted keys.
+ diag_set("api_status",status)
+ if status~="200" or not raw then
+  local excerpt=(raw or ""):sub(1,1500)
+  diag_set("api_response_excerpt",excerpt)
+  diag_set("api_error","HTTP/Transport: "..status)
+  os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
+  return nil,"KI-Aufruf fehlgeschlagen ("..status.."): "..excerpt:sub(1,350),true
+ end
+ local result=a.provider=="openai" and response_text(raw) or first_text_field(raw)
+ if not result or trim(result)=="" then
+  diag_set("api_error","Antwortformat nicht erkannt ("..a.provider..")")
+  diag_set("api_response_excerpt",raw:sub(1,1500))
+  os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
+  return nil,"KI-Antwort konnte nicht gelesen werden. Antwortanfang: "..raw:sub(1,350),true
+ end
+ diag_set("api_error","")
+ os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
+ return result,nil,true
 end
-launch=function(stage,prompt,key,data) local a,e=ai_command(prompt,key); if not a then add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {}}; return true end
+launch=function(stage,prompt,key,data) local a,e=ai_command(prompt,key); if not a then add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 local function begin_process(request)
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
  local items=selected_items(false); local tracks=selected_tracks(); diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); launch("controller",prompt,key,{request=request,items=items,tracks=tracks})
@@ -514,7 +628,7 @@ local function summary_prompt(request,comp,made)
  return [[Beschreibe die bereits fertig komponierte MIDI-Komposition kurz, konkret und hörbezogen. Nenne Tempo/BPM, Tonart bzw. falls nicht eindeutig 'tonales Zentrum nicht eindeutig', den Umfang in Takten soweit aus den QN-Daten ableitbar, die prägende musikalische Idee und höchstens eine auffällige klangliche oder satztechnische Eigenheit. Maximal 600 Zeichen. Keine Takt-für-Takt-Analyse, keine Bewertung und keine Verbesserungsvorschläge. Erfinde keine Angaben.]].."\nREAPER-TEMPO: "..string.format("%.2f BPM",reaper.Master_GetTempo()).."\nAUFTRAG: "..request.."\nMIDI-DATEN:\n"..comp
 end
 local function poll_job()
- if not job then return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
+ if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  if not text then add("KI",e); busy=false; return end; text=trim(text)
  if stage=="work_title" then
   local t=safe_work_title(text:gsub("^[Tt][Ii][Tt][Ee][Ll]%s*:%s*","")); if t=="" then update_status="Kein brauchbarer Werktitel erhalten."; busy=false; return end
@@ -1660,5 +1774,6 @@ local function info_text() return "AKTUELLER STAND\n\nComposition Studio "..VERS
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(48,math.min(260,lines*22+12)); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
-local function loop() poll_job(); finish_save_panel(); score_bridge_poll(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
+local auto_update_at=nil -- manuelles Update verhindert unerwartete Rückkehr zur alten GitHub-Version
+local function loop() if auto_update_at and reaper.time_precise()>=auto_update_at and not busy then auto_update_at=nil; install_update() end; poll_update(); poll_job(); finish_save_panel(); score_bridge_poll(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx); if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local ih,bh=112,32; local ch=math.max(120,h-ih-bh*2-84); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=6; local bw=math.max(110,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
 loop()
