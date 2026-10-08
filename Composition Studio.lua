@@ -758,6 +758,21 @@ local function lily_compile_import(source)
  reaper.Undo_EndBlock2(0,"Composition Studio – LilyPond MIDI",-1)
  local tracks=reaper.CountTracks(0)-prior
  if tracks<=0 then return nil,"MIDI-Datei erzeugt, aber REAPER-Import fehlgeschlagen ("..tostring(n)..")." end
+ local made,ids={},{}
+ for ix=prior,reaper.CountTracks(0)-1 do
+  local tr=reaper.GetTrack(0,ix)
+  if tr then
+   for j=0,reaper.CountTrackMediaItems(tr)-1 do
+    local it=reaper.GetTrackMediaItem(tr,j)
+    local tk=it and reaper.GetActiveTake(it)
+    if tk and reaper.TakeIsMIDI(tk) then
+     made[#made+1]=it; ids[#ids+1]=item_guid(it)
+    end
+   end
+  end
+ end
+ last_made=made
+ reaper.SetProjExtState(0,EXT_SECTION,"LastMadeGUIDs",table.concat(ids,"\n"))
  reaper.UpdateArrange()
  return tracks
 end
@@ -2001,7 +2016,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio "..VERSION.." arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD).."\n\nNEU IN "..VERSION.."\n\n• Mit A- und A+ wird die Schriftgröße auch auf Buttons, Modellauswahl, Menüs und Eingabefelder angewandt. Buttonhöhen und Eingabebereich passen sich an. Der Wert wird dauerhaft gespeichert.\n• Direkter LilyPond-Kompositionsweg für Klavier unterstützt jetzt auch Akkorde und Notenwerte bis 1/128.\n• Keine Abschnittsübersetzung bei neuen Klavierstücken.\n• LilyPond-Funktionen außerhalb des unterstützten Imports (z. B. Triolen, Wiederholungen und Haltebögen) führen zu einer Fehlermeldung statt zu stillen MIDI-Verlusten.\n\nHINWEIS: Ein REAPER-Windows-Funktionstest steht noch aus." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio "..VERSION.." arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD).."\n\nNEU IN "..VERSION.."\n\n• Mit A- und A+ wird die Schriftgröße auch auf Buttons, Modellauswahl, Menüs und Eingabefelder angewandt. Buttonhöhen und Eingabebereich passen sich an. Der Wert wird dauerhaft gespeichert.\n• Keine eigene LilyPond-Notenauswertung mehr. Die vollständige Partitur geht an die LilyPond-Engine.\n• Keine Abschnittsübersetzung bei neuen Klavierstücken.\n• Neue Klavierstücke werden mit der offiziellen LilyPond-Engine in MIDI umgewandelt und direkt in REAPER importiert. Der Pfad ist über das Menü einstellbar.\n\nHINWEIS: Ein REAPER-Windows-Funktionstest steht noch aus." end
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
