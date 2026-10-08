@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.49
+-- @version 1.0.50
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.49"
+local VERSION="1.0.50"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -98,7 +98,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.49')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.50')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -680,6 +680,112 @@ local function ai_poll(a)
  return result,nil,true
 end
 launch=function(stage,prompt,key,data) local a,e=ai_command(prompt,key); if not a then add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
+
+-- Local LilyPond-to-MIDI translator for unambiguous absolute-pitch piano notation.
+-- Deliberately rejects unsupported syntax rather than silently losing notes.
+local function lily_extract_staffs(src)
+ local result,pos={},1
+ while true do
+  local s,e=src:find("\\new%s+Staff%s*%b\"\"",pos)
+  if not s then s,e=src:find("\\new%s+Staff",pos) end
+  if not s then break end
+  local a=src:find("{",e+1,true); if not a then return nil,"Staff ohne Notenblock" end
+  local depth,b=0,nil
+  for i=a,#src do
+   local ch=src:sub(i,i)
+   if ch=="{" then depth=depth+1 elseif ch=="}" then depth=depth-1; if depth==0 then b=i; break end end
+  end
+  if not b then return nil,"Unvollständiger Staff-Block" end
+  result[#result+1]=src:sub(a+1,b-1)
+  pos=b+1
+ end
+ if #result==0 then return nil,"Keine \\new Staff-Blöcke gefunden" end
+ return result
+end
+local function lily_parse_staff(src,channel)
+ if src:find("\\relative",1,true) then return nil,"Relative Tonhöhen sind nicht zugelassen; \\absolute verwenden." end
+ src=src:gsub("%%[^\n]*"," "):gsub("\\absolute%s*{"," "):gsub("[{}|]"," ")
+ src=src:gsub('\\clef%s+"?[%w]+"?'," ")
+ src=src:gsub("\\key%s+[%w']+%s+\\[a-zA-Z]+"," ")
+ src=src:gsub("\\time%s+%d+/%d+"," ")
+ src=src:gsub("\\tempo%s+[^=\n]+=%s*%d+"," ")
+ src=src:gsub("\\bar%s+\"[^\"]*\""," ")
+ src=src:gsub("\\(voiceOne|voiceTwo|oneVoice)"," ")
+ src=src:gsub("\\(p|pp|ppp|mp|mf|f|ff|fff|<|>|!)"," ")
+ src=src:gsub("[-_^][%.%-+>]"," ")
+ local notes,pos,lastdur={},0,1
+ local semis={c=0,d=2,e=4,f=5,g=7,a=9,b=11}
+ for tok in src:gmatch("%S+") do
+  if tok:sub(1,1)=="\\" then
+   if not (tok=="\\absolute" or tok=="\\break" or tok=="\\pageBreak" or tok=="\\major" or tok=="\\minor" or tok=="\\numericTimeSignature") then
+    return nil,"Nicht unterstützter LilyPond-Befehl: "..tok
+   end
+  elseif tok=="~" or tok=="(" or tok==")" or tok=="[" or tok=="]" then
+   -- Slurs and ties have no separate MIDI note here; ties must be resolved explicitly.
+   if tok=="~" then return nil,"Bindebögen über Notengrenzen werden noch nicht unterstützt." end
+  else
+   local root,alter,oct,dur,dots=tok:match("^([a-g])(isis|eses|is|es|)?([',]*)(%d*)(%.?)$")
+   local rest,rdur,rdots=tok:match("^([rs])(%d*)(%.?)$")
+   if not root and not rest then return nil,"Unbekannter Notenausdruck: "..tok end
+   local dn=tonumber(root and dur or rdur) or lastdur
+   if dn<=0 or dn>128 then return nil,"Ungültiger Notenwert" end
+   lastdur=dn
+   local length=4/dn
+   if (root and dots or rdots)=="." then length=length*1.5 end
+   if root then
+    local alt=({is=1,isis=2,es=-1,eses=-2})[alter] or 0
+    local octave=0
+    for ch in oct:gmatch(".") do octave=octave+(ch=="'" and 1 or -1) end
+    -- LilyPond c' is MIDI 60, LilyPond c is MIDI 48.
+    local pitch=48+12*octave+semis[root]+alt
+    if pitch<0 or pitch>127 then return nil,"Tonhöhe außerhalb MIDI 0–127" end
+    notes[#notes+1]={start_qn=pos,duration_qn=length,pitch=pitch,velocity=80,channel=channel}
+   end
+   pos=pos+length
+  end
+ end
+ if #notes==0 then return nil,"Stimme ohne Noten" end
+ return notes,pos
+end
+local function lily_to_cs(src)
+ local staffs,err=lily_extract_staffs(src); if not staffs then return nil,err end
+ local all,maxdur={},nil
+ for i,staff in ipairs(staffs) do
+  local notes,duration=lily_parse_staff(staff,math.min(i-1,15))
+  if not notes then return nil,"Staff "..i..": "..duration end
+  if maxdur and math.abs(duration-maxdur)>0.001 then return nil,"Stimmen haben unterschiedliche Längen." end
+  maxdur=duration
+  for _,n in ipairs(notes) do all[#all+1]=string.format("%.6g,%.6g,%d,%d,%d",n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end
+ end
+ local num,den=src:match("\\time%s+(%d+)%s*/%s*(%d+)")
+ num,den=tonumber(num) or 4,tonumber(den) or 4
+ local bpm=tonumber(src:match("\\tempo%s+[^\n=]-=%s*(%d+)")) or 90
+ local measure=4*num/den
+ if maxdur/measure-math.floor(maxdur/measure+0.0001)>0.001 then return nil,"Stück endet nicht an einer Taktgrenze." end
+ return "CSMETA|tempo|0|"..bpm.."\nCSMETA|timesig|0|"..num.."|"..den.."\nCS|new|-|Klavier|0|"..table.concat(all,";"),math.floor(maxdur/measure+0.0001),#all
+end
+local function lily_composition_prompt(request)
+ return [[Komponiere direkt das vollständige Musikstück als LilyPond-Partitur, KEINEN Entwurf.
+Gib ausschließlich ausführbaren LilyPond-Code zurück (ohne Markdown-Codezaun).
+Verwende für ein Klavierstück genau zwei \new Staff-Blöcke im \score, rechte und linke Hand.
+Jede Stimme muss \absolute verwenden; benutze ausschließlich absolute LilyPond-Tonhöhen
+(c' ist das mittlere C), Noten c d e f g a b, is/es-Vorzeichen, Oktavstriche,
+Dauern 1,2,4,8,16 mit optionalem Punkt sowie Pausen r und einzelne Taktstriche |.
+Schreibe JEDE Tonhöhe und JEDE Dauer explizit. Verwende keine \relative-Angaben,
+keine Variablen, Wiederholungsbefehle, Triolen, Akkorde, Bindebögen oder
+verschachtelte Stimmen. Halte die beiden Staves taktsynchron.
+Ein Beispiel des erwarteten Aufbaus:
+\version "2.24.3"
+\score { <<
+\new Staff { \absolute { \clef treble \time 4/4 \tempo 4 = 84 c'4 d'4 e'4 f'4 | } }
+\new Staff { \absolute { \clef bass \time 4/4 c4 g4 c4 g4 | } }
+>> }
+Entwickle die musikalische Gestalt frei; vermeide mechanische Begleitmuster.
+Keine Erklärungen und keine technischen MIDI-Zeilen.
+AUFTRAG:
+]]..request
+end
+
 local function begin_process(request)
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
  local items=selected_items(false); local tracks=selected_tracks(); diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); launch("controller",prompt,key,{request=request,items=items,tracks=tracks})
@@ -702,6 +808,24 @@ end
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  if not text then add("KI",e); busy=false; return end; text=trim(text)
+ if stage=="lily_composition" then
+  diag_set("composition_music",text)
+  local midi,bars,notes=lily_to_cs(text)
+  if not midi then
+   diag_set("apply_result","LilyPond-Parser: "..tostring(bars))
+   add("KI","LilyPond konnte nicht vollständig gelesen werden: "..tostring(bars)..". Keine Noten übertragen.")
+   busy=false; return
+  end
+  diag_set("composition_answer",midi)
+  local made,ae=apply_composition(midi,{}, {},true)
+  diag_set("apply_result",made and ("created_items="..#made.."; measures="..bars.."; notes="..notes) or ("ERROR: "..tostring(ae)))
+  if not made then add("KI","MIDI konnte nicht erstellt werden: "..tostring(ae)); busy=false; return end
+  last_made=made
+  local ids={}; for _,it in ipairs(made) do ids[#ids+1]=item_guid(it) end
+  reaper.SetProjExtState(0,EXT_SECTION,"LastMadeGUIDs",table.concat(ids,"\n"))
+  add("KI","LilyPond direkt übertragen: "..bars.." Takte, "..notes.." Noten, eine Klavierspur. Keine weitere KI-Übersetzung.")
+  busy=false; return
+ end
  if stage=="work_title" then
   local t=safe_work_title(text:gsub("^[Tt][Ii][Tt][Ee][Ll]%s*:%s*","")); if t=="" then update_status="Kein brauchbarer Werktitel erhalten."; busy=false; return end
   work_title=t; reaper.SetProjExtState(0,EXT_SECTION,TITLE_KEY,work_title); diag_set("work_title",work_title); busy=false
@@ -710,7 +834,10 @@ local function poll_job()
  if stage=="controller" then
   diag_set("controller_answer",text); local chat=text:match("^CHAT|(.*)$"); if chat then add("KI",trim(chat)); busy=false; return end; local ask=text:match("^ASK|(.*)$"); if ask then add("KI",trim(ask)); busy=false; return end
   local awhy=text:match("^NEED_ANALYSIS|(.*)$"); if awhy then local full=selected_items(true); if #full==0 and #data.tracks>0 then full=track_context_items(data.tracks) end; if #full==0 then add("KI","Für die Analyse ist kein MIDI-Material ausgewählt."); busy=false; return end; launch("analysis",analysis_prompt(data.request,full,data.tracks),key,data); return end
-  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or selected_items(true); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil); diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; launch(newwhy and "composition_music" or "composition",cp,key,data); return end
+  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or selected_items(true); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil); diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; if newwhy and tostring(data.request or ""):lower():find("klavier",1,true) then
+    local lp=lily_composition_prompt(data.request); diag_set("composition_prompt",lp)
+    launch("lily_composition",lp,key,data)
+   else launch(newwhy and "composition_music" or "composition",cp,key,data) end; return end
   if text:match("^ACTION|") then local a,pe=parse_action(text,data.items); if not a then add("KI","Ich führe nichts aus: "..pe); busy=false; return end; local ok,ae=execute_action(a); if not ok then add("KI","Die Aktion wurde nicht ausgeführt: "..tostring(ae)); else add("KI",trim(a.desc).." – erledigt. REAPER Undo kann die Änderung rückgängig machen.") end; busy=false; return end
   add("KI","Ich konnte den Auftrag nicht eindeutig einem sicheren Vorgang zuordnen und habe nichts verändert."); busy=false; return
  elseif stage=="swam_interpretation" then
