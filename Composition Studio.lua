@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.47
+-- @version 1.0.48
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.47"
+local VERSION="1.0.48"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -98,7 +98,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.47')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.48')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -567,8 +567,30 @@ local function numbered_measure_count(draft)
  return highest
 end
 local function chunk_prompt(draft,first_bar,last_bar)
- return midi_translation_prompt("",draft).."\n\nVERBINDLICHER TEILAUFTRAG: Übertrage AUSSCHLIESSLICH Takt "..first_bar.." bis "..last_bar.." (einschließlich). Berücksichtige alle vorangehenden Takte zur Berechnung der absoluten startQN ab Stückbeginn; beginne NICHT erneut bei QN 0. Für jedes Instrument eine vollständige CS-Zeile mit ausschließlich den Noten dieser Takte; keine abgeschnittenen Noteneinträge. Jeder Eintrag besteht aus exakt fünf Werten. Keine Wiederholung von Noten anderer Takte. CSMETA nur im ersten Abschnitt, falls nötig. Antworte nur mit vollständigen CS-/CSCTRL-/CSMETA-Zeilen."
+ -- Send only the target bars: repeating the entire composition was unnecessarily slow.
+ local header={}
+ local found={}
+ local current=nil
+ for line in (tostring(draft or "").."\n"):gmatch("([^\n]*)\n") do
+  local bar=tonumber(line:match("[Tt]%.%s*(%d+)"))
+  if bar then current=bar end
+  if current and current>=first_bar and current<=last_bar then found[#found+1]=line
+  elseif not current and #header<20 then header[#header+1]=line end
+ end
+ local base_qn=(first_bar-1)*4
+ return [[Übertrage den folgenden vollständigen musikalischen Abschnitt in REAPER-MIDI-Daten.
+Antworte ausschließlich mit vollständigen Datenzeilen:
+CS|new|-|NAME|PROGRAM|startQN,durationQN,pitch,velocity,channel;...
+CSMETA|tempo|startQN|BPM
+CSMETA|timesig|startQN|ZAEHLER|NENNER
+CSCTRL|NAME|startQN|CHANNEL|cc|CONTROLLER|VALUE
+Alle startQN sind ABSOLUT ab Stückbeginn, nicht relativ zum Abschnitt.
+Für 4/4 beginnt dieser Abschnitt bei QN ]]..base_qn..[[. Andere Taktarten entsprechend berücksichtigen.
+Übertrage exakt alle Noten, Pausen, Akkorde und Dauern der Takte ]]..first_bar..[[ bis ]]..last_bar..[[, ohne Noten zu erfinden oder auszulassen. Gib jede MIDI-Note mit fünf numerischen Werten an. Gib nur diese Takte aus. Für Klavier nutze konsequent NAME=Klavier für beide Hände und MIDI-Kanal 0 (oder 1 für die linke Hand). Die Ausgabe muss vollständig sein.
+STÜCKINFORMATION:
+]]..table.concat(header,"\n").."\nTAKTE:\n"..table.concat(found,"\n")
 end
+
 local function check_translation_chunk(s)
  local found=false
  for line in tostring(s or ""):gmatch("[^\r\n]+") do
@@ -589,7 +611,7 @@ local function check_translation_chunk(s)
 end
 local function start_translation_chunk(data,key)
  local first_bar=data.chunk_first
- local last_bar=math.min(data.chunk_total,first_bar+3)
+ local last_bar=math.min(data.chunk_total,first_bar+6)
  local prompt=chunk_prompt(data.draft,first_bar,last_bar)
  diag_set("translation_prompt",prompt)
  update_status="Notenübertragung: Takte "..first_bar.."–"..last_bar.." von "..data.chunk_total
@@ -685,7 +707,7 @@ local function poll_job()
   swam_last_made=made; add("KI","SWAM-Interpretation erzeugt: "..tostring(#made).." neue Stimme(n). Die ursprüngliche Komposition blieb unverändert."); update_status="SWAM-Interpretation fertig – Original unverändert."; busy=false; return
  elseif stage=="analysis" then add("KI",text); busy=false; return
  elseif stage=="composition_music" then
-  diag_set("composition_music",text); data.draft=text; work_title=title_from_draft(text,data.request); if work_title~="" then reaper.SetProjExtState(0,EXT_SECTION,TITLE_KEY,work_title); diag_set("work_title",work_title) end; local bars=numbered_measure_count(text); if bars>=5 and bars<=256 then data.chunk_total=bars; data.chunk_first=1; data.chunk_results={}; data.chunk_retries=0; start_translation_chunk(data,key) else local tp=midi_translation_prompt(data.request,text); diag_set("translation_prompt",tp); launch("composition",tp,key,data) end; return
+  diag_set("composition_music",text); data.draft=text; work_title=title_from_draft(text,data.request); if work_title~="" then reaper.SetProjExtState(0,EXT_SECTION,TITLE_KEY,work_title); diag_set("work_title",work_title) end; local bars=numbered_measure_count(text); if bars>=5 and bars<=256 then data.chunk_total=bars; data.chunk_piano=(tostring(data.request or ""):lower():find("klavier",1,true)~=nil and tostring(data.request or ""):lower():find("und",1,true)==nil); data.chunk_first=1; data.chunk_results={}; data.chunk_retries=0; start_translation_chunk(data,key) else local tp=midi_translation_prompt(data.request,text); diag_set("translation_prompt",tp); launch("composition",tp,key,data) end; return
  elseif stage=="translation_chunk" then
   local valid,reason=check_translation_chunk(text)
   if not valid then
@@ -695,16 +717,52 @@ local function poll_job()
     start_translation_chunk(data,key)
     return
    end
-   diag_set("apply_result","ERROR: Takte "..data.chunk_first.."–"..math.min(data.chunk_total,data.chunk_first+3)..": "..tostring(reason))
+   diag_set("apply_result","ERROR: Takte "..data.chunk_first.."–"..math.min(data.chunk_total,data.chunk_first+6)..": "..tostring(reason))
    diag_set("composition_answer",table.concat(data.chunk_results or {},"\n").."\n"..text)
    add("KI","MIDI-Übertragung im Abschnitt "..data.chunk_first.." abgebrochen: "..tostring(reason)..". Keine MIDI-Daten wurden übernommen.")
    busy=false; return
   end
+  -- Validate actual coverage, not merely syntactic validity. Do not accept missing bars.
+  local bar_start=(data.chunk_first-1)*4
+  local bar_end=math.min(data.chunk_total,data.chunk_first+6)*4
+  for q=bar_start,bar_end-4,4 do
+   local covered=false
+   for line in tostring(text):gmatch("[^\r\n]+") do
+    if line:match("^CS|") then
+     local notes=line:match("^CS|[^|]+|[^|]+|[^|]+|%d+|(.+)$")
+     if notes then
+      for note in notes:gmatch("[^;]+") do
+       local at=tonumber(note:match("^%s*([%d%.%-]+),"))
+       if at and at>=q-0.0001 and at<q+4-0.0001 then covered=true; break end
+      end
+     end
+    end
+    if covered then break end
+   end
+   if not covered then
+    diag_set("apply_result","ERROR: Noten fehlen in Takt "..tostring(math.floor(q/4)+1))
+    add("KI","MIDI-Übertragung unvollständig: Takt "..tostring(math.floor(q/4)+1).." fehlt. Keine MIDI-Daten übernommen.")
+    busy=false; return
+   end
+  end
   data.chunk_results[#data.chunk_results+1]=text
-  data.chunk_first=data.chunk_first+4
+  data.chunk_first=data.chunk_first+7
   data.chunk_retries=0
   if data.chunk_first<=data.chunk_total then start_translation_chunk(data,key); return end
   text=table.concat(data.chunk_results,"\n")
+  -- Normalize inconsistent piano track labels before the existing merging logic.
+  if data.chunk_piano then
+   local lines={}
+   for line in text:gmatch("[^\r\n]+") do
+    if line:match("^CS|new|") then
+     line=line:gsub("^(CS|new|[^|]+|)[^|]+|","%1Klavier|")
+    elseif line:match("^CSCTRL|") then
+     line=line:gsub("^(CSCTRL|)[^|]+|","%1Klavier|")
+    end
+    lines[#lines+1]=line
+   end
+   text=table.concat(lines,"\n")
+  end
   stage="composition"
  end
  if stage=="composition" then
