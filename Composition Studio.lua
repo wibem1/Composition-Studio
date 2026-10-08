@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.46
+-- @version 1.0.47
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.46"
+local VERSION="1.0.47"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -98,7 +98,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.46')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.47')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -241,7 +241,7 @@ end
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","api_error","api_response_excerpt","update_error"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
@@ -526,7 +526,7 @@ local function create_track(name,index) index=index or reaper.CountTracks(0); re
 local function existing_program(track) for i=0,reaper.CountTrackMediaItems(track)-1 do local item=reaper.GetTrackMediaItem(track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local _,_,_,cc=reaper.MIDI_CountEvts(take); for n=0,(cc or 0)-1 do local ok,_,muted,_,chanmsg,_,msg2=reaper.MIDI_GetCC(take,n); if ok and not muted and chanmsg==0xC0 then return msg2 end end end end; return nil end
 local function program_for_name(name,proposed) local n=(name or ""):lower(); local map={{"violin",40},{"violine",40},{"geige",40},{"viola",41},{"bratsche",41},{"cello",42},{"violoncello",42},{"kontrabass",43},{"double bass",43},{"gitarre",24},{"guitar",24},{"harfe",46},{"harp",46},{"flöte",73},{"floete",73},{"flute",73},{"oboe",68},{"klarinette",71},{"clarinet",71},{"fagott",70},{"bassoon",70},{"trompete",56},{"trumpet",56},{"horn",60},{"posaune",57},{"trombone",57},{"sax",65},{"klavier",0},{"piano",0},{"orgel",19},{"organ",19}}; for _,p in ipairs(map) do if n:find(p[1],1,true) then return p[2] end end; local v=tonumber(proposed); if v and v>=0 and v<=127 then return math.floor(v) end; return 0 end
 local function create_midi(track,name,notes,program) local lo,hi=math.huge,-math.huge; for _,n in ipairs(notes) do lo=math.min(lo,n.start_qn); hi=math.max(hi,n.start_qn+n.duration_qn) end; if hi<=lo then return nil end; local item=reaper.CreateNewMIDIItemInProj(track,reaper.TimeMap2_QNToTime(0,lo),reaper.TimeMap2_QNToTime(0,hi),false); local take=item and reaper.GetActiveTake(item); if not take then return nil end; reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME",name,true); local ch=math.max(0,math.min(15,(notes[1].channel or 0))); local ppq=reaper.MIDI_GetPPQPosFromProjTime(take,reaper.TimeMap2_QNToTime(0,lo)); local pg=math.max(0,math.min(127,program or 0)); reaper.MIDI_InsertCC(take,false,false,ppq,0xB0,ch,0,0); reaper.MIDI_InsertCC(take,false,false,ppq,0xB0,ch,32,0); reaper.MIDI_InsertCC(take,false,false,ppq,0xC0,ch,pg,0); for _,n in ipairs(notes) do local s=reaper.MIDI_GetPPQPosFromProjTime(take,reaper.TimeMap2_QNToTime(0,n.start_qn)); local e=reaper.MIDI_GetPPQPosFromProjTime(take,reaper.TimeMap2_QNToTime(0,n.start_qn+n.duration_qn)); reaper.MIDI_InsertNote(take,false,false,s,e,n.channel,n.pitch,n.velocity,true) end; reaper.MIDI_Sort(take); return item end
-local function apply_composition(text,items,tracks) local src,targets={},{ }; for _,it in ipairs(items) do src[it.guid]=it end; for _,t in ipairs(tracks or {}) do targets[t.guid]=t.track end; local jobs={}; local musical_map={}; local controls={}; for line in text:gmatch("[^\r\n]+") do line=trim(line); local mt,q,bpm=line:match("^CSMETA|(tempo)|([^|]+)|([^|]+)$"); local ms,mq,num,den=line:match("^CSMETA|(timesig)|([^|]+)|([^|]+)|([^|]+)$"); if mt then q,bpm=tonumber(q),tonumber(bpm); if not q or not bpm or q<0 or bpm<=0 then return nil,"Ungültige Tempoangabe." end; musical_map[#musical_map+1]={kind="tempo",qn=q,bpm=bpm} elseif ms then mq,num,den=tonumber(mq),tonumber(num),tonumber(den); if not mq or not num or not den or mq<0 or num<1 or den<1 then return nil,"Ungültige Taktartangabe." end; musical_map[#musical_map+1]={kind="timesig",qn=mq,num=math.floor(num),den=math.floor(den)} elseif line:match("^CSCTRL|") then local name,cq,ch,kind,rest=line:match("^CSCTRL|([^|]+)|([^|]+)|([^|]+)|([^|]+)|(.+)$"); cq,ch=tonumber(cq),tonumber(ch); if not name or not cq or not ch or cq<0 or ch<0 or ch>15 then return nil,"Ungültiges Ausdrucksereignis." end; if kind=="cc" then local cc,val=rest:match("^(%d+)|(%d+)$"); cc,val=tonumber(cc),tonumber(val); if not cc or not val or cc>127 or val>127 then return nil,"Ungültiges CC-Ausdrucksereignis." end; controls[#controls+1]={name=trim(name),qn=cq,ch=ch,kind="cc",a=cc,b=val} elseif kind=="program" then local pg=tonumber(rest); if not pg or pg<0 or pg>127 then return nil,"Ungültiger Program Change." end; controls[#controls+1]={name=trim(name),qn=cq,ch=ch,kind="program",a=math.floor(pg)} else return nil,"Unbekanntes Ausdrucksereignis." end else local k,g,rest=line:match("^CS|([^|]+)|([^|]+)|?(.*)$"); if not k then return nil,"Unerwartete Kompositionsantwort." end; if k=="unchanged" then if not src[g] then return nil,"Unbekannte Quelle." end elseif k=="revised" or k=="target" or k=="track" or k=="new" then local name,pg,nt=rest:match("^([^|]+)|(%d+)|(.+)$"); local notes=parse_notes(nt); local program=tonumber(pg); if not name or not notes or not program or program<0 or program>127 then return nil,"Ungültige Kompositionsdaten." end; if (k=="revised" or k=="target") and not src[g] then return nil,"Unbekannte Quelle." end; if k=="track" and not targets[g] then return nil,"Unbekannte Zielspur." end; if k=="new" and g~="-" then return nil,"Ungültige neue Spur." end; jobs[#jobs+1]={kind=k,guid=g,name=trim(name),program=program_for_name(name,program),notes=notes} else return nil,"Unbekannter Ergebnistyp." end end end; reaper.Undo_BeginBlock2(0); local made={}; local ok,err=xpcall(function() if #musical_map>0 then for i=reaper.CountTempoTimeSigMarkers(0)-1,0,-1 do reaper.DeleteTempoTimeSigMarker(0,i) end; table.sort(musical_map,function(a,b) return a.qn<b.qn end); local cur_bpm=reaper.Master_GetTempo(); local cur_num,cur_den=4,4; for _,m in ipairs(musical_map) do if m.kind=="tempo" then cur_bpm=m.bpm else cur_num,cur_den=m.num,m.den end; local tm=reaper.TimeMap2_QNToTime(0,m.qn); reaper.SetTempoTimeSigMarker(0,-1,tm,-1,-1,cur_bpm,cur_num,cur_den,false) end end; local takes_by_name={}; for _,j in ipairs(jobs) do local tr; if j.kind=="revised" then local no=math.floor(reaper.GetMediaTrackInfo_Value(src[j.guid].track,"IP_TRACKNUMBER")); tr=create_track(j.name.." [Variante]",no) elseif j.kind=="target" then tr=src[j.guid].track elseif j.kind=="track" then tr=targets[j.guid] else tr=create_track(j.name) end; local inherited=(j.kind~="new") and existing_program(tr) or nil; local it=create_midi(tr,j.name,j.notes,inherited or j.program); if not it then error("MIDI konnte nicht erzeugt werden") end; made[#made+1]=it; local tk=reaper.GetActiveTake(it); if tk then takes_by_name[j.name]=tk end end; for _,c in ipairs(controls) do local tk=takes_by_name[c.name]; if tk then local ppq=reaper.MIDI_GetPPQPosFromProjTime(tk,reaper.TimeMap2_QNToTime(0,c.qn)); if c.kind=="cc" then reaper.MIDI_InsertCC(tk,false,false,ppq,0xB0,c.ch,c.a,c.b) else reaper.MIDI_InsertCC(tk,false,false,ppq,0xC0,c.ch,c.a,0) end; reaper.MIDI_Sort(tk) end end end,debug.traceback); if not ok then reaper.Undo_EndBlock2(0,"Composition Studio – fehlgeschlagen",-1); reaper.Undo_DoUndo2(0); return nil,err end; reaper.UpdateArrange(); reaper.Undo_EndBlock2(0,"Composition Studio – KI-Komposition",-1); return made end
+local function apply_composition(text,items,tracks) local src,targets={},{ }; for _,it in ipairs(items) do src[it.guid]=it end; for _,t in ipairs(tracks or {}) do targets[t.guid]=t.track end; local jobs={}; local musical_map={}; local controls={}; for line in text:gmatch("[^\r\n]+") do line=trim(line); local mt,q,bpm=line:match("^CSMETA|(tempo)|([^|]+)|([^|]+)$"); local ms,mq,num,den=line:match("^CSMETA|(timesig)|([^|]+)|([^|]+)|([^|]+)$"); if mt then q,bpm=tonumber(q),tonumber(bpm); if not q or not bpm or q<0 or bpm<=0 then return nil,"Ungültige Tempoangabe." end; musical_map[#musical_map+1]={kind="tempo",qn=q,bpm=bpm} elseif ms then mq,num,den=tonumber(mq),tonumber(num),tonumber(den); if not mq or not num or not den or mq<0 or num<1 or den<1 then return nil,"Ungültige Taktartangabe." end; musical_map[#musical_map+1]={kind="timesig",qn=mq,num=math.floor(num),den=math.floor(den)} elseif line:match("^CSCTRL|") then local name,cq,ch,kind,rest=line:match("^CSCTRL|([^|]+)|([^|]+)|([^|]+)|([^|]+)|(.+)$"); cq,ch=tonumber(cq),tonumber(ch); if not name or not cq or not ch or cq<0 or ch<0 or ch>15 then return nil,"Ungültiges Ausdrucksereignis." end; if kind=="cc" then local cc,val=rest:match("^(%d+)|(%d+)$"); cc,val=tonumber(cc),tonumber(val); if not cc or not val or cc>127 or val>127 then return nil,"Ungültiges CC-Ausdrucksereignis." end; controls[#controls+1]={name=trim(name),qn=cq,ch=ch,kind="cc",a=cc,b=val} elseif kind=="program" then local pg=tonumber(rest); if not pg or pg<0 or pg>127 then return nil,"Ungültiger Program Change." end; controls[#controls+1]={name=trim(name),qn=cq,ch=ch,kind="program",a=math.floor(pg)} else return nil,"Unbekanntes Ausdrucksereignis." end else local k,g,rest=line:match("^CS|([^|]+)|([^|]+)|?(.*)$"); if not k then return nil,"Unerwartete Kompositionsantwort." end; if k=="unchanged" then if not src[g] then return nil,"Unbekannte Quelle." end elseif k=="revised" or k=="target" or k=="track" or k=="new" then local name,pg,nt=rest:match("^([^|]+)|(%d+)|(.+)$"); local notes=parse_notes(nt); local program=tonumber(pg); if not name or not notes or not program or program<0 or program>127 then return nil,"Ungültige Kompositionsdaten." end; if (k=="revised" or k=="target") and not src[g] then return nil,"Unbekannte Quelle." end; if k=="track" and not targets[g] then return nil,"Unbekannte Zielspur." end; if k=="new" and g~="-" then return nil,"Ungültige neue Spur." end; local merged=nil; for _,j in ipairs(jobs) do if j.kind==k and j.guid==g and j.name==trim(name) then merged=j; break end end; if merged then for _,note in ipairs(notes) do merged.notes[#merged.notes+1]=note end else jobs[#jobs+1]={kind=k,guid=g,name=trim(name),program=program_for_name(name,program),notes=notes} end else return nil,"Unbekannter Ergebnistyp." end end end; reaper.Undo_BeginBlock2(0); local made={}; local ok,err=xpcall(function() if #musical_map>0 then for i=reaper.CountTempoTimeSigMarkers(0)-1,0,-1 do reaper.DeleteTempoTimeSigMarker(0,i) end; table.sort(musical_map,function(a,b) return a.qn<b.qn end); local cur_bpm=reaper.Master_GetTempo(); local cur_num,cur_den=4,4; for _,m in ipairs(musical_map) do if m.kind=="tempo" then cur_bpm=m.bpm else cur_num,cur_den=m.num,m.den end; local tm=reaper.TimeMap2_QNToTime(0,m.qn); reaper.SetTempoTimeSigMarker(0,-1,tm,-1,-1,cur_bpm,cur_num,cur_den,false) end end; local takes_by_name={}; for _,j in ipairs(jobs) do local tr; if j.kind=="revised" then local no=math.floor(reaper.GetMediaTrackInfo_Value(src[j.guid].track,"IP_TRACKNUMBER")); tr=create_track(j.name.." [Variante]",no) elseif j.kind=="target" then tr=src[j.guid].track elseif j.kind=="track" then tr=targets[j.guid] else tr=create_track(j.name) end; local inherited=(j.kind~="new") and existing_program(tr) or nil; local it=create_midi(tr,j.name,j.notes,inherited or j.program); if not it then error("MIDI konnte nicht erzeugt werden") end; made[#made+1]=it; local tk=reaper.GetActiveTake(it); if tk then takes_by_name[j.name]=tk end end; for _,c in ipairs(controls) do local tk=takes_by_name[c.name]; if tk then local ppq=reaper.MIDI_GetPPQPosFromProjTime(tk,reaper.TimeMap2_QNToTime(0,c.qn)); if c.kind=="cc" then reaper.MIDI_InsertCC(tk,false,false,ppq,0xB0,c.ch,c.a,c.b) else reaper.MIDI_InsertCC(tk,false,false,ppq,0xC0,c.ch,c.a,0) end; reaper.MIDI_Sort(tk) end end end,debug.traceback); if not ok then reaper.Undo_EndBlock2(0,"Composition Studio – fehlgeschlagen",-1); reaper.Undo_DoUndo2(0); return nil,err end; reaper.UpdateArrange(); reaper.Undo_EndBlock2(0,"Composition Studio – KI-Komposition",-1); return made end
 export_last_midi=function()
  local made=last_made; if #made==0 then made=recover_last_made() end
  local valid=0; for _,it in ipairs(made) do if reaper.ValidatePtr2(0,it,"MediaItem*") then valid=valid+1 end end
@@ -559,6 +559,43 @@ CSCTRL|NAME|startQN|CHANNEL|cc|CONTROLLER|VALUE
 CSCTRL|NAME|startQN|CHANNEL|program|PROGRAM
 NAME muss exakt dem NAME der CS-Zeile entsprechen. CHANNEL 0-15; CONTROLLER, VALUE und PROGRAM 0-127. PROGRAM der CS-Zeile ist General MIDI 0-127. startQN und durationQN dürfen beliebige sinnvolle Dezimalwerte haben. Antworte ausschließlich mit CSMETA-, CSCTRL- und CS-Zeilen.]].."\n\nFERTIGE KOMPOSITION:\n"..draft
 end
+
+-- Long works are translated in short independently validated sections.
+local function numbered_measure_count(draft)
+ local highest=0
+ for n in tostring(draft or ""):gmatch("[Tt]%.%s*(%d+)") do highest=math.max(highest,tonumber(n) or 0) end
+ return highest
+end
+local function chunk_prompt(draft,first_bar,last_bar)
+ return midi_translation_prompt("",draft).."\n\nVERBINDLICHER TEILAUFTRAG: Übertrage AUSSCHLIESSLICH Takt "..first_bar.." bis "..last_bar.." (einschließlich). Berücksichtige alle vorangehenden Takte zur Berechnung der absoluten startQN ab Stückbeginn; beginne NICHT erneut bei QN 0. Für jedes Instrument eine vollständige CS-Zeile mit ausschließlich den Noten dieser Takte; keine abgeschnittenen Noteneinträge. Jeder Eintrag besteht aus exakt fünf Werten. Keine Wiederholung von Noten anderer Takte. CSMETA nur im ersten Abschnitt, falls nötig. Antworte nur mit vollständigen CS-/CSCTRL-/CSMETA-Zeilen."
+end
+local function check_translation_chunk(s)
+ local found=false
+ for line in tostring(s or ""):gmatch("[^\r\n]+") do
+  line=trim(line)
+  if line:match("^CS|") then
+   local kind,guid,rest=line:match("^CS|([^|]+)|([^|]+)|(.+)$")
+   if not kind then return false,"Unvollständiger CS-Kopf" end
+   if kind=="new" or kind=="track" or kind=="target" or kind=="revised" then
+    local name,program,notes=rest:match("^([^|]+)|(%d+)|(.+)$")
+    if not name or not program or not parse_notes(notes) then return false,"Unvollständige oder ungültige Notenliste" end
+    found=true
+   elseif kind~="unchanged" then return false,"Unbekannter CS-Typ" end
+  elseif not line:match("^CSMETA|") and not line:match("^CSCTRL|") then
+   return false,"Zusätzlicher Text statt Daten"
+  end
+ end
+ return found,nil
+end
+local function start_translation_chunk(data,key)
+ local first_bar=data.chunk_first
+ local last_bar=math.min(data.chunk_total,first_bar+3)
+ local prompt=chunk_prompt(data.draft,first_bar,last_bar)
+ diag_set("translation_prompt",prompt)
+ update_status="Notenübertragung: Takte "..first_bar.."–"..last_bar.." von "..data.chunk_total
+ return launch("translation_chunk",prompt,key,data)
+end
+
 local job=nil
 local function ai_command(prompt,key)
  local base=temp_path(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers,win_headers
@@ -588,7 +625,7 @@ local function ai_poll(a)
  status=trim(status)
  local raw=read_file(a.rs)
  -- Don't retain access credentials: API responses do not include submitted keys.
- diag_set("api_status",status)
+ diag_set("api_status",status); diag_set("api_stop_reason",raw and (raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"') or raw:match('"finish_reason"%s*:%s*"([^"]+)"')) or "")
  if status~="200" or not raw then
   local excerpt=(raw or ""):sub(1,1500)
   diag_set("api_response_excerpt",excerpt)
@@ -648,8 +685,29 @@ local function poll_job()
   swam_last_made=made; add("KI","SWAM-Interpretation erzeugt: "..tostring(#made).." neue Stimme(n). Die ursprüngliche Komposition blieb unverändert."); update_status="SWAM-Interpretation fertig – Original unverändert."; busy=false; return
  elseif stage=="analysis" then add("KI",text); busy=false; return
  elseif stage=="composition_music" then
-  diag_set("composition_music",text); data.draft=text; work_title=title_from_draft(text,data.request); if work_title~="" then reaper.SetProjExtState(0,EXT_SECTION,TITLE_KEY,work_title); diag_set("work_title",work_title) end; local tp=midi_translation_prompt(data.request,text); diag_set("translation_prompt",tp); launch("composition",tp,key,data); return
- elseif stage=="composition" then
+  diag_set("composition_music",text); data.draft=text; work_title=title_from_draft(text,data.request); if work_title~="" then reaper.SetProjExtState(0,EXT_SECTION,TITLE_KEY,work_title); diag_set("work_title",work_title) end; local bars=numbered_measure_count(text); if bars>=5 and bars<=256 then data.chunk_total=bars; data.chunk_first=1; data.chunk_results={}; data.chunk_retries=0; start_translation_chunk(data,key) else local tp=midi_translation_prompt(data.request,text); diag_set("translation_prompt",tp); launch("composition",tp,key,data) end; return
+ elseif stage=="translation_chunk" then
+  local valid,reason=check_translation_chunk(text)
+  if not valid then
+   data.chunk_retries=(data.chunk_retries or 0)+1
+   if data.chunk_retries<=2 then
+    update_status="Abschnitt unvollständig – erneuter Versuch …"
+    start_translation_chunk(data,key)
+    return
+   end
+   diag_set("apply_result","ERROR: Takte "..data.chunk_first.."–"..math.min(data.chunk_total,data.chunk_first+3)..": "..tostring(reason))
+   diag_set("composition_answer",table.concat(data.chunk_results or {},"\n").."\n"..text)
+   add("KI","MIDI-Übertragung im Abschnitt "..data.chunk_first.." abgebrochen: "..tostring(reason)..". Keine MIDI-Daten wurden übernommen.")
+   busy=false; return
+  end
+  data.chunk_results[#data.chunk_results+1]=text
+  data.chunk_first=data.chunk_first+4
+  data.chunk_retries=0
+  if data.chunk_first<=data.chunk_total then start_translation_chunk(data,key); return end
+  text=table.concat(data.chunk_results,"\n")
+  stage="composition"
+ end
+ if stage=="composition" then
   diag_set("composition_answer",text); local made,ae=apply_composition(text,data.full,data.music_tracks); diag_set("apply_result",made and ("created_items="..tostring(#made)) or ("ERROR: "..tostring(ae))); if not made then add("KI","Die musikalische Antwort konnte nicht sicher angewendet werden: "..tostring(ae)); busy=false; return end; local htr,hsl=initialize_halion_project(); diag_set("halion_result",string.format("auto_initialized_tracks=%d slots=%d",htr,hsl)); data.comp=text; data.made=made; last_made=made; local gs={}; for _,it in ipairs(made) do gs[#gs+1]=item_guid(it) end; reaper.SetProjExtState(0,EXT_SECTION,"LastMadeGUIDs",table.concat(gs,"\n")); persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); launch("summary",summary_prompt(data.request,text,made),key,data); return
  elseif stage=="summary" then add("KI",text); busy=false; return end
 end
