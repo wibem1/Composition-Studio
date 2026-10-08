@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.52
+-- @version 1.0.53
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.52"
+local VERSION="1.0.53"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -105,7 +105,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.52')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.53')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -737,8 +737,14 @@ local function lily_parse_staff(src,channel)
   if p<0 or p>127 then return nil,"Tonhöhe außerhalb des MIDI-Bereichs" end
   return p
  end
- for tok in src:gmatch("%S+") do
-  if tok:sub(1,1)=="\\" then
+ for raw in src:gmatch("%S+") do
+  -- LilyPond slurs and beam delimiters can touch notes: e'8) or c'8(.
+  -- Remove only boundary marks; a pitch/duration must still parse strictly.
+  local tok=raw:gsub("^[%(%)]*", ""):gsub("[%(%)]*$", "")
+  tok=tok:gsub("^%[+", ""):gsub("%]+$", "")
+  if tok=="" then
+   -- A standalone phrasing mark contains no timed event.
+  elseif tok:sub(1,1)=="\\" then
    if tok~="\\absolute" and tok~="\\break" and tok~="\\pageBreak" and tok~="\\major" and tok~="\\minor" and tok~="\\numericTimeSignature" then
     return nil,"Nicht unterstützter LilyPond-Befehl: "..tok
    end
