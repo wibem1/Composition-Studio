@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.53
+-- @version 1.0.54
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.53"
+local VERSION="1.0.54"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -105,7 +105,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.53')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.54')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -690,132 +690,84 @@ launch=function(stage,prompt,key,data) local a,e=ai_command(prompt,key); if not 
 
 -- Local LilyPond-to-MIDI translator for unambiguous absolute-pitch piano notation.
 -- Deliberately rejects unsupported syntax rather than silently losing notes.
-local function lily_extract_staffs(src)
- local result,pos={},1
- while true do
-  local s,e=src:find("\\new%s+Staff%s*%b\"\"",pos)
-  if not s then s,e=src:find("\\new%s+Staff",pos) end
-  if not s then break end
-  local a=src:find("{",e+1,true); if not a then return nil,"Staff ohne Notenblock" end
-  local depth,b=0,nil
-  for i=a,#src do
-   local ch=src:sub(i,i)
-   if ch=="{" then depth=depth+1 elseif ch=="}" then depth=depth-1; if depth==0 then b=i; break end end
-  end
-  if not b then return nil,"Unvollständiger Staff-Block" end
-  result[#result+1]=src:sub(a+1,b-1)
-  pos=b+1
+
+-- The official LilyPond compiler handles the musical semantics.
+local LILYPOND_PATH_KEY="LilyPondExe"
+local function lily_exe()
+ local p=trim(reaper.GetExtState(EXT_SECTION,LILYPOND_PATH_KEY))
+ if p~="" and reaper.file_exists(p) then return p end
+ local home=os.getenv("USERPROFILE") or ""
+ local expected=home.."/Downloads/lilypond-2.26.0-mingw-x86_64/lilypond-2.26.0/bin/lilypond.exe"
+ if reaper.file_exists(expected) then
+  reaper.SetExtState(EXT_SECTION,LILYPOND_PATH_KEY,expected,true)
+  return expected
  end
- if #result==0 then return nil,"Keine \\new Staff-Blöcke gefunden" end
- return result
+ return nil
 end
-local function lily_parse_staff(src,channel)
- if src:find("\\relative",1,true) then return nil,"\\relative benötigt einen relativen Tonhöhen-Parser; bitte absolute Tonhöhen ausgeben." end
- src=src:gsub("%%[^\n]*"," "):gsub("\\absolute%s*{"," "):gsub("[{}|]"," ")
- src=src:gsub('\\clef%s+"?[%w]+"?'," ")
- src=src:gsub("\\key%s+[%w']+%s+\\[a-zA-Z]+"," ")
- src=src:gsub("\\time%s+%d+/%d+"," ")
- src=src:gsub("\\tempo%s+[^=\n]+=%s*%d+"," ")
- src=src:gsub('\\bar%s+"[^"]*"'," ")
- src=src:gsub("\\voiceOne"," "):gsub("\\voiceTwo"," "):gsub("\\oneVoice"," ")
- src=src:gsub("\\ppp"," "):gsub("\\pp"," "):gsub("\\mp"," "):gsub("\\mf"," "):gsub("\\fff"," "):gsub("\\ff"," "):gsub("\\p"," "):gsub("\\f"," ")
- src=src:gsub("[-_^][%.%-+>]"," ")
- -- Preserve spaces inside chords while splitting the score into tokens.
- src=src:gsub("<([^<>]+)>%s*(%d*%.?)",function(pitches,tail)
-  return "<"..pitches:gsub("%s+",";")..">"..tail
- end)
- local notes,pos,lastdur={},0,4
- local semis={c=0,d=2,e=4,f=5,g=7,a=9,b=11}
- local function pitch_number(t)
-  local root,alter,oct=t:match("^([a-g])([a-z]*)([',]*)$")
-  if not root then return nil,"Ungültige Tonhöhe: "..t end
-  if alter~="" and alter~="is" and alter~="isis" and alter~="es" and alter~="eses" then return nil,"Unbekanntes Vorzeichen: "..alter end
-  local chrom=({is=1,isis=2,es=-1,eses=-2})[alter] or 0
-  local shift=0
-  for ch in oct:gmatch(".") do shift=shift+(ch=="'" and 1 or -1) end
-  local p=48+12*shift+semis[root]+chrom
-  if p<0 or p>127 then return nil,"Tonhöhe außerhalb des MIDI-Bereichs" end
-  return p
- end
- for raw in src:gmatch("%S+") do
-  -- LilyPond slurs and beam delimiters can touch notes: e'8) or c'8(.
-  -- Remove only boundary marks; a pitch/duration must still parse strictly.
-  local tok=raw:gsub("^[%(%)]*", ""):gsub("[%(%)]*$", "")
-  tok=tok:gsub("^%[+", ""):gsub("%]+$", "")
-  if tok=="" then
-   -- A standalone phrasing mark contains no timed event.
-  elseif tok:sub(1,1)=="\\" then
-   if tok~="\\absolute" and tok~="\\break" and tok~="\\pageBreak" and tok~="\\major" and tok~="\\minor" and tok~="\\numericTimeSignature" then
-    return nil,"Nicht unterstützter LilyPond-Befehl: "..tok
-   end
-  elseif tok=="(" or tok==")" or tok=="[" or tok=="]" then
-   -- Phrasing marks are non-timed events.
-  elseif tok=="~" then
-   return nil,"Haltebogen nicht unterstützt; keine stille Veränderung der Notendauer."
-  else
-   local pitches,tail=tok:match("^<([^<>]+)>(%d*%.?)$")
-   local rest,rdur,rdots=tok:match("^([rs])(%d*)(%.?)$")
-   local root,alter,oct,dur,dots=tok:match("^([a-g])([a-z]*)([',]*)(%d*)(%.?)$")
-   if not pitches and not rest and not root then return nil,"Unbekannter Notenausdruck: "..tok end
-   local dstr= pitches and tail:match("^(%d*)") or (root and dur or rdur)
-   local dn=tonumber(dstr) or lastdur
-   if dn<=0 or dn>128 or 128%dn~=0 then return nil,"Ungültiger Notenwert" end
-   lastdur=dn
-   local length=4/dn
-   local dotted=pitches and tail:sub(-1)=="." or (root and dots=="." or rdots==".")
-   if dotted then length=length*1.5 end
-   local chord_pitches={}
-   if pitches then
-    for p in pitches:gmatch("[^;]+") do
-     local pitch,err=pitch_number(p)
-     if not pitch then return nil,err end
-     chord_pitches[#chord_pitches+1]=pitch
-    end
-    if #chord_pitches==0 then return nil,"Leerer Akkord" end
-   elseif root then
-    local pitch,err=pitch_number(root..alter..oct)
-    if not pitch then return nil,err end
-    chord_pitches[1]=pitch
-   end
-   for _,pitch in ipairs(chord_pitches) do
-    notes[#notes+1]={start_qn=pos,duration_qn=length,pitch=pitch,velocity=80,channel=channel}
-   end
-   pos=pos+length
-  end
- end
- if #notes==0 then return nil,"Stimme ohne Noten" end
- return notes,pos
+local function set_lily_exe()
+ local old=reaper.GetExtState(EXT_SECTION,LILYPOND_PATH_KEY) or ""
+ local ok,p=reaper.GetUserInputs("LilyPond",1,"Pfad zu lilypond.exe:",old)
+ if not ok then return end
+ p=trim(p):gsub('^"',''):gsub('"$','')
+ if not reaper.file_exists(p) then update_status="LilyPond nicht gefunden: "..p; return end
+ reaper.SetExtState(EXT_SECTION,LILYPOND_PATH_KEY,p,true)
+ update_status="LilyPond-Pfad gespeichert."
 end
-local function lily_to_cs(src)
- local staffs,err=lily_extract_staffs(src); if not staffs then return nil,err end
- local all,maxdur={},nil
- for i,staff in ipairs(staffs) do
-  local notes,duration=lily_parse_staff(staff,math.min(i-1,15))
-  if not notes then return nil,"Staff "..i..": "..duration end
-  if maxdur and math.abs(duration-maxdur)>0.001 then return nil,"Stimmen haben unterschiedliche Längen." end
-  maxdur=duration
-  for _,n in ipairs(notes) do all[#all+1]=string.format("%.6g,%.6g,%d,%d,%d",n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end
+local function midi_score(src)
+ src=trim(src)
+ local fence=string.rep(string.char(96),3)
+ if src:sub(1,3)==fence then
+  src=src:gsub("^[^\n]*\n",""):gsub("\n[^\n]*$","")
  end
- local num,den=src:match("\\time%s+(%d+)%s*/%s*(%d+)")
- num,den=tonumber(num) or 4,tonumber(den) or 4
- local bpm=tonumber(src:match("\\tempo%s+[^\n=]-=%s*(%d+)")) or 90
- local measure=4*num/den
- if maxdur/measure-math.floor(maxdur/measure+0.0001)>0.001 then return nil,"Stück endet nicht an einer Taktgrenze." end
- return "CSMETA|tempo|0|"..bpm.."\nCSMETA|timesig|0|"..num.."|"..den.."\nCS|new|-|Klavier|0|"..table.concat(all,";"),math.floor(maxdur/measure+0.0001),#all
+ local beginning=src:find("\\score",1,true)
+ if not beginning then return nil,"Kein LilyPond-score-Block vorhanden." end
+ local opening=src:find("{",beginning+6,true)
+ if not opening then return nil,"LilyPond-score-Block unvollständig." end
+ local depth,closing=0,nil
+ for i=opening,#src do
+  local ch=src:sub(i,i)
+  if ch=="{" then depth=depth+1 elseif ch=="}" then depth=depth-1; if depth==0 then closing=i; break end end
+ end
+ if not closing then return nil,"LilyPond: schließende score-Klammer fehlt." end
+ if not src:sub(opening,closing):find("\\midi",1,true) then
+  src=src:sub(1,closing-1).."\n\\midi { }\n"..src:sub(closing)
+ end
+ return src
+end
+local function lily_compile_import(source)
+ if not IS_WINDOWS then return nil,"LilyPond-MIDI-Integration derzeit für Windows." end
+ local exe=lily_exe()
+ if not exe then return nil,"LilyPond-Pfad nicht gefunden. Menü ... → LilyPond-Pfad einstellen." end
+ local src,err=midi_score(source)
+ if not src then return nil,err end
+ local input=temp_path(".ly")
+ local base=input:sub(1,-4)
+ if not write_file(input,src) then return nil,"LilyPond-Datei konnte nicht gespeichert werden." end
+ local command=shell_quote(exe)..' -dno-print-pages -dmidi-extension=mid -o '..shell_quote(base)..' '..shell_quote(input)
+ local result,output=reaper.ExecProcess(command,120000)
+ diag_set("lilypond_log",tostring(output or ""):sub(-12000))
+ if result~=0 then return nil,"LilyPond Fehler "..tostring(result)..": "..tostring(output or ""):sub(-1200) end
+ local midi=base..".mid"
+ if not reaper.file_exists(midi) then return nil,"LilyPond hat keine MIDI-Datei erzeugt." end
+ local prior=reaper.CountTracks(0)
+ local cursor=reaper.GetCursorPosition()
+ reaper.Undo_BeginBlock2(0)
+ reaper.SetEditCurPos(0,false,false)
+ local n=reaper.InsertMedia(midi,1)
+ reaper.SetEditCurPos(cursor,false,false)
+ reaper.Undo_EndBlock2(0,"Composition Studio – LilyPond MIDI",-1)
+ local tracks=reaper.CountTracks(0)-prior
+ if tracks<=0 then return nil,"MIDI-Datei erzeugt, aber REAPER-Import fehlgeschlagen ("..tostring(n)..")." end
+ reaper.UpdateArrange()
+ return tracks
 end
 local function lily_composition_prompt(request)
- return [[Komponiere ein vollständiges, musikalisch eigenständiges Stück direkt als LilyPond-Partitur.
-Gib nur LilyPond-Code zurück, keinen Entwurf und keinen erklärenden Text.
-Entwickle frei Melodik, Harmonik, Rhythmus, Phrasierung, Dynamik und Charakter.
-Für Klavier: genau zwei \new Staff-Blöcke, rechte und linke Hand.
-Benutze \absolute, vollständige Tonhöhen mit LilyPond-Schreibweise (c' = MIDI 60).
-Der lokale MIDI-Import versteht Einzelnoten, Pausen, Akkorde <c' e' g'>,
-normale und punktierte Dauern von 1 bis 128 sowie Taktstriche.
-Setze notwendige Artikulation und Dynamik als LilyPond-Spielanweisungen,
-verwende aber in dieser Version keine \relative-Tonhöhen, Variablen,
-Wiederholungen, Haltebögen, Triolen oder verschachtelte Stimmen.
-Beide Notensysteme sollen rhythmisch gleich lang sein. Vermeide schematische
-Begleitmuster und mechanische Tonfolgen. Schreibe das Werk vollständig.
+ return [[Komponiere das vollständige verlangte Musikstück als LilyPond-Partitur.
+Gib ausschließlich gültigen LilyPond-Quellcode zurück. Keine Entwürfe oder Erläuterungen.
+Komponiere musikalisch frei: Akkorde, Phrasierung, Stimmen, Triolen, Bindungen,
+Dynamik, Artikulationen und Tempoänderungen sind erlaubt, soweit sinnvoll.
+Notiere das vollständige Werk mit einem \score { ... }-Block.
+Der MIDI-Block wird von der App ergänzt. Keine Markdown-Codezäune.
 AUFTRAG:
 ]]..request
 end
@@ -843,23 +795,13 @@ local function poll_job()
  if not text then add("KI",e); busy=false; return end; text=trim(text)
  if stage=="lily_composition" then
   diag_set("composition_music",text)
-  local midi,bars,notes=lily_to_cs(text)
-  if not midi then
-   diag_set("apply_result","LilyPond-Parser: "..tostring(bars))
-   add("KI","LilyPond konnte nicht vollständig gelesen werden: "..tostring(bars)..". Keine Noten übertragen.")
-   busy=false; return
-  end
-  diag_set("composition_answer",midi)
-  local made,ae=apply_composition(midi,{}, {},true)
-  diag_set("apply_result",made and ("created_items="..#made.."; measures="..bars.."; notes="..notes) or ("ERROR: "..tostring(ae)))
-  if not made then add("KI","MIDI konnte nicht erstellt werden: "..tostring(ae)); busy=false; return end
-  last_made=made
-  local ids={}; for _,it in ipairs(made) do ids[#ids+1]=item_guid(it) end
-  reaper.SetProjExtState(0,EXT_SECTION,"LastMadeGUIDs",table.concat(ids,"\n"))
-  add("KI","LilyPond direkt übertragen: "..bars.." Takte, "..notes.." Noten, eine Klavierspur. Keine weitere KI-Übersetzung.")
+  update_status="LilyPond übersetzt nach MIDI …"
+  local tracks,why=lily_compile_import(text)
+  diag_set("apply_result",tracks and ("LilyPond MIDI: "..tracks.." Spuren") or ("ERROR: "..tostring(why)))
+  if not tracks then add("KI","LilyPond: "..tostring(why)) else add("KI","Vollständige LilyPond-MIDI-Datei importiert: "..tracks.." Spur(en).") end
   busy=false; return
  end
- if stage=="work_title" then
+  if stage=="work_title" then
   local t=safe_work_title(text:gsub("^[Tt][Ii][Tt][Ee][Ll]%s*:%s*","")); if t=="" then update_status="Kein brauchbarer Werktitel erhalten."; busy=false; return end
   work_title=t; reaper.SetProjExtState(0,EXT_SECTION,TITLE_KEY,work_title); diag_set("work_title",work_title); busy=false
   if data.save_kind=="midi" then export_last_midi() elseif data.save_kind=="diagnosis" then save_diagnosis() end; return
@@ -2072,5 +2014,5 @@ reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end;
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
-if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local scale=font_size/14; local ih=math.floor(112*scale+0.5); local bh=math.floor(34*scale+0.5); local ch=math.max(120,h-ih-bh*2-math.floor(84*scale+0.5)); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=math.max(4,math.floor(6*scale)); local bw=math.max(80,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local scale=font_size/14; local ih=math.floor(112*scale+0.5); local bh=math.floor(34*scale+0.5); local ch=math.max(120,h-ih-bh*2-math.floor(84*scale+0.5)); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=math.max(4,math.floor(6*scale)); local bw=math.max(80,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
 loop()
