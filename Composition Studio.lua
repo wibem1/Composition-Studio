@@ -710,8 +710,8 @@ local function lily_parse_staff(src,channel)
  src=src:gsub("\\time%s+%d+/%d+"," ")
  src=src:gsub("\\tempo%s+[^=\n]+=%s*%d+"," ")
  src=src:gsub("\\bar%s+\"[^\"]*\""," ")
- src=src:gsub("\\(voiceOne|voiceTwo|oneVoice)"," ")
- src=src:gsub("\\(p|pp|ppp|mp|mf|f|ff|fff|<|>|!)"," ")
+ src=src:gsub("\\voiceOne"," "):gsub("\\voiceTwo"," "):gsub("\\oneVoice"," ")
+ src=src:gsub("\\ppp"," "):gsub("\\pp"," "):gsub("\\mp"," "):gsub("\\mf"," "):gsub("\\fff"," "):gsub("\\ff"," "):gsub("\\p"," "):gsub("\\f"," ")
  src=src:gsub("[-_^][%.%-+>]"," ")
  local notes,pos,lastdur={},0,1
  local semis={c=0,d=2,e=4,f=5,g=7,a=9,b=11}
@@ -724,8 +724,9 @@ local function lily_parse_staff(src,channel)
    -- Slurs and ties have no separate MIDI note here; ties must be resolved explicitly.
    if tok=="~" then return nil,"Bindebögen über Notengrenzen werden noch nicht unterstützt." end
   else
-   local root,alter,oct,dur,dots=tok:match("^([a-g])(isis|eses|is|es|)?([',]*)(%d*)(%.?)$")
+   local root,alter,oct,dur,dots=tok:match("^([a-g])([a-z]*)([',]*)(%d*)(%.?)$")
    local rest,rdur,rdots=tok:match("^([rs])(%d*)(%.?)$")
+   if root and alter~="" and alter~="is" and alter~="isis" and alter~="es" and alter~="eses" then return nil,"Unbekanntes Vorzeichen: "..alter end
    if not root and not rest then return nil,"Unbekannter Notenausdruck: "..tok end
    local dn=tonumber(root and dur or rdur) or lastdur
    if dn<=0 or dn>128 then return nil,"Ungültiger Notenwert" end
