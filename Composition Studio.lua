@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.58
+-- @version 1.0.59
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.58"
+local VERSION="1.0.59"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -936,6 +936,52 @@ local function lily_compile_import(source,insert_qn,expected_bars)
  reaper.UpdateArrange()
  return tracks
 end
+
+-- Local connection to the existing Composition Engine JavaScript runtime.
+-- The engine and bridge are downloaded from our GitHub repositories.
+-- They are not installed as separate REAPER apps.
+local JSON_ENGINE_VERSION="2.20.1"
+local function engine_json_prompt(request)
+ return [[Komponiere das verlangte Musikstück vollständig und eigenständig.
+Gib ausschließlich gültiges JSON aus, ohne Markdown oder Erläuterungen.
+Das JSON hat dieses technische Format:
+{"title":"Titel","bpm":120,"timeSignature":[4,4],"tracks":[{"name":"Klavier","program":0,"channel":0,"notes":[[0,1,60,80],[1,1,64,80]]}]}
+Jede Note ist [StartInVierteln,DauerInVierteln,MIDIPitch,Velocity].
+Alle Positionen beginnen bei 0 und sind in Viertelnoten-Einheiten.
+MIDI-Pitch 0..127, Velocity 1..127, Instrumentenprogramm 0..127, Kanal 0..15.
+Pausen sind Lücken; Akkordtöne haben dieselbe Startposition.
+Wähle Musik, Instrumentierung, Artikulation, Form, Harmonik und Rhythmus frei entsprechend dem Auftrag.
+Keine zusätzliche musikalische Vorgabe. Alle geforderten Takte vollständig komponieren.
+AUFTRAG:
+]]..request
+end
+local function engine_translate_json(answer)
+ if not IS_WINDOWS then return nil,"Der lokale Engine-Adapter ist derzeit für Windows eingerichtet." end
+ local source=temp_path(".json"),output=temp_path(".cs"),script=temp_path(".ps1")
+ if not write_file(source,answer) then return nil,"KI-JSON konnte nicht gespeichert werden." end
+ local root=os.getenv("SystemRoot") or "C:/Windows"
+ local ps=root.."/System32/WindowsPowerShell/v1.0/powershell.exe"
+ local bridge_file=TEMP_DIR.."/engine-bridge.js",engine_file=TEMP_DIR.."/composition-engine.js"
+ local commands={
+  "$ErrorActionPreference = 'Stop'",
+  "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12",
+  "$node = Get-Command node.exe -ErrorAction SilentlyContinue",
+  "if (-not $node) { throw 'Node.js ist nicht installiert oder nicht im PATH. Bitte Node.js LTS installieren.' }",
+  "$client = New-Object Net.WebClient",
+  "$client.Headers.Add('Cache-Control','no-cache')",
+  "$client.DownloadFile('https://raw.githubusercontent.com/wibem1/Composition-Studio/main/engine-bridge.js',"..ps_quote(bridge_file)..")",
+  "$client.DownloadFile('https://raw.githubusercontent.com/wibem1/Composition-Engine/main/composition-engine.js',"..ps_quote(engine_file)..")",
+  "& $node.Source "..ps_quote(bridge_file).." "..ps_quote(engine_file).." "..ps_quote(source).." "..ps_quote(output),
+  "if ($LASTEXITCODE -ne 0) { throw 'Engine-Adapter: JSON ungültig oder nicht übersetzbar.' }"
+ }
+ write_file(script,table.concat(commands,"\r\n"))
+ local cmd=shell_quote(ps)..' -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '..shell_quote(script)
+ local ok,result=pcall(reaper.ExecProcess,cmd,30000)
+ if not ok or not result or not read_file(output) then
+  return nil,"Die Composition Engine konnte das JSON nicht übertragen: "..tostring(result or "kein Ergebnis")
+ end
+ return read_file(output)
+end
 local function lily_composition_prompt(request)
  return [[Komponiere das vollständige verlangte Musikstück als LilyPond-Partitur.
 Gib ausschließlich gültigen LilyPond-Quellcode zurück. Keine Entwürfe oder Erläuterungen.
@@ -947,6 +993,19 @@ AUFTRAG:
 ]]..request
 end
 local function begin_process(request)
+ -- For an unambiguous new-composition request, do not pay for a controller call.
+ local lower=request:lower()
+ if reaper.CountSelectedMediaItems(0)==0 and
+  (lower:find("^%s*komponier") or lower:find("^%s*erstelle%s+ein") or lower:find("^%s*schreibe%s+ein")) and
+  (lower:find("stück",1,true) or lower:find("fuge",1,true) or lower:find("sonate",1,true) or lower:find("walzer",1,true) or lower:find("komposition",1,true)) then
+  local key=get_key()
+  if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
+  last_diag={version=VERSION,composition_engine="Composition Engine JSON bridge "..JSON_ENGINE_VERSION,composition_engine_build="22001",provider=provider,model=model,request=request}
+  local jp=engine_json_prompt(request)
+  diag_set("composition_prompt",jp)
+  launch("engine_json",jp,key,{request=request,full={},music_tracks={}})
+  return
+ end
  -- Explicit continuations can be dispatched deterministically without AI controller.
  local bars=continuation_bars(request)
  if bars then
@@ -988,6 +1047,22 @@ end
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  if not text then add("KI",e); busy=false; return end; text=trim(text)
+ if stage=="engine_json" then
+  diag_set("composition_music",text)
+  local cs,why=engine_translate_json(text)
+  if not cs then diag_set("apply_result","ERROR: "..tostring(why)); add("KI",tostring(why)); busy=false; return end
+  local made,err=apply_composition(cs,{},{})
+  diag_set("apply_result",made and ("Engine JSON MIDI: "..tostring(#made).." Items") or ("ERROR: "..tostring(err)))
+  if not made then add("KI","JSON-MIDI konnte nicht eingefügt werden: "..tostring(err)); busy=false; return end
+  last_made=made
+  local ids={}
+  for _,item in ipairs(made) do ids[#ids+1]=item_guid(item) end
+  reaper.SetProjExtState(0,EXT_SECTION,"LastMadeGUIDs",table.concat(ids,"\n"))
+  local htr,hsl=initialize_halion_project()
+  diag_set("halion_result",string.format("auto_initialized_tracks=%d slots=%d",htr,hsl))
+  add("KI","Komposition über Composition Engine (JSON → REAPER-MIDI) eingefügt: "..tostring(#made).." MIDI-Items.")
+  busy=false; return
+ end
  if stage=="lily_continuation" then
   diag_set("composition_music",text)
   update_status="LilyPond übersetzt Fortsetzung nach MIDI …"
@@ -1022,9 +1097,9 @@ local function poll_job()
    local lp=continuation_prompt(data.request,full,tracks,ext,endpoint)
    diag_set("composition_prompt",lp)
    launch("lily_continuation",lp,key,data)
-  elseif newwhy and tostring(data.request or ""):lower():find("klavier",1,true) then
-    local lp=lily_composition_prompt(data.request); diag_set("composition_prompt",lp)
-    launch("lily_composition",lp,key,data)
+  elseif newwhy then
+    local jp=engine_json_prompt(data.request); diag_set("composition_prompt",jp)
+    launch("engine_json",jp,key,data)
    else launch(newwhy and "composition_music" or "composition",cp,key,data) end; return end
   if text:match("^ACTION|") then local a,pe=parse_action(text,data.items); if not a then add("KI","Ich führe nichts aus: "..pe); busy=false; return end; local ok,ae=execute_action(a); if not ok then add("KI","Die Aktion wurde nicht ausgeführt: "..tostring(ae)); else add("KI",trim(a.desc).." – erledigt. REAPER Undo kann die Änderung rückgängig machen.") end; busy=false; return end
   add("KI","Ich konnte den Auftrag nicht eindeutig einem sicheren Vorgang zuordnen und habe nichts verändert."); busy=false; return
