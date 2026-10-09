@@ -15,4 +15,10 @@ assert(output:find("0.000000,1.000000,60,90,0",1,true))
 assert(not translate('{"bpm":120,"tracks":['))
 assert(not translate('{"bpm":120,"tracks":[{"notes":[[0,-1,60,80]]}]}'))
 assert(not translate('{"bpm":120,"tracks":[{"notes":[[0,1,155,80]]}]}'))
-print("Native Lua JSON adapter checks passed")
+
+-- Cost regression: a new user request must start with an empty per-order
+-- counter even when the controller is bypassed for JSON composition.
+local submit=assert(source:match("local function submit%(%)(.-)end\nlocal function wrap_text"))
+assert(submit:find("costs.begin()",1,true),"Direct JSON composition must reset order costs")
+
+print("Native Lua JSON adapter and cost reset checks passed")
