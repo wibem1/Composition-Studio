@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.71
+-- @version 1.0.72
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.71"
+local VERSION="1.0.72"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1008,18 +1008,25 @@ Entscheidungen ab. Form, Stimmführung, Zusammenhang und Machbarkeit sind Ziele,
 keine Schablone für einzelne Takte oder Noten.
 
 Komponiere fortlaufend aus dem bereits entstandenen musikalischen Verlauf heraus.
-Behandle jede neu entstandene Phrase und jeden neuen Takt als veränderten Kontext
-für das Folgende. Entscheide während des Komponierens immer wieder neu, was das
-konkrete Material jetzt musikalisch verlangt: fortführen, variieren, kontrastieren,
-modulieren, verdichten, ausdünnen, überleiten, zurücknehmen oder etwas Neues
-einführen. Keine dieser Möglichkeiten ist Pflicht. Wähle sie nur, wenn sie aus
-dem bisherigen Verlauf musikalisch sinnvoll folgt.
+Behandle das tatsächlich Geschriebene als neuen musikalischen Kontext für alles,
+was folgt.
 
-Arbeite keinen im Voraus festgelegten Notenplan und kein starres Variationsschema
-mechanisch ab. Eine einmal gefundene Figur, Harmonie oder Begleitung darf sich
-entwickeln, verändern oder verschwinden. Ebenso wenig ist Abwechslung um ihrer
-selbst willen erforderlich. Zusammenhang entsteht dadurch, dass spätere
-Entscheidungen auf das tatsächlich zuvor Komponierte reagieren.
+Prüfe während des Komponierens immer wieder, ob im bisherigen Verlauf etwas
+musikalisch Eigenständiges oder Unerwartetes entstanden ist: eine Geste, eine
+rhythmische Verschiebung, eine neue Rollenverteilung der Stimmen, eine harmonische
+Spannung, eine Pause, eine Verdichtung, eine melodische Nebenidee oder etwas
+anderes, das sich nicht bloß wie die Fortsetzung der bisherigen Routine anfühlt.
+Wenn so etwas entsteht, frage nicht nach mehr Abwechslung, sondern danach, ob
+gerade DIESER konkrete Gedanke eine musikalische Konsequenz eröffnet. Wenn ja,
+gib ihm Raum und entwickle die Konsequenz weiter. Wenn nein, zwinge nichts hinein.
+
+Erkenne außerdem die bequemste oder naheliegendste Fortsetzung des bisherigen
+Musters. Übernimm sie nicht automatisch. Prüfe, ob sie das Stück wirklich stärker
+macht oder nur die bisherige Denkweise wiederholt.
+
+Arbeite keinen im Voraus festgelegten Notenplan, kein starres Variationsschema
+und keine Checkliste von Kontrasten ab. Zusammenhang entsteht dadurch, dass
+spätere Entscheidungen auf das tatsächlich zuvor Komponierte reagieren.
 
 Die konkrete musikalische Erfindung und ihre vollständige Verwirklichung
 sind DEINE Aufgabe im selben Kompositionsvorgang.
