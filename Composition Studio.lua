@@ -1156,7 +1156,7 @@ local function engine_translate_json(answer)
    local value=type(e)=="table" and tonumber(e.value)
    if not numeric(at) or at<0 or not numeric(value) or value%1~=0 or value<0 or value>127 then return nil,"Ungültiges Pedalereignis "..j end
    for k,tr in ipairs(score.tracks) do
-    local name=tostring(tr.name or ("Spur "..k)):gsub("[|\\r\\n]"," "):sub(1,120)
+    local name=tostring(tr.name or ("Spur "..k)):gsub("[|\r\n]"," "):sub(1,120)
     local channel=tonumber(tr.channel or ((k-1)%16))
     if not numeric(channel) or channel%1~=0 or channel<0 or channel>15 then return nil,"Ungültiger Pedalkanal "..k end
     lines[#lines+1]=string.format("CSCTRL|%s|%.6f|%d|cc|64|%d",name,at,channel,value)
