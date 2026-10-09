@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.65
+-- @version 1.0.66
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.65"
+local VERSION="1.0.66"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -978,39 +978,41 @@ local COMPOSITION_MODE_KEY="CompositionModeV1"
 local composition_mode=reaper.GetExtState(EXT_SECTION,COMPOSITION_MODE_KEY)
 if composition_mode~="concept" and composition_mode~="direct" then composition_mode="concept" end
 local function concept_prompt(request)
- return [=[Du entwirfst das MUSIKALISCHE GRUNDGERÜST einer eigenständigen Komposition, noch keine Noten.
-Entscheide selbst alle Aspekte, die der Nutzer nicht ausdrücklich festgelegt hat:
-Besetzung, Länge, Tonart/tonales Zentrum, Taktart, Tempo, Charakter und Stimmung,
-eine bildhafte Klangvorstellung, Textur/Begleitprinzip, harmonische Richtung,
-melodische Grundidee sowie Form, Steigerung, Höhepunkt und Ausklang.
-Gestalte eine zusammenhängende individuelle musikalische Identität; nicht bloß eine Liste
-beliebiger Merkmale. Feste Nutzerwünsche sind verbindlich. Keine konkreten Notenfolgen,
-keine Takt-für-Takt-Konstruktion, kein MIDI, kein JSON. Formuliere ein prägnantes
-musikalisches Grundgerüst (etwa 150 bis 250 Wörter), das kompositorische Freiheit
-für die eigentliche Ausarbeitung lässt. Gib nur den Entwurf aus.
+ return [=[Lege ausschließlich den MUSIKALISCHEN RAHMEN für eine spätere Komposition fest.
+Der Nutzerauftrag bestimmt alle ausdrücklich genannten Anforderungen.
+Bestimme nur die noch offenen Eckdaten: Besetzung (falls offen), Tonart bzw.
+tonales Zentrum, Taktart, Tempo mit eindeutiger Schlageinheit, ungefähre Länge,
+Stimmung/Charakter und eine GROBE musikalische Richtung.
+Entwickle ausdrücklich NOCH KEINE konkrete Kompositionsidee: kein inneres Bild,
+keine Szene, kein bestimmtes Begleitmuster, keine Melodiegeste, keine harmonische
+Abfolge, keine detaillierte Formdramaturgie. Diese schöpferische Arbeit gehört
+vollständig der anschließend komponierenden KI.
+Antworte kurz, sachlich und nur mit dem musikalischen Rahmen.
 NUTZERAUFTRAG:
 ]=]..request
 end
-local function composed_json_prompt(request,concept)
- return [=[Komponiere ein vollständiges, musikalisch eigenständiges Werk aus dem folgenden
-bereits entwickelten musikalischen Grundgerüst. Stelle dir dessen Klangverlauf als Ganzes vor.
-Entwickle die melodischen Gedanken, die Harmonik, Stimmenführung, rhythmische Gestalt,
-Satzdichte und dynamische Dramaturgie als zusammenhängende Musik. Die Konzeption
-ist Ausgangspunkt, kein fertiger Notenplan; gestalte die konkrete Musik schöpferisch.
-Musikalische Wiederholung ist erlaubt, wenn sie den Charakter trägt.
-Befolge die ausdrücklichen Wünsche des Nutzers.
-ERSTELLTES MUSIKALISCHES GRUNDGERÜST:
-]=]..concept..[=[
+local function composed_json_prompt(request,framework)
+ return [=[Du bist die komponierende KI. Du erhältst zunächst ausschließlich
+einen MUSIKALISCHEN RAHMEN. Entwickle nun SELBST daraus eine konkrete musikalische
+Vorstellung bzw. Kompositionsidee, bevor du die Noten setzt.
+Verwirkliche deine eigene Idee anschließend als vollständige Komposition.
+Entwickle musikalisches Material, harmonisches Fundament, Melodieführung,
+Intervalle, Vorhalte, Atembereiche sowie Rhythmus und Dynamik so, dass sie
+zusammengehören. Die Idee und ihre musikalische Realisation sind DEINE Aufgabe,
+nicht die bloße Ausführung einer Idee aus dem ersten Schritt.
+Halte alle ausdrücklichen Anforderungen des ursprünglichen Nutzerauftrags ein.
+MUSIKALISCHER RAHMEN:
+]=]..framework..[=[
 
 URSPRÜNGLICHER NUTZERAUFTRAG:
 ]=]..request..[=[
 
-Gib NUR die fertige Komposition als gültiges JSON, ohne Erklärungen oder Markdown,
-im folgenden exakt technisch auswertbaren Format aus:
+Gib als Antwort NUR die fertige Komposition als gültiges JSON ohne Markdown aus.
+Technisches Datenformat (die Zahlen darin sind nur Platzhalter, keine musikalische Vorgabe):
 {"title":"Titel","bpm":86,"timeSignature":[3,4],"tracks":[{"name":"Klavier","program":0,"channel":0,"notes":[[0,1,60,80],[1,0.5,64,76]]}]}
 Jede Note [Start in Vierteln, Dauer in Vierteln, MIDI-Pitch, Velocity].
-Positionen starten bei 0, Pausen sind Lücken, gleichzeitig klingende Töne
-haben dieselbe Startposition. Vollständige musikalische Komposition, alle Takte.
+Positionen starten bei 0. Pausen sind Lücken; gleichzeitig klingende Töne
+haben dieselbe Startposition. Erzeuge das vollständige Werk.
 ]=]
 end
 local function launch_new_json(request,key,data)
@@ -1351,7 +1353,7 @@ end
 
 local function info_text()
  return "Composition Studio "..VERSION.."\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..
- "\n\nNEU IN "..VERSION.."\n\n• Neues Kompositionsverfahren Konzeption + Komposition: zwei getrennte KI-Aufrufe, Grundgerüst in Diagnose dokumentiert.\n• Im Menü auf Direktes JSON mit einem Aufruf umschaltbar; MIDI-Umsetzung unverändert.\n• Kostenanzeige pro Auftrag und insgesamt; Details und eigene Preise im Menü.\n• LilyPond-Exitcodes werden korrekt ausgewertet; der Import prüft echte MIDI-Items.\n• Ungenutzte ScoreFlow-/Verovio-Prototypen und die alte WebView-Bridge wurden entfernt.\n• Neue Klavierstücke und Fortsetzungen werden durch LilyPond in REAPER-MIDI übertragen. Der Pfad ist im Menü einstellbar.\n\nGeprüft unter Windows mit REAPER 7.82 und LilyPond 2.26.0: Kompilierung, MIDI-Import und Fortsetzungsprüfung."
+ "\n\nNEU IN "..VERSION.."\n\n• Experiment: erste KI legt nur den musikalischen Rahmen fest; zweite KI entwickelt selbst die konkrete Kompositionsidee und komponiert.\n• Im Menü auf Direktes JSON mit einem Aufruf umschaltbar; MIDI-Umsetzung unverändert.\n• Kostenanzeige pro Auftrag und insgesamt; Details und eigene Preise im Menü.\n• LilyPond-Exitcodes werden korrekt ausgewertet; der Import prüft echte MIDI-Items.\n• Ungenutzte ScoreFlow-/Verovio-Prototypen und die alte WebView-Bridge wurden entfernt.\n• Neue Klavierstücke und Fortsetzungen werden durch LilyPond in REAPER-MIDI übertragen. Der Pfad ist im Menü einstellbar.\n\nGeprüft unter Windows mit REAPER 7.82 und LilyPond 2.26.0: Kompilierung, MIDI-Import und Fortsetzungsprüfung."
 end
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
