@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.56
+-- @version 1.0.57
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.56"
+local VERSION="1.0.57"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -103,7 +103,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.56')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.57')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -547,6 +547,162 @@ local function start_translation_chunk(data,key)
  return launch("translation_chunk",prompt,key,data)
 end
 
+-- Local token-cost estimates, never provider invoices. Rates checked 2026-10-09.
+local costs={}
+do
+ local function fields(raw)
+  raw=trim(raw); local out={}
+  if raw:sub(1,1)~="{" or raw:sub(-1)~="}" then return out end
+  local i=2
+  while i<#raw do
+   while raw:sub(i,i):match("[%s,]") do i=i+1 end
+   if raw:sub(i,i)~='"' then break end
+   local key=read_json_string(raw,i); i=i+1
+   while i<=#raw do local c=raw:sub(i,i); if c=="\\" then i=i+2 elseif c=='"' then i=i+1; break else i=i+1 end end
+   while raw:sub(i,i):match("%s") do i=i+1 end
+   if raw:sub(i,i)~=":" then break end
+   i=i+1; while raw:sub(i,i):match("%s") do i=i+1 end
+   local first,depth,quoted=i,0,false
+   while i<=#raw do
+    local c=raw:sub(i,i)
+    if quoted then if c=="\\" then i=i+1 elseif c=='"' then quoted=false end
+    elseif c=='"' then quoted=true
+    elseif c=="{" or c=="[" then depth=depth+1
+    elseif c=="}" or c=="]" then if depth==0 then break end; depth=depth-1
+    elseif c=="," and depth==0 then break end
+    i=i+1
+   end
+   if quoted or depth~=0 then return {} end
+   out[key]=trim(raw:sub(first,i-1))
+   if raw:sub(i,i)=="}" then break end
+  end
+  return out
+ end
+ function costs.usage(pv,raw)
+  local top=fields(raw); local u=fields(top[pv=="google" and "usageMetadata" or "usage"])
+  local bad=false
+  local function count(obj,key,required)
+   local v=obj[key]
+   if (not v or v=="null") and not required then return 0 end
+   local n=v and v:match("^%d+$") and tonumber(v)
+   if not n or n>9007199254740991 then bad=true; return 0 end
+   return n
+  end
+  local n={input=0,output=0,cached=0,write5=0,write1=0}
+  if pv=="google" then
+   n.input=count(u,"promptTokenCount",true)
+   n.output=count(u,"candidatesTokenCount",true)+count(u,"thoughtsTokenCount")
+   n.cached=count(u,"cachedContentTokenCount")
+  else
+   n.input=count(u,"input_tokens",true); n.output=count(u,"output_tokens",true)
+   if pv=="openai" then
+    local details=fields(u.input_tokens_details)
+    n.cached=count(details,"cached_tokens"); n.write5=count(details,"cache_write_tokens")
+   elseif pv=="anthropic" then
+    n.cached=count(u,"cache_read_input_tokens")
+    local writes=count(u,"cache_creation_input_tokens")
+    local cache=fields(u.cache_creation)
+    n.write1=count(cache,"ephemeral_1h_input_tokens")
+    n.write5=cache.ephemeral_5m_input_tokens and count(cache,"ephemeral_5m_input_tokens") or writes-n.write1
+    if n.write5+n.write1~=writes then bad=true end
+    n.input=n.input+n.cached+writes
+   else bad=true end
+  end
+  if n.cached+n.write5+n.write1>n.input or n.write5<0 then bad=true end
+  return not bad and n or nil
+ end
+ -- input, output, cached reads, 5m writes, 1h writes; USD per million tokens.
+ local rates={
+  ["openai/gpt-5.6-sol"]={4,20,0.4,5,5,limit=272000,expires="2026-11-21"},
+  ["openai/gpt-5.6-terra"]={2,12,0.2,2.5,2.5,limit=272000},
+  ["openai/gpt-5.6-luna"]={0.2,1.2,0.02,0.25,0.25,limit=272000},
+  ["anthropic/claude-fable-5"]={10,50,1,12.5,20},
+  ["anthropic/claude-sonnet-5"]={2,10,0.2,2.5,4},
+  ["anthropic/claude-opus-5"]={5,25,0.5,6.25,10},
+  ["google/gemini-3.8-flash"]={0.75,3.75,0.075,0,0,expires="2026-12-31"},
+ }
+ local function rate_values(raw)
+  if type(raw)~="string" or select(2,raw:gsub(",",""))~=4 then return nil end
+  local a={}
+  for v in (raw or ""):gmatch("[^,]+") do
+   local n=tonumber((trim(v))); if not n or n<0 or n==math.huge or n~=n then return nil end
+   a[#a+1]=n
+  end
+  return #a==5 and a or nil
+ end
+ function costs.rate(pv,id)
+  local custom=rate_values(reaper.GetExtState(EXT_SECTION,"CostRateV1:"..pv.."/"..id))
+  if custom then return custom end
+  local r=rates[pv.."/"..id]
+  if not r or r.expires and os.date("%Y-%m-%d")>r.expires then
+   if pv=="google" and id=="gemini-3.8-flash" then return {1.5,7.5,0.15,0,0} end
+   return nil
+  end
+  return r
+ end
+ function costs.price(n,r)
+  if not n or not r then return nil end
+  local scale=r.limit and n.input>r.limit and 2 or 1
+  return ((n.input-n.cached-n.write5-n.write1)*r[1]*scale+n.cached*r[3]*scale+
+   n.write5*r[4]*scale+n.write1*r[5]*scale+n.output*r[2]*(scale==2 and 1.5 or 1))/1000000
+ end
+ local keys={"calls","input","output","usd","unknown"}
+ local function summary(raw)
+  local a=rate_values(raw)
+  return {calls=a and a[1] or 0,input=a and a[2] or 0,output=a and a[3] or 0,usd=a and a[4] or 0,unknown=a and a[5] or 0}
+ end
+ costs.total=summary(reaper.GetExtState(EXT_SECTION,"CostTotalV1"))
+ costs.order=summary(reaper.GetExtState(EXT_SECTION,"CostOrderV1"))
+ costs.since=reaper.GetExtState(EXT_SECTION,"CostSinceV1")
+ if costs.since=="" then costs.since=os.date("%Y-%m-%d"); reaper.SetExtState(EXT_SECTION,"CostSinceV1",costs.since,true) end
+ local function persist()
+  for key,s in pairs({CostTotalV1=costs.total,CostOrderV1=costs.order}) do
+   local values={}; for _,k in ipairs(keys) do values[#values+1]=string.format("%.12g",s[k]) end
+   reaper.SetExtState(EXT_SECTION,key,table.concat(values,","),true)
+  end
+ end
+ function costs.begin() costs.order=summary(""); persist() end
+ function costs.start(a)
+  a.cost_order=costs.order; a.cost_rate=costs.rate(a.provider,a.model)
+  for _,s in ipairs({costs.total,a.cost_order}) do s.calls=s.calls+1; s.unknown=s.unknown+1 end
+  persist()
+ end
+ function costs.record(a,raw)
+  if a.cost_recorded then return end; a.cost_recorded=true
+  local n=costs.usage(a.provider,raw); local usd=costs.price(n,a.cost_rate)
+  for _,s in ipairs({costs.total,a.cost_order}) do
+   if n then s.input=s.input+n.input; s.output=s.output+n.output end
+   if usd then s.usd=s.usd+usd; s.unknown=math.max(0,s.unknown-1) end
+  end
+  persist()
+ end
+ function costs.text(s)
+  return string.format("~ %.4f USD · %d Aufrufe · %d ein / %d aus",s.usd,s.calls,s.input,s.output)..
+   (s.unknown>0 and (" · "..s.unknown.." ohne vollständige Kostenangabe") or "")
+ end
+ function costs.amount(s)
+  return string.format("~ %.4f USD · %d Aufrufe",s.usd,s.calls)..(s.unknown>0 and " · unvollständig" or "")
+ end
+ function costs.edit_rate()
+  if busy then update_status="Preise bitte nach Abschluss des Auftrags ändern."; return end
+  local r=costs.rate(provider,model); local values={}
+  for i=1,5 do values[i]=r and tostring(r[i]) or "" end
+  local ok,raw=reaper.GetUserInputs("Kosten – "..model.." (USD je 1 Mio. Token)",5,
+   "Eingabe:,Ausgabe inkl. Denken:,Cache lesen:,Cache schreiben 5m:,Cache schreiben 1h:,extrawidth=250",table.concat(values,","))
+  if not ok then return end
+  if not rate_values(raw) then update_status="Preise nicht gespeichert: fünf nichtnegative Zahlen mit Dezimalpunkt eingeben."; return end
+  reaper.SetExtState(EXT_SECTION,"CostRateV1:"..provider.."/"..model,raw,true)
+  update_status="Eigene Preise für "..model.." gespeichert. Bisherige Kosten bleiben unverändert."
+ end
+ function costs.show()
+  local r=costs.rate(provider,model)
+  local tariff=r and string.format("Aktuelles Modell %s: Eingabe %.4g / Ausgabe %.4g / Cache %.4g USD je 1 Mio. Token.",model,r[1],r[2],r[3]) or
+   ("Für "..model.." fehlt ein bestätigter Preis. Im Menü »Kostenpreise einstellen« hinterlegen.")
+  reaper.ShowMessageBox("Letzter / laufender Auftrag:\n"..costs.text(costs.order).."\n\nGesamt seit "..costs.since..":\n"..costs.text(costs.total)..
+   "\n\n"..tariff.."\n\nSchätzungen für Aufrufe aus Composition Studio, keine Anbieterrechnung. Standardtarife: Stand 09.10.2026; eigene Preise im Menü. Google-Free-Tier kann mit Preisen 0 eingestellt werden. Fehlende Verbrauchsdaten bleiben als unvollständig markiert. Frühere Aufrufe vor dieser Version sind nicht enthalten.",SCRIPT_NAME.." – Kosten",0)
+ end
+end
+-- End cost accounting.
 local job=nil
 local function ai_command(prompt,key)
  local base=temp_path(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers,win_headers
@@ -563,18 +719,22 @@ local function ai_command(prompt,key)
   local cmd="/usr/bin/curl -sS --max-time 180 -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(cd).." 2>/dev/null &"
   os.execute(cmd)
  end
- return {rq=rq,rs=rs,cd=cd,provider=provider,deadline=reaper.time_precise()+200},nil
+ local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,deadline=reaper.time_precise()+200}
+ costs.start(a)
+ return a,nil
 end
 
 local function ai_poll(a)
  local status=read_file(a.cd)
  if not status or trim(status)=="" then
   if reaper.time_precise()<a.deadline then return nil,nil,false end
+  costs.record(a,read_file(a.rs))
   diag_set("api_error","Zeitlimit / Hintergrundprozess ohne Statusdatei")
   return nil,"KI-Zeitlimit erreicht; siehe Diagnose und CompositionStudioTemp.",true
  end
  status=trim(status)
  local raw=read_file(a.rs)
+ costs.record(a,raw)
  -- Don't retain access credentials: API responses do not include submitted keys.
  diag_set("api_status",status); diag_set("api_stop_reason",raw and (raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"') or raw:match('"finish_reason"%s*:%s*"([^"]+)"')) or "")
  if status~="200" or not raw then
@@ -595,7 +755,7 @@ local function ai_poll(a)
  os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
  return result,nil,true
 end
-launch=function(stage,prompt,key,data) local a,e=ai_command(prompt,key); if not a then add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
+launch=function(stage,prompt,key,data) if stage=="controller" or stage=="swam_interpretation" or stage=="work_title" then costs.begin() end; local a,e=ai_command(prompt,key); if not a then add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 
 -- The official LilyPond compiler handles the musical semantics.
 local LILYPOND_PATH_KEY="LilyPondExe"
@@ -911,7 +1071,7 @@ end
 
 local function info_text()
  return "Composition Studio "..VERSION.."\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..
- "\n\nNEU IN "..VERSION.."\n\n• LilyPond-Exitcodes werden korrekt ausgewertet; der Import prüft echte MIDI-Items.\n• Ungenutzte ScoreFlow-/Verovio-Prototypen und die alte WebView-Bridge wurden entfernt.\n• Neue Klavierstücke und Fortsetzungen werden durch LilyPond in REAPER-MIDI übertragen. Der Pfad ist im Menü einstellbar.\n\nGeprüft unter Windows mit REAPER 7.82 und LilyPond 2.26.0: Kompilierung, MIDI-Import und Fortsetzungsprüfung."
+ "\n\nNEU IN "..VERSION.."\n\n• Kostenanzeige pro Auftrag und insgesamt; Details und eigene Preise im Menü.\n• LilyPond-Exitcodes werden korrekt ausgewertet; der Import prüft echte MIDI-Items.\n• Ungenutzte ScoreFlow-/Verovio-Prototypen und die alte WebView-Bridge wurden entfernt.\n• Neue Klavierstücke und Fortsetzungen werden durch LilyPond in REAPER-MIDI übertragen. Der Pfad ist im Menü einstellbar.\n\nGeprüft unter Windows mit REAPER 7.82 und LilyPond 2.26.0: Kompilierung, MIDI-Import und Fortsetzungsprüfung."
 end
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
@@ -921,8 +1081,8 @@ if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
 reaper.ImGui_SameLine(ctx)
-if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end;
+if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
-if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local scale=font_size/14; local ih=math.floor(112*scale+0.5); local bh=math.floor(34*scale+0.5); local ch=math.max(120,h-ih-bh*2-math.floor(84*scale+0.5)); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=math.max(4,math.floor(6*scale)); local bw=math.max(80,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); reaper.ImGui_TextWrapped(ctx,"Auftrag: "..costs.amount(costs.order)); reaper.ImGui_TextWrapped(ctx,"Gesamt: "..costs.amount(costs.total)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local scale=font_size/14; local ih=math.floor(112*scale+0.5); local bh=math.floor(34*scale+0.5); local ch=math.max(120,h-ih-bh*2-math.floor(84*scale+0.5)); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=math.max(4,math.floor(6*scale)); local bw=math.max(80,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
 loop()

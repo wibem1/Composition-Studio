@@ -1,5 +1,5 @@
 from pathlib import Path
-import sys, subprocess, tempfile, json
+import sys, subprocess, tempfile, json, re
 sys.path.insert(0, str(Path(__file__).parent / "python-deps"))
 from lupa.lua54 import LuaRuntime
 
@@ -10,6 +10,7 @@ script_dir = Path(__file__).resolve().parent
 default_source = script_dir.parent / "Composition Studio.lua"
 source_path = Path(sys.argv[1]) if len(sys.argv)>1 else default_source
 source = source_path.read_text(encoding="utf-8")
+source_version = re.search(r"-- @version (\S+)", source).group(1)
 scratch = tempfile.TemporaryDirectory(prefix="composition-studio-tests-")
 root = Path(scratch.name)
 results = []
@@ -217,7 +218,7 @@ for name,version,status,body,expected in [
         with tempfile.TemporaryDirectory(dir=root) as d:
             p=Path(d); old="previous original"; (p/"installed.lua").write_text(old)
             r,api=update_env(p)
-            fresh=body or source.replace("1.0.56",version)
+            fresh=body or source.replace(source_version,version)
             if name=="update syntax failure": fresh+="\nlocal =\n"
             api.complete(status,fresh)
             actual=api.status()

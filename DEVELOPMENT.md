@@ -1,6 +1,6 @@
 # Entwicklung
 
-CURRENT: Composition Studio 1.0.56
+CURRENT: Composition Studio 1.0.57
 Lokale Engine: Composition Engine 2.3.1, Build 231
 Runtime: Composition Studio.lua
 
@@ -369,3 +369,35 @@ Nicht ausgeführt:
 - Keine bezahlten KI-Provider-Aufrufe, musikalische Qualitätsprüfung, SWAM-/HALion-Audio- oder Export-End-to-End-Tests.
 - Kein Update über den tatsächlichen Menübutton inklusive GitHub-Netzwerkabruf und laufendem App-Neustart; HTTP-Transport/Fallback wurde nur gelesen, die Installationslogik getestet.
 - Kein macOS/Linux-Funktionstest (LilyPond-Import bleibt Windows-only).
+
+## 2026-10-09 – v1.0.57 / Kostenanzeige pro Auftrag und insgesamt
+
+Nutzerwunsch: Anzeige, kein Budgetlimit.
+
+- Kompakte Schätzung in USD für den laufenden/letzten Auftrag und für alle seit Aktivierung erfassten Composition-Studio-Aufrufe. Details mit Eingabe-/Ausgabetokens und Aufrufzahl unter »Kostenübersicht«.
+- Mehrstufige Aufträge (Controller, Komposition, Übersetzung, Retry, Zusammenfassung) werden gemeinsam gezählt. SWAM-Aufträge und separat angeforderte Werktitel beginnen einen eigenen Auftrag.
+- Nutzungsdaten stammen aus den Antworten der OpenAI Responses-, Anthropic Messages- und Gemini GenerateContent-APIs. Cache-Lesen/-Schreiben sowie Gemini-Denktokens werden separat behandelt; OpenAI-Ausgabetokens werden nicht nochmals um Denktokens erhöht.
+- Das Modell und die Preise werden beim Start eines Aufrufs festgehalten. Die Kosten bereits erfasster Antworten werden durch spätere Preisänderungen nicht rückwirkend geändert.
+- Gesamtsumme und letzter Auftrag werden über REAPER ExtState gespeichert. Ein gestarteter, noch nicht abgerechneter Aufruf wird sofort als unvollständig gespeichert. Timeout, fehlende Nutzungsdaten und unbekannte Preise bleiben sichtbar; sie werden nicht als sicher kostenlos behauptet.
+- Nur echte Top-Level-Nutzungsobjekte werden gelesen; Token-/Usage-Text im KI-Antwortinhalt wird nicht als Verbrauch interpretiert.
+- »Kostenpreise einstellen« erlaubt fünf nichtnegative USD-Tarife pro Million Token für das ausgewählte Modell: Eingabe, Ausgabe, Cache lesen, Cache schreiben 5m/1h. Google-Free-Tier kann explizit mit Nullpreisen hinterlegt werden.
+- Bestätigte Standardpreise für GPT-5.6 Sol/Terra/Luna, Claude Fable/Sonnet/Opus 5 und Gemini 3.8 Flash, Stand 09.10.2026. Die übrigen Google-Modelle bleiben ohne bestätigten voreingestellten Tarif und zeigen ihre Tokenzahlen mit unvollständiger Kostenangabe, bis ein Preis eingetragen wird.
+- GPT-5.6-Standardpreise berücksichtigen >272000 Eingabetokens. Sol-Promopreise werden nach dem 21.11.2026 nicht automatisch fortgeschrieben; dann ist eine bestätigte Preisaktualisierung/eigener Tarif nötig. Gemini 3.8 Flash wechselt am 01.01.2027 auf den offiziell angekündigten Standardpreis.
+- Das Skript bleibt dieselbe schlanke Laufzeitdatei (99389 Bytes gegenüber 140233 Bytes in v1.0.55). Keine zusätzliche App/Installation und keine neuen bezahlten Kontrollanfragen.
+
+Preis-/API-Grundlagen:
+- [OpenAI Pricing](https://developers.openai.com/api/docs/pricing), [Terra](https://developers.openai.com/api/docs/models/gpt-5.6-terra), [Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna), [Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
+- [Anthropic Pricing](https://platform.claude.com/docs/en/about-claude/pricing), [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching)
+- [Gemini Pricing](https://ai.google.dev/gemini-api/docs/pricing), [Token usage/thinking](https://ai.google.dev/gemini-api/docs/generate-content/tokens)
+
+Vor Commit bestanden:
+- 32 neue automatisierte Kostenprüfungen: drei Anbieter, Cache-Kategorien, Denken ohne Doppelzählung, Standard-/Langkontextpreise, Null-/fehlende/negative/ungültige Nutzungsdaten, Top-Level-Abgrenzung, Speicherung/Neuladen, unterbrochene Aufrufe, Idempotenz, Modell-/Tarif-Snapshot, fehlender Tarif, Free-Tier-Nulltarif, Preisdialog-Validierung, Promoablauf sowie echte ai_command/ai_poll-Funktionen mit lokalen Antwortfixtures; Mehrstufen-/SWAM-Auftragsgrenzen und Übersichtstext.
+- 30 vorhandene Regressionstests erneut bestanden: vollständige Lua-5.4-Syntax, kompletter Start/erste sichtbare UI-Runde mit simuliertem REAPER/ReaImGui, LilyPond/MIDI-Importfunktion, Fortsetzungen/Rollback, Update-Validierung/Backup/Rollback und echter LilyPond-Compiler.
+- In isoliertem Windows-REAPER 7.82/x64 (Lua 5.4): komplette Skriptsyntax, Kostenrechnung mit tatsächlichem ExtState, gespeicherte Gesamtsumme/letzter Auftrag neu geladen, unterbrochener Aufruf bleibt unvollständig, neuer Auftrag erhält Gesamtsumme. Fünf Prüfungen bestanden.
+
+Grenzen:
+- Keine bezahlten KI-Aufrufe oder Abstimmung gegen eine echte Anbieterrechnung. Die Anzeige ist eine lokale Standardtarif-Schätzung; Sondertarife und frühere Aufrufe sind nicht enthalten.
+- Kein interaktiver GUI-/Preisdialog-Sichttest. Oberfläche/Preisdialog mit API-Simulation geprüft.
+- Update-Installation nur über lokale Fixtures geprüft; kein Menü-/Netzwerk-/Neustart-End-to-End-Test.
+- Kein erneuter realer MIDI-Import in REAPER für diese Änderung; die in v1.0.56 live geprüfte Importfunktion ist unverändert und die automatisierten Import-/Compilerregressionen wurden erneut ausgeführt.
+- Reproduzierbar: `python tools/test_cost_accounting.py` und `python tools/test_lilypond_import.py` (Python + lupa/Lua 5.4; optional installierter LilyPond).
