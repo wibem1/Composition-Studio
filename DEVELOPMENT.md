@@ -1,6 +1,6 @@
 # Entwicklung
 
-CURRENT: Composition Studio 1.0.4
+CURRENT: Composition Studio 1.0.56
 Lokale Engine: Composition Engine 2.3.1, Build 231
 Runtime: Composition Studio.lua
 
@@ -346,3 +346,26 @@ Der bisherige Notation-Studio-Updater verwendete ausschließlich raw.githubuserc
 ## 2026-10-04 – Notation Studio v0.1.15 / größere Page View + Instrumentprofil
 
 Page-View-Skalierung von 42 auf 70 px pro Viertelnote erhöht; Ziel sind ca. 4–5 Takte pro System statt einer zu kleinen Gesamtübersicht. Zusätzlich erkennt Notation Studio aus Trackname und Tonlage ein Clef-Profil (treble, alto, bass, grand). Es versucht passende MIDI-Editor-Actions für Default Clef zu finden. Da REAPER laut ReaScript-API keinen dokumentierten direkten Default-Clef-Setting-Parameter anbietet, wird bei nicht verfügbarer Action eine konkrete manuelle Anweisung im Status ausgegeben, statt eine erfolgreiche automatische Änderung vorzutäuschen.
+
+## 2026-10-09 – v1.0.56 / LilyPond-Exitcode und Entschlackung
+
+- Ursache von `LilyPond Fehler 0`: ReaScript `ExecProcess` liefert einen einzelnen String mit Exitcode, Zeilenumbruch und Ausgabe. v1.0.55 verglich diesen String mit der Zahl 0 und verlor außerdem die Compiler-Ausgabe.
+- Exitcode wird jetzt aus der ersten Zeile gelesen und numerisch geprüft. Nichtzero, fehlende und ungültige Antworten brechen vor dem Import ab. Eine erzeugte MIDI-Datei allein überschreibt keinen Compilerfehler.
+- Neu eingefügte Spuren werden über ihre Identität erkannt, auch zwischen vorhandenen Spuren. Erfolg erfordert tatsächliche MIDI-Items. Leere/nicht-MIDI-Importe werden zurückgerollt; Fortsetzungsstart und -länge bleiben geprüft. Cursor und LastMadeGUIDs werden geprüft.
+- LilyPond-Ausgabe wird in der gespeicherten Diagnose mitgeführt.
+- 36 historische ScoreFlow-/Verovio-/WebView-Hilfsfunktionen, eingebettetes HTML/JavaScript, alter Score-Zustand und die verwaiste Bridge-Abfrage entfernt. Die bestehende separate Datei `Notation Studio.lua` bleibt unverändert.
+- Datei gegenüber main v1.0.55: 140233 → 90138 UTF-8-Bytes (−35,7 %); 2106 → 928 Zeilen. Aktive KI-, SWAM-, HALion-, Export-, Verlauf- und Update-Implementierungen wurden nicht umgebaut.
+- Version 1.0.56 in derselben Datei und derselben main-Update-Linie; keine Parallelinstallation.
+
+Vor Veröffentlichung ausgeführt:
+- 30 automatisierte Prüfungen unter Lua 5.4: vollständige Syntax; kompletter Start/erster sichtbarer UI-Durchlauf mit simuliertem REAPER/ReaImGui; LF/CRLF-, Null-, Nichtzero-, fehlende/ungültige Prozessantworten; fehlendes MIDI; Importfehler/leere/nicht-MIDI-Spuren; Einfügen zwischen vorhandenen Spuren; Cursor/GUIDs/Log; Fortsetzungsstart/-länge/Rollback; MIDI-Block-Ergänzung.
+- Update-Prüfungen mit Originalfunktionen und Testdateien: gleiche/ältere Version, HTTP-Fehler, falscher Inhalt, Lua-Syntaxfehler, Installation samt Backup und Neustartplanung, Wiederherstellung bei simuliertem Rename-Fehler.
+- Echter LilyPond 2.26.0 erzeugt MIDI mit gültigem MThd-Header.
+- Isolierte Windows-REAPER-7.82/x64-Instanz mit eigenem Testprofil: komplette Dateisyntax; echter LilyPond→MIDI-Import (zwei Noten, erste Tonhöhe 60); zwei Takte Fortsetzung bei QN 8; falsche Länge vollständig zurückgerollt; echter Compilerfehler trotz erzeugtem MIDI blockiert Import; zweistaviges Klavier mit zwei importierten MIDI-Items/Spuren und vier Noten. Alle sechs Prüfungen erfolgreich.
+- Reproduzierbarer automatisierter Test: `python tools/test_lilypond_import.py` (Python + lupa, Lua 5.4). Optional tatsächlicher Compiler über `LILYPOND_EXE`; ohne Compiler wird dieser Test ausdrücklich übersprungen.
+
+Nicht ausgeführt:
+- Kein vollständiger interaktiver GUI-/Menü-/Docking-/ReaImGui-Sichttest.
+- Keine bezahlten KI-Provider-Aufrufe, musikalische Qualitätsprüfung, SWAM-/HALion-Audio- oder Export-End-to-End-Tests.
+- Kein Update über den tatsächlichen Menübutton inklusive GitHub-Netzwerkabruf und laufendem App-Neustart; HTTP-Transport/Fallback wurde nur gelesen, die Installationslogik getestet.
+- Kein macOS/Linux-Funktionstest (LilyPond-Import bleibt Windows-only).

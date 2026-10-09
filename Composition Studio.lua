@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.55
+-- @version 1.0.56
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.55"
+local VERSION="1.0.56"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -19,8 +19,6 @@ local TITLE_KEY="LastWorkTitle"
 local work_title=reaper.GetProjExtState(0,EXT_SECTION,TITLE_KEY); if type(work_title)=="number" then local _,v=reaper.GetProjExtState(0,EXT_SECTION,TITLE_KEY); work_title=v end; work_title=tostring(work_title or ""):gsub("^%s+",""):gsub("%s+$","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Composition%20Studio.lua"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
-local SCOREFLOW_COMMIT="b2d86a085504c5ac85bdf5f302167d4c79de50e2"
-local SCOREFLOW_HOST_PATH=reaper.GetResourcePath().."/Composition-Studio-ScoreFlow.html"
 
 local function ensure_native_startup_hook()
  local p=reaper.GetResourcePath().."/Scripts/__startup.lua"
@@ -48,7 +46,7 @@ if type(reaper.ImGui_CreateContext)~="function" then reaper.ShowMessageBox("Comp
 local ctx=reaper.ImGui_CreateContext(SCRIPT_NAME,reaper.ImGui_ConfigFlags_DockingEnable())
 if type(reaper.ImGui_SetConfigVar)=="function" and type(reaper.ImGui_ConfigVar_DockingNoSplit)=="function" then reaper.ImGui_SetConfigVar(ctx,reaper.ImGui_ConfigVar_DockingNoSplit(),1) end
 reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"1",true)
-local open,input,busy=true,"",false; local last_made={}; local swam_last_made={}; local last_diag={}; local restarting=false; local update_status=""; local history={}; local chat_start=1; local info_visible=false; local history_mode=false; local notation_status=""; local score_state={items={},notes={},selected=0,selection_signature=""}; local score_bridge_seq=""; local current_project=reaper.EnumProjects(-1,""); local font=nil
+local open,input,busy=true,"",false; local last_made={}; local swam_last_made={}; local last_diag={}; local restarting=false; local update_status=""; local history={}; local chat_start=1; local info_visible=false; local history_mode=false; local current_project=reaper.EnumProjects(-1,""); local font=nil
 if type(reaper.ImGui_CreateFont)=="function" then local ok,f=pcall(reaper.ImGui_CreateFont,"sans-serif"); if ok then font=f end end
 if font and type(reaper.ImGui_Attach)=="function" then pcall(reaper.ImGui_Attach,ctx,font) end
 local FONT_SIZE_KEY="InterfaceFontSize"
@@ -105,7 +103,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.55')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.56')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -248,13 +246,13 @@ end
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","api_error","api_response_excerpt","update_error"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
  local raw=read_file(DIAG_CACHE_PATH) or reaper.GetExtState(EXT_SECTION,DIAG_STATE_KEY)
  if not raw or raw=="" then return end
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error"}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error","lilypond_log"}
  for _,k in ipairs(keys) do
   local pat='"'..k..'"%s*:%s*"'
   local _,e=raw:find(pat)
@@ -405,95 +403,6 @@ local function item_guid(item) local ok,g=reaper.GetSetMediaItemInfo_String(item
 local function track_guid(track) return reaper.GetTrackGUID(track) or "" end
 local function selected_tracks() local a={}; for i=0,reaper.CountSelectedTracks(0)-1 do local tr=reaper.GetSelectedTrack(0,i); local _,n=reaper.GetTrackName(tr); a[#a+1]={track=tr,guid=track_guid(tr),name=n~="" and n or "Unbenannte Spur",index=math.floor(reaper.GetMediaTrackInfo_Value(tr,"IP_TRACKNUMBER"))} end; return a end
 local function selected_items(with_notes) local a={}; for i=0,reaper.CountSelectedMediaItems(0)-1 do local item=reaper.GetSelectedMediaItem(0,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local tr=reaper.GetMediaItem_Track(item); local _,tn=reaper.GetTrackName(tr); local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=tr,guid=item_guid(item),track_guid=track_guid(tr),track_name=tn~="" and tn or "Unbenannte Spur",take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; if with_notes then local _,ncount=reaper.MIDI_CountEvts(take); for n=0,(ncount or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end end; a[#a+1]=it end end; return a end
-
-local NOTE_NAMES={"C","C♯","D","E♭","E","F","F♯","G","A♭","A","B♭","B"}
-local function score_pitch_name(p)
- p=math.max(0,math.min(127,math.floor(p or 60)))
- return NOTE_NAMES[(p%12)+1]..tostring(math.floor(p/12)-1)
-end
-local function score_selection_signature()
- local parts={}
- for i=0,reaper.CountSelectedMediaItems(0)-1 do
-  local item=reaper.GetSelectedMediaItem(0,i)
-  local take=item and reaper.GetActiveTake(item)
-  if take and reaper.TakeIsMIDI(take) then parts[#parts+1]=item_guid(item) end
- end
- table.sort(parts)
- return table.concat(parts,"|")
-end
-local function score_capture_selection()
- local items=selected_items(false)
- local notes,kept={},{}
- for _,it in ipairs(items) do
-  if it.take and reaper.ValidatePtr2(0,it.take,"MediaItem_Take*") and reaper.TakeIsMIDI(it.take) then
-   kept[#kept+1]=it
-   local _,ncount=reaper.MIDI_CountEvts(it.take)
-   for n=0,(ncount or 0)-1 do
-    local ok,_,muted,sp,ep,ch,p,v=reaper.MIDI_GetNote(it.take,n)
-    if ok and not muted then
-     local st=reaper.MIDI_GetProjTimeFromPPQPos(it.take,sp)
-     local et=reaper.MIDI_GetProjTimeFromPPQPos(it.take,ep)
-     notes[#notes+1]={take=it.take,item=it.item,item_guid=it.guid,track_guid=it.track_guid,take_name=it.take_name,track_name=it.track_name,note_idx=n,start_ppq=sp,end_ppq=ep,start_qn=reaper.TimeMap2_timeToQN(0,st),duration_qn=reaper.TimeMap2_timeToQN(0,et)-reaper.TimeMap2_timeToQN(0,st),pitch=p,velocity=v,channel=ch}
-    end
-   end
-  end
- end
- table.sort(notes,function(a,b)
-  if math.abs(a.start_qn-b.start_qn)>0.000001 then return a.start_qn<b.start_qn end
-  if a.item_guid~=b.item_guid then return a.item_guid<b.item_guid end
-  return a.pitch<b.pitch
- end)
- for i,n in ipairs(notes) do n.csid=i end
- score_state.items=kept
- score_state.notes=notes
- score_state.selection_signature=score_selection_signature()
- if #notes==0 then score_state.selected=0 else score_state.selected=math.min(math.max(score_state.selected,1),#notes) end
- notation_status=#kept==0 and "Keine ausgewählten MIDI-Items in REAPER." or (tostring(#kept).." MIDI-Item(s) übernommen · "..tostring(#notes).." Noten.")
-end
-local function score_selected_note()
- if score_state.selected<1 then return nil end
- return score_state.notes[score_state.selected]
-end
-local function score_refresh_after_edit(ref)
- score_capture_selection()
- if not ref then return end
- for i,n in ipairs(score_state.notes) do
-  if n.item_guid==ref.item_guid and math.abs(n.start_ppq-ref.start_ppq)<0.5 and n.channel==ref.channel then
-   score_state.selected=i
-   if n.pitch==ref.pitch then break end
-  end
- end
-end
-local function score_change_pitch(delta)
- local n=score_selected_note()
- if not n then notation_status="Keine Note ausgewählt."; return end
- local np=math.max(0,math.min(127,n.pitch+delta))
- local ref={item_guid=n.item_guid,start_ppq=n.start_ppq,channel=n.channel,pitch=np}
- reaper.Undo_BeginBlock2(0)
- local ok,sel,mut,sp,ep,ch,_,vel=reaper.MIDI_GetNote(n.take,n.note_idx)
- if ok then reaper.MIDI_SetNote(n.take,n.note_idx,sel,mut,sp,ep,ch,np,vel,true); reaper.MIDI_Sort(n.take) end
- reaper.Undo_EndBlock2(0,"Composition Studio Notation – Tonhöhe ändern",-1)
- reaper.UpdateArrange()
- score_refresh_after_edit(ref)
- notation_status="Tonhöhe geändert: "..score_pitch_name(np).." · REAPER-MIDI aktualisiert."
-end
-local function score_scale_duration(factor)
- local n=score_selected_note()
- if not n then notation_status="Keine Note ausgewählt."; return end
- local ref={item_guid=n.item_guid,start_ppq=n.start_ppq,channel=n.channel,pitch=n.pitch}
- reaper.Undo_BeginBlock2(0)
- local ok,sel,mut,sp,ep,ch,p,vel=reaper.MIDI_GetNote(n.take,n.note_idx)
- if ok then
-  local dur=math.max(1,ep-sp)
-  local nd=math.max(1,math.floor(dur*factor+0.5))
-  reaper.MIDI_SetNote(n.take,n.note_idx,sel,mut,sp,sp+nd,ch,p,vel,true)
-  reaper.MIDI_Sort(n.take)
- end
- reaper.Undo_EndBlock2(0,"Composition Studio Notation – Notendauer ändern",-1)
- reaper.UpdateArrange()
- score_refresh_after_edit(ref)
- notation_status="Notendauer geändert · REAPER-MIDI aktualisiert."
-end
 
 local function track_context_items(tracks) local a={}; local seen={}; for _,t in ipairs(tracks) do for i=0,reaper.CountTrackMediaItems(t.track)-1 do local item=reaper.GetTrackMediaItem(t.track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local g=item_guid(item); if not seen[g] then seen[g]=true; local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=t.track,guid=g,track_guid=t.guid,track_name=t.name,take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; local _,nc=reaper.MIDI_CountEvts(take); for n=0,(nc or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end; a[#a+1]=it end end end end; return a end
 local function time_selection_context() local s,e=reaper.GetSet_LoopTimeRange(false,false,0,0,false); if not s or not e or e<=s then return "TIME_SELECTION none" end; local sq=reaper.TimeMap2_timeToQN(0,s); local eq=reaper.TimeMap2_timeToQN(0,e); local _,sm,sb=reaper.TimeMap2_timeToBeats(0,s); local _,em,eb=reaper.TimeMap2_timeToBeats(0,e); return string.format("TIME_SELECTION startQN=%.3f endQN=%.3f startBar=%d startBeat=%.3f endBar=%d endBeat=%.3f",sq,eq,(sm or 0)+1,(sb or 0)+1,(em or 0)+1,(eb or 0)+1) end
@@ -688,9 +597,6 @@ local function ai_poll(a)
 end
 launch=function(stage,prompt,key,data) local a,e=ai_command(prompt,key); if not a then add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 
--- Local LilyPond-to-MIDI translator for unambiguous absolute-pitch piano notation.
--- Deliberately rejects unsupported syntax rather than silently losing notes.
-
 -- The official LilyPond compiler handles the musical semantics.
 local LILYPOND_PATH_KEY="LilyPondExe"
 local function lily_exe()
@@ -760,6 +666,15 @@ AUFTRAG:
 end
 
 local function lily_compile_import(source,insert_qn,expected_bars)
+ -- ExecProcess returns one string: exit code, newline, captured output.
+ local function process_result(raw)
+  if type(raw)~="string" then return nil,"Prozess konnte nicht ausgeführt werden." end
+  local first,output=raw:match("^([^\n]*)\n(.*)$")
+  first=first or raw; output=output or ""
+  local code=trim(first):match("^([%-]?%d+)$")
+  if not code then return nil,"Ungültige Prozessantwort: "..raw:sub(-1200) end
+  return tonumber(code),output
+ end
  if not IS_WINDOWS then return nil,"LilyPond-MIDI-Integration derzeit für Windows." end
  local exe=lily_exe()
  if not exe then return nil,"LilyPond-Pfad nicht gefunden. Menü ... → LilyPond-Pfad einstellen." end
@@ -769,12 +684,14 @@ local function lily_compile_import(source,insert_qn,expected_bars)
  local base=input:sub(1,-4)
  if not write_file(input,src) then return nil,"LilyPond-Datei konnte nicht gespeichert werden." end
  local command=shell_quote(exe)..' -dno-print-pages -dmidi-extension=mid -o '..shell_quote(base)..' '..shell_quote(input)
- local result,output=reaper.ExecProcess(command,120000)
+ local result,output=process_result(reaper.ExecProcess(command,120000))
  diag_set("lilypond_log",tostring(output or ""):sub(-12000))
  if result~=0 then return nil,"LilyPond Fehler "..tostring(result)..": "..tostring(output or ""):sub(-1200) end
  local midi=base..".mid"
  if not reaper.file_exists(midi) then return nil,"LilyPond hat keine MIDI-Datei erzeugt." end
  local prior=reaper.CountTracks(0)
+ local existing={}
+ for ix=0,prior-1 do existing[reaper.GetTrack(0,ix)]=true end
  local cursor=reaper.GetCursorPosition()
  reaper.Undo_BeginBlock2(0)
  local at=insert_qn and reaper.TimeMap2_QNToTime(0,insert_qn) or 0
@@ -782,6 +699,25 @@ local function lily_compile_import(source,insert_qn,expected_bars)
  local n=reaper.InsertMedia(midi,1)
  reaper.SetEditCurPos(cursor,false,false)
  local tracks=reaper.CountTracks(0)-prior
+ local imported={}
+ -- InsertMedia may insert after the selected track, rather than at project end.
+ for ix=0,reaper.CountTracks(0)-1 do
+  local tr=reaper.GetTrack(0,ix)
+  if not existing[tr] then imported[#imported+1]=tr end
+ end
+ local made,ids={},{}
+ for _,tr in ipairs(imported) do
+  for j=0,reaper.CountTrackMediaItems(tr)-1 do
+   local it=reaper.GetTrackMediaItem(tr,j)
+   local tk=it and reaper.GetActiveTake(it)
+   if tk and reaper.TakeIsMIDI(tk) then made[#made+1]=it; ids[#ids+1]=item_guid(it) end
+  end
+ end
+ if tracks<=0 or #made==0 then
+  reaper.Undo_EndBlock2(0,"Composition Studio – MIDI-Import fehlgeschlagen",-1)
+  if #imported>0 then reaper.Undo_DoUndo2(0) end
+  return nil,"MIDI-Datei erzeugt, aber REAPER-Import fehlgeschlagen ("..tostring(n)..")."
+ end
  if expected_bars then
   local num,den=reaper.TimeMap_GetTimeSigAtTime(0,at)
   num=tonumber(num) or 4; den=tonumber(den) or 4
@@ -789,8 +725,7 @@ local function lily_compile_import(source,insert_qn,expected_bars)
   local highest=insert_qn
   local total_items=0
   local earliest=math.huge
-  for ix=prior,reaper.CountTracks(0)-1 do
-   local tr=reaper.GetTrack(0,ix)
+  for _,tr in ipairs(imported) do
    for j=0,reaper.CountTrackMediaItems(tr)-1 do
     local item=reaper.GetTrackMediaItem(tr,j)
     local take=reaper.GetActiveTake(item)
@@ -811,20 +746,6 @@ local function lily_compile_import(source,insert_qn,expected_bars)
   end
  else
   reaper.Undo_EndBlock2(0,"Composition Studio – LilyPond MIDI",-1)
- end
- if tracks<=0 then return nil,"MIDI-Datei erzeugt, aber REAPER-Import fehlgeschlagen ("..tostring(n)..")." end
- local made,ids={},{}
- for ix=prior,reaper.CountTracks(0)-1 do
-  local tr=reaper.GetTrack(0,ix)
-  if tr then
-   for j=0,reaper.CountTrackMediaItems(tr)-1 do
-    local it=reaper.GetTrackMediaItem(tr,j)
-    local tk=it and reaper.GetActiveTake(it)
-    if tk and reaper.TakeIsMIDI(tk) then
-     made[#made+1]=it; ids[#ids+1]=item_guid(it)
-    end
-   end
-  end
  end
  last_made=made
  reaper.SetProjExtState(0,EXT_SECTION,"LastMadeGUIDs",table.concat(ids,"\n"))
@@ -988,1113 +909,14 @@ local function text_context_menu(id,text,editable)
  return text
 end
 
-local function url_encode_path(path)
- return tostring(path or ""):gsub("([^%w%-%._~/])",function(c) return string.format("%%%02X",string.byte(c)) end)
+local function info_text()
+ return "Composition Studio "..VERSION.."\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..
+ "\n\nNEU IN "..VERSION.."\n\n• LilyPond-Exitcodes werden korrekt ausgewertet; der Import prüft echte MIDI-Items.\n• Ungenutzte ScoreFlow-/Verovio-Prototypen und die alte WebView-Bridge wurden entfernt.\n• Neue Klavierstücke und Fortsetzungen werden durch LilyPond in REAPER-MIDI übertragen. Der Pfad ist im Menü einstellbar.\n\nGeprüft unter Windows mit REAPER 7.82 und LilyPond 2.26.0: Kompilierung, MIDI-Import und Fortsetzungsprüfung."
 end
-local function scoreflow_pitch_key(p)
- local names={"c","c#","d","eb","e","f","f#","g","ab","a","bb","b"}
- p=math.max(0,math.min(127,math.floor(p or 60)))
- return names[(p%12)+1].."/"..tostring(math.floor(p/12)-1)
-end
-local SCOREFLOW_DURS={
- {4.0,"w",0},{3.0,"h",1},{2.0,"h",0},{1.5,"q",1},{1.0,"q",0},
- {0.75,"8",1},{0.5,"8",0},{0.375,"16",1},{0.25,"16",0},{0.125,"32",0}
-}
-local SCOREFLOW_REST_DURS={
- {4.0,"w",0},{2.0,"h",0},{1.0,"q",0},{0.5,"8",0},{0.25,"16",0},{0.125,"32",0}
-}
-local function scoreflow_quant(v,grid)
- grid=grid or 0.25
- return math.floor((tonumber(v) or 0)/grid+0.5)*grid
-end
-local function scoreflow_grid(notes)
- local shortest=math.huge
- for _,n in ipairs(notes or {}) do
-  if n.duration_qn and n.duration_qn>0 then shortest=math.min(shortest,n.duration_qn) end
- end
- if shortest<0.19 then return 0.125 end
- return 0.25
-end
-local function scoreflow_nearest_duration(qn,grid)
- qn=math.max(grid or 0.25,tonumber(qn) or 1)
- local best=SCOREFLOW_DURS[#SCOREFLOW_DURS]; local bd=math.huge
- for _,d in ipairs(SCOREFLOW_DURS) do
-  if d[1]+1e-8 >= (grid or 0.25) then
-   local e=math.abs(qn-d[1])
-   if e<bd then best=d; bd=e end
-  end
- end
- return best[2],best[3],best[1]
-end
-local function scoreflow_note_json(keys,qn,is_rest,csid,grid)
- local dur,dots=scoreflow_nearest_duration(qn,grid)
- local kk={}
- for _,k in ipairs(keys or {}) do kk[#kk+1]='"'..json_escape(k)..'"' end
- return '{"keys":['..table.concat(kk,",")..'],"duration":"'..dur..'","dots":'..tostring(dots)..',"rest":'..(is_rest and "true" or "false")..(csid and (',"csid":'..tostring(csid)) or "")..'}'
-end
-local function scoreflow_append_rests(out,gap,grid)
- gap=scoreflow_quant(math.max(0,tonumber(gap) or 0),grid)
- local guard=0
- while gap>grid/2 and guard<64 do
-  guard=guard+1
-  local chosen=nil
-  for _,d in ipairs(SCOREFLOW_REST_DURS) do
-   if d[1]>=grid-1e-8 and d[1]<=gap+1e-8 then chosen=d; break end
-  end
-  chosen=chosen or {grid,grid<=0.125 and "32" or "16",0}
-  out[#out+1]='{"keys":[],"duration":"'..chosen[2]..'","dots":0,"rest":true}'
-  gap=scoreflow_quant(gap-chosen[1],grid)
- end
-end
-local function scoreflow_staff_mode(notes,items)
- local lo,hi,sum,cnt=127,0,0,0
- for _,x in ipairs(notes or {}) do
-  local p=x.pitch or 60
-  lo=math.min(lo,p); hi=math.max(hi,p); sum=sum+p; cnt=cnt+1
- end
- local avg=(cnt>0) and (sum/cnt) or 60
-
- -- Musical register wins over potentially stale track/take/plugin names.
- -- Clear violin/treble range:
- if cnt>0 and lo>=55 and avg>=67 then return "treble" end
- -- Clear bass/cello range:
- if cnt>0 and hi<=67 and avg<=55 then return "bass" end
-
- local names={}
- for _,it in ipairs(items or score_state.items or {}) do
-  names[#names+1]=string.lower(tostring(it.track_name or "").." "..tostring(it.take_name or ""))
- end
- local n=table.concat(names," ")
-
- -- Piano/keyboard remains explicit because wide range is expected.
- if n:find("klavier",1,true) or n:find("piano",1,true) or n:find("keyboard",1,true) then return "piano" end
-
- -- Instrument names are only secondary hints and must be compatible with range.
- if (n:find("violin",1,true) or n:find("violine",1,true) or n:find("flöte",1,true) or n:find("flute",1,true)
-     or n:find("klarinette",1,true) or n:find("clarinet",1,true) or n:find("oboe",1,true) or n:find("viola",1,true))
-     and (cnt==0 or avg>=58) then return "treble" end
- if (n:find("cello",1,true) or n:find("violoncello",1,true) or n:find("kontrabass",1,true)
-     or n:find("double bass",1,true) or n:find("fagott",1,true))
-     and (cnt==0 or avg<=61) then return "bass" end
-
- -- Generic fallback from pitch distribution.
- if lo>=52 and hi-lo<36 then return "treble" end
- if hi<=69 and hi-lo<36 then return "bass" end
- return "piano"
-end
-
-local function scoreflow_part_label(part_items,part_notes,part_index,name_counts)
- local raw=(part_items[1] and part_items[1].track_name) or ""
- raw=tostring(raw or "")
- local lower=string.lower(raw)
- local lo,hi,sum,cnt=127,0,0,0
- for _,x in ipairs(part_notes or {}) do
-  local p=x.pitch or 60; lo=math.min(lo,p); hi=math.max(hi,p); sum=sum+p; cnt=cnt+1
- end
- local avg=(cnt>0) and sum/cnt or 60
-
- -- Don't expose a clearly contradictory stale SWAM/plugin-style label.
- local suspicious=false
- if lower:find("cello",1,true) and avg>=64 then suspicious=true end
- if lower:find("bass",1,true) and avg>=67 then suspicious=true end
- if lower=="" then suspicious=true end
-
- if suspicious then
-  return "Part "..tostring(part_index)
- end
-
- local c=(name_counts and name_counts[raw]) or 1
- if c>1 then return raw.." · "..tostring(part_index) end
- return raw
-end
-local function scoreflow_voice_json(notes,mstart,mend,staff,mode,grid)
- local ev={}
- for _,n in ipairs(notes) do
-  local which
-  if mode=="treble" then which="treble"
-  elseif mode=="bass" then which="bass"
-  else which=(n.pitch>=60) and "treble" or "bass" end
-  local qs=scoreflow_quant(n.start_qn,grid)
-  if which==staff and qs>=mstart-0.0001 and qs<mend-0.0001 then
-   ev[#ev+1]={src=n,start=qs,dur=math.max(grid,scoreflow_quant(n.duration_qn,grid)),pitch=n.pitch}
-  end
- end
- table.sort(ev,function(a,b)
-  if math.abs(a.start-b.start)>0.0001 then return a.start<b.start end
-  return a.pitch<b.pitch
- end)
- local groups={}
- for _,n in ipairs(ev) do
-  local g=groups[#groups]
-  if not g or math.abs(g.start-n.start)>grid/4 then
-   g={start=n.start,notes={}}; groups[#groups+1]=g
-  end
-  g.notes[#g.notes+1]=n
- end
- local out={}
- local cursor=mstart
- for gi,g in ipairs(groups) do
-  if g.start>cursor+grid/2 then
-   scoreflow_append_rests(out,g.start-cursor,grid)
-   cursor=g.start
-  end
-  if g.start>=cursor-grid/2 then
-   local keys={}; local rawdur=grid
-   for _,n in ipairs(g.notes) do
-    keys[#keys+1]=scoreflow_pitch_key(n.pitch)
-    rawdur=math.max(rawdur,n.dur)
-   end
-   local nextStart=(groups[gi+1] and groups[gi+1].start) or mend
-   local slot=math.max(grid,scoreflow_quant(nextStart-g.start,grid))
-   local dur=rawdur
-   -- MIDI gate length is performance articulation, not necessarily notation.
-   -- For short notes that clearly occupy the next onset slot, notate the slot
-   -- instead of creating tiny values plus rests.
-   if slot<=1.0+1e-8 and rawdur<slot*0.72 then dur=slot
-   elseif rawdur>slot then dur=slot
-   end
-   dur=math.min(dur,mend-g.start)
-   local _,_,repr=scoreflow_nearest_duration(dur,grid)
-   out[#out+1]=scoreflow_note_json(keys,dur,false,g.notes[1] and g.notes[1].src.csid or nil,grid)
-   cursor=math.max(cursor,g.start+repr)
-  end
- end
- if cursor<mend-grid/2 then scoreflow_append_rests(out,mend-cursor,grid) end
- return "["..table.concat(out,",").."]"
-end
-local function scoreflow_part_json(part_notes,part_items,m0,m1,part_index,name_counts)
- local grid=scoreflow_grid(part_notes)
- local mode=scoreflow_staff_mode(part_notes,part_items)
- local measures={}
- local prev_ts=nil
- for mi=m0,m1 do
-  local _,ms,me,num,den=reaper.TimeMap_GetMeasureInfo(0,mi)
-  ms=tonumber(ms) or (mi*4); me=tonumber(me) or (ms+4)
-  num=tonumber(num) or 4; den=tonumber(den) or 4
-  local ts=tostring(num).."/"..tostring(den)
-  local extra=""
-  if prev_ts and ts~=prev_ts then extra=',"_ts":"'..ts..'"' end
-  prev_ts=ts
-  local tre=scoreflow_voice_json(part_notes,ms,me,"treble",mode,grid)
-  local bas=scoreflow_voice_json(part_notes,ms,me,"bass",mode,grid)
-  measures[#measures+1]='{"treble":'..tre..',"bass":'..bas..extra..'}'
- end
- local staffMode=(mode=="treble" and "single-treble") or (mode=="bass" and "single-bass") or "grand"
- local name=scoreflow_part_label(part_items,part_notes,part_index,name_counts)
- return '{"name":"'..json_escape(name)..'","staffMode":"'..staffMode..'","measures":['..table.concat(measures,",")..']}'
-end
-local function scoreflow_score_json()
- local notes=score_state.notes or {}
- if #notes==0 then return nil,"Keine Noten in der aktuellen REAPER-Auswahl." end
-
- local minq,maxq=notes[1].start_qn,notes[1].start_qn+notes[1].duration_qn
- for _,n in ipairs(notes) do minq=math.min(minq,n.start_qn); maxq=math.max(maxq,n.start_qn+n.duration_qn) end
- local m0=select(1,reaper.TimeMap_QNToMeasures(0,minq))
- local m1=select(1,reaper.TimeMap_QNToMeasures(0,math.max(minq,maxq-1e-7)))
- m0=math.max(0,tonumber(m0) or 0); m1=math.max(m0,tonumber(m1) or m0)
-
- local _,_,_,first_num,first_den,first_tempo=reaper.TimeMap_GetMeasureInfo(0,m0)
- first_num=tonumber(first_num) or 4; first_den=tonumber(first_den) or 4
- first_tempo=tonumber(first_tempo) or reaper.Master_GetTempo()
- local timesig=tostring(first_num).."/"..tostring(first_den)
-
- local byTrack,order={},{}
- for _,it in ipairs(score_state.items or {}) do
-  local g=it.track_guid or it.track_name
-  if not byTrack[g] then byTrack[g]={notes={},items={}}; order[#order+1]=g end
-  byTrack[g].items[#byTrack[g].items+1]=it
- end
- for _,n in ipairs(notes) do
-  local g=n.track_guid or n.track_name
-  if not byTrack[g] then byTrack[g]={notes={},items={}}; order[#order+1]=g end
-  byTrack[g].notes[#byTrack[g].notes+1]=n
- end
-
- if #order<=1 then
-  local p=byTrack[order[1]]
-  local mode=scoreflow_staff_mode(p.notes,p.items)
-  local grid=scoreflow_grid(p.notes)
-  local measures={}; local prev_ts=nil
-  for mi=m0,m1 do
-   local _,ms,me,num,den=reaper.TimeMap_GetMeasureInfo(0,mi)
-   ms=tonumber(ms) or (mi*4); me=tonumber(me) or (ms+4)
-   num=tonumber(num) or 4; den=tonumber(den) or 4
-   local ts=tostring(num).."/"..tostring(den); local extra=""
-   if prev_ts and ts~=prev_ts then extra=',"_ts":"'..ts..'"' end
-   prev_ts=ts
-   local tre=scoreflow_voice_json(p.notes,ms,me,"treble",mode,grid)
-   local bas=scoreflow_voice_json(p.notes,ms,me,"bass",mode,grid)
-   measures[#measures+1]='{"treble":'..tre..',"bass":'..bas..extra..'}'
-  end
-  local staffMode=(mode=="treble" and "single-treble") or (mode=="bass" and "single-bass") or "grand"
-  return '{"title":"Composition Studio","instrument":"piano","staffMode":"'..staffMode..'","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo)..',"measures":['..table.concat(measures,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
- end
-
- local name_counts={}
- for _,g in ipairs(order) do
-  local p=byTrack[g]
-  local nm=(p.items[1] and p.items[1].track_name) or ""
-  name_counts[nm]=(name_counts[nm] or 0)+1
- end
- local parts={}
- local pi=0
- for _,g in ipairs(order) do
-  local p=byTrack[g]
-  if #p.notes>0 then
-   pi=pi+1
-   parts[#parts+1]=scoreflow_part_json(p.notes,p.items,m0,m1,pi,name_counts)
-  end
- end
- return '{"title":"Composition Studio","instrument":"ensemble","timeSignature":"'..timesig..'","keySignature":"C","tempo":'..string.format("%.2f",first_tempo)..',"parts":['..table.concat(parts,",")..'],"cursor":{"measure":-1,"voice":"","index":-1}}'
-end
-
-local function xml_escape(v)
- return tostring(v or ""):gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;"):gsub('"',"&quot;")
-end
-local function vrv_pitch(p)
- local names={
-  {"c",nil},{"c","s"},{"d",nil},{"d","s"},{"e",nil},{"f",nil},
-  {"f","s"},{"g",nil},{"g","s"},{"a",nil},{"a","s"},{"b",nil}
- }
- p=math.max(0,math.min(127,math.floor(p or 60)))
- local x=names[(p%12)+1]
- return x[1],math.floor(p/12)-1,x[2]
-end
-local VRV_DURS={
- {4.0,"1",0},{3.0,"2",1},{2.0,"2",0},{1.5,"4",1},{1.0,"4",0},
- {0.75,"8",1},{0.5,"8",0},{0.375,"16",1},{0.25,"16",0},{0.125,"32",0}
-}
-local function vrv_nearest_duration(qn,grid)
- qn=math.max(grid or 0.25,tonumber(qn) or 1)
- local best=VRV_DURS[#VRV_DURS]; local bd=math.huge
- for _,d in ipairs(VRV_DURS) do
-  if d[1]+1e-8 >= (grid or 0.25) then
-   local e=math.abs(qn-d[1])
-   if e<bd then best=d; bd=e end
-  end
- end
- return best[2],best[3],best[1]
-end
-local function vrv_rest_entries(out,gap,grid,startpos)
- gap=scoreflow_quant(math.max(0,tonumber(gap) or 0),grid)
- local pos=tonumber(startpos) or 0
- local guard=0
- while gap>grid/2 and guard<64 do
-  guard=guard+1
-  local chosen=nil
-  for _,d in ipairs(VRV_DURS) do
-   if d[3]==0 and d[1]>=grid-1e-8 and d[1]<=gap+1e-8 then chosen=d; break end
-  end
-  chosen=chosen or {grid,grid<=0.125 and "32" or "16",0}
-  out[#out+1]={xml='<rest dur="'..chosen[2]..'"/>',start=pos,dur=chosen[1],beamable=false}
-  pos=pos+chosen[1]
-  gap=scoreflow_quant(gap-chosen[1],grid)
- end
- return pos
-end
-
-local function vrv_beam_entries(entries,mstart,beatSpan)
- beatSpan=tonumber(beatSpan) or 1.0
- local out={}
- local run={}
- local runBeat=nil
- local function flush()
-  if #run>=2 then
-   local xs={}
-   for _,e in ipairs(run) do xs[#xs+1]=e.xml end
-   out[#out+1]="<beam>"..table.concat(xs).."</beam>"
-  else
-   for _,e in ipairs(run) do out[#out+1]=e.xml end
-  end
-  run={}; runBeat=nil
- end
- for _,e in ipairs(entries or {}) do
-  local beat=math.floor(((e.start or mstart)-mstart)/beatSpan+1e-7)
-  if e.beamable then
-   if #run>0 and beat~=runBeat then flush() end
-   runBeat=beat
-   run[#run+1]=e
-  else
-   if #run>0 then flush() end
-   out[#out+1]=e.xml
-  end
- end
- if #run>0 then flush() end
- return table.concat(out)
-end
-
-local function vrv_layer_xml(notes,mstart,mend,mode,staff_kind,grid,beatSpan)
- local ev={}
- for _,n in ipairs(notes or {}) do
-  local use=true
-  if mode=="piano" then
-   use=(staff_kind=="treble" and n.pitch>=60) or (staff_kind=="bass" and n.pitch<60)
-  end
-  if use then
-   local qs=scoreflow_quant(n.start_qn,grid)
-   if qs>=mstart-0.0001 and qs<mend-0.0001 then
-    ev[#ev+1]={src=n,start=qs,dur=math.max(grid,scoreflow_quant(n.duration_qn,grid)),pitch=n.pitch}
-   end
-  end
- end
- table.sort(ev,function(a,b)
-  if math.abs(a.start-b.start)>0.0001 then return a.start<b.start end
-  return a.pitch<b.pitch
- end)
- local groups={}
- for _,n in ipairs(ev) do
-  local g=groups[#groups]
-  if not g or math.abs(g.start-n.start)>grid/4 then
-   g={start=n.start,notes={}}; groups[#groups+1]=g
-  end
-  g.notes[#g.notes+1]=n
- end
- local entries={}
- local cursor=mstart
- for gi,g in ipairs(groups) do
-  if g.start>cursor+grid/2 then
-   cursor=vrv_rest_entries(entries,g.start-cursor,grid,cursor)
-  end
-  if g.start>=cursor-grid/2 then
-   local rawdur=grid
-   for _,n in ipairs(g.notes) do rawdur=math.max(rawdur,n.dur) end
-   local nextStart=(groups[gi+1] and groups[gi+1].start) or mend
-   local slot=math.max(grid,scoreflow_quant(nextStart-g.start,grid))
-   local dur=rawdur
-   if slot<=1.0+1e-8 and rawdur<slot*0.72 then dur=slot
-   elseif rawdur>slot then dur=slot end
-   dur=math.min(dur,mend-g.start)
-   local d,dots,repr=vrv_nearest_duration(dur,grid)
-   local dotattr=dots>0 and (' dots="'..tostring(dots)..'"') or ""
-   local xml
-   if #g.notes==1 then
-    local n=g.notes[1]
-    local pname,oct,accid=vrv_pitch(n.pitch)
-    local acc=accid and (' accid="'..accid..'"') or ""
-    xml='<note xml:id="csn'..tostring(n.src.csid)..'" pname="'..pname..'" oct="'..tostring(oct)..'" dur="'..d..'"'..dotattr..acc..'/>'
-   else
-    local chord={'<chord dur="'..d..'"'..dotattr..'>'}
-    for _,n in ipairs(g.notes) do
-     local pname,oct,accid=vrv_pitch(n.pitch)
-     local acc=accid and (' accid="'..accid..'"') or ""
-     chord[#chord+1]='<note xml:id="csn'..tostring(n.src.csid)..'" pname="'..pname..'" oct="'..tostring(oct)..'"'..acc..'/>'
-    end
-    chord[#chord+1]='</chord>'
-    xml=table.concat(chord)
-   end
-   -- Beam eighths and shorter metrically, never across the current beat group.
-   entries[#entries+1]={xml=xml,start=g.start,dur=repr,beamable=(repr<=0.5+1e-8)}
-   cursor=math.max(cursor,g.start+repr)
-  end
- end
- if cursor<mend-grid/2 then vrv_rest_entries(entries,mend-cursor,grid,cursor) end
- if #entries==0 then return '<mRest/>' end
- return vrv_beam_entries(entries,mstart,beatSpan or 1.0)
-end
-local function verovio_score_mei()
- local notes=score_state.notes or {}
- if #notes==0 then return nil,"Keine Noten in der aktuellen REAPER-Auswahl." end
-
- local minq,maxq=notes[1].start_qn,notes[1].start_qn+notes[1].duration_qn
- for _,n in ipairs(notes) do minq=math.min(minq,n.start_qn); maxq=math.max(maxq,n.start_qn+n.duration_qn) end
- local m0=select(1,reaper.TimeMap_QNToMeasures(0,minq))
- local m1=select(1,reaper.TimeMap_QNToMeasures(0,math.max(minq,maxq-1e-7)))
- m0=math.max(0,tonumber(m0) or 0); m1=math.max(m0,tonumber(m1) or m0)
-
- local byTrack,order={},{}
- for _,it in ipairs(score_state.items or {}) do
-  local g=it.track_guid or it.track_name
-  if not byTrack[g] then byTrack[g]={notes={},items={}}; order[#order+1]=g end
-  byTrack[g].items[#byTrack[g].items+1]=it
- end
- for _,n in ipairs(notes) do
-  local g=n.track_guid or n.track_name
-  if not byTrack[g] then byTrack[g]={notes={},items={}}; order[#order+1]=g end
-  byTrack[g].notes[#byTrack[g].notes+1]=n
- end
-
- local staves={}
- local staffNo=0
- local name_counts={}
- for _,g in ipairs(order) do
-  local p=byTrack[g]; local nm=(p.items[1] and p.items[1].track_name) or ""
-  name_counts[nm]=(name_counts[nm] or 0)+1
- end
- local pi=0
- for _,g in ipairs(order) do
-  local p=byTrack[g]
-  if #p.notes>0 then
-   pi=pi+1
-   local mode=scoreflow_staff_mode(p.notes,p.items)
-   local label=scoreflow_part_label(p.items,p.notes,pi,name_counts)
-   local grid=scoreflow_grid(p.notes)
-   if mode=="piano" then
-    staffNo=staffNo+1; local t=staffNo
-    staffNo=staffNo+1; local b=staffNo
-    staves[#staves+1]={part=p,mode=mode,kind="piano",label=label,grid=grid,treble=t,bass=b}
-   else
-    staffNo=staffNo+1
-    staves[#staves+1]={part=p,mode=mode,kind="single",label=label,grid=grid,staff=staffNo}
-   end
-  end
- end
-
- local _,_,_,first_num,first_den=reaper.TimeMap_GetMeasureInfo(0,m0)
- first_num=tonumber(first_num) or 4; first_den=tonumber(first_den) or 4
-
- local head={}
- head[#head+1]='<?xml version="1.0" encoding="UTF-8"?>'
- head[#head+1]='<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1">'
- head[#head+1]='<meiHead><fileDesc><titleStmt><title>Composition Studio</title></titleStmt><pubStmt/></fileDesc></meiHead>'
- head[#head+1]='<music><body><mdiv><score>'
- head[#head+1]='<scoreDef meter.count="'..tostring(first_num)..'" meter.unit="'..tostring(first_den)..'"><staffGrp>'
- for _,sp in ipairs(staves) do
-  if sp.kind=="piano" then
-   head[#head+1]='<staffGrp symbol="brace" bar.thru="true">'
-   head[#head+1]='<staffDef n="'..sp.treble..'" lines="5" clef.shape="G" clef.line="2" label="'..xml_escape(sp.label)..'"/>'
-   head[#head+1]='<staffDef n="'..sp.bass..'" lines="5" clef.shape="F" clef.line="4"/>'
-   head[#head+1]='</staffGrp>'
-  else
-   local shape,line=sp.mode=="bass" and "F" or "G",sp.mode=="bass" and 4 or 2
-   head[#head+1]='<staffDef n="'..sp.staff..'" lines="5" clef.shape="'..shape..'" clef.line="'..line..'" label="'..xml_escape(sp.label)..'"/>'
-  end
- end
- head[#head+1]='</staffGrp></scoreDef><section>'
-
- local prev_num,prev_den=first_num,first_den
- for mi=m0,m1 do
-  local _,ms,me,num,den=reaper.TimeMap_GetMeasureInfo(0,mi)
-  ms=tonumber(ms) or mi*4; me=tonumber(me) or ms+4
-  num=tonumber(num) or prev_num; den=tonumber(den) or prev_den
-  local beatSpan=(den==8 and num>3 and num%3==0) and 1.5 or (4.0/den)
-  if mi>m0 and (num~=prev_num or den~=prev_den) then
-   head[#head+1]='<scoreDef meter.count="'..tostring(num)..'" meter.unit="'..tostring(den)..'"/>'
-  end
-  prev_num,prev_den=num,den
-  head[#head+1]='<measure n="'..tostring(mi-m0+1)..'">'
-  for _,sp in ipairs(staves) do
-   if sp.kind=="piano" then
-    head[#head+1]='<staff n="'..sp.treble..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,"piano","treble",sp.grid,beatSpan)..'</layer></staff>'
-    head[#head+1]='<staff n="'..sp.bass..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,"piano","bass",sp.grid,beatSpan)..'</layer></staff>'
-   else
-    local k=sp.mode=="bass" and "bass" or "treble"
-    head[#head+1]='<staff n="'..sp.staff..'"><layer n="1">'..vrv_layer_xml(sp.part.notes,ms,me,sp.mode,k,sp.grid,beatSpan)..'</layer></staff>'
-   end
-  end
-  head[#head+1]='</measure>'
- end
- head[#head+1]='</section></score></mdiv></body></music></mei>'
- return table.concat(head)
-end
-
-local function verovio_host_html(mei)
- local encoded='"'..json_escape(mei)..'"'
- return [[<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Composition Studio – Notation</title>
-<style>
-html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#111}
-#top{position:sticky;top:0;z-index:20;background:#f5f5f5;border-bottom:1px solid #bbb;padding:7px 10px;font-size:13px;display:flex;flex-direction:column;gap:6px}
-.cs-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap} #top button{font-size:14px;padding:5px 13px;min-width:42px}
-#cs-status{margin-left:8px;color:#444}.cs-label{color:#555}
-#notation-container{position:relative;padding:10px 14px 28px 14px;background:#fff;min-height:300px}
-#notation-container svg{display:block;max-width:100%;height:auto}
-#selection-layer{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none}
-#drag-preview{position:absolute;left:0;top:0;right:0;bottom:0;pointer-events:none;z-index:25}
-#drag-preview svg{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible}
-.cs-sel{position:absolute;background:rgba(0,102,204,.16);border:2px solid rgba(0,102,204,.75);border-radius:4px;box-sizing:border-box}
-.cs-ghost-guide{position:absolute;border-left:1px dashed rgba(0,102,204,.65);border-top:1px dashed rgba(0,102,204,.65);pointer-events:none}
-#drag-box{position:absolute;border:1px dashed #0066cc;background:rgba(0,102,204,.08);pointer-events:none;display:none;z-index:30}
-#error{padding:16px;color:#b00020}
-</style></head><body>
-<div id="top">
-<div class="cs-row"><button onclick="csTransport('start')">|◀</button><button onclick="csTransport('play')">▶</button><button onclick="csTransport('pause')">Ⅱ</button><button onclick="csTransport('stop')">■</button><span class="cs-label">REAPER Player</span></div>
-<div class="cs-row"><button onclick="csCmd('pitch',-1)">−1 Halbton</button><button onclick="csCmd('pitch',1)">+1 Halbton</button><button onclick="csCmd('duration',0.5)">½ Dauer</button><button onclick="csCmd('duration',2)">2× Dauer</button><span id="cs-status">Verovio wird geladen …</span></div>
-</div>
-<div id="notation-container"><div id="selection-layer"></div><div id="drag-preview"></div><div id="drag-box"></div></div>
-<script>
-window.csSelectedIds=[];
-function csBridgeReady(){return !!(window.compositionStudioBridge&&window.compositionStudioBridge.postMessage);}
-function csSend(obj){try{if(csBridgeReady()){window.compositionStudioBridge.postMessage(JSON.stringify(obj));return true;}}catch(e){}return false;}
-function csSetStatus(t){const e=document.getElementById('cs-status');if(e)e.textContent=t;}
-function csTransport(action){if(!csSend({type:'transport',action}))csSetStatus('Bridge fehlt');}
-function csCmd(kind,value){const ids=window.csSelectedIds||[];if(!ids.length){csSetStatus('Zuerst Note(n) markieren');return;}if(!csSend({type:'command',csids:ids.join(','),kind,value}))csSetStatus('Bridge fehlt');}
-</script>
-<script type="module">
-import createVerovioModule from 'https://cdn.jsdelivr.net/npm/verovio@6.3.0/dist/verovio-module.mjs';
-import { VerovioToolkit } from 'https://cdn.jsdelivr.net/npm/verovio@6.3.0/dist/verovio.mjs';
-
-let mei=]]..encoded..[[;
-let toolkit=null,drag=null;
-const container=document.getElementById('notation-container');
-const layer=document.getElementById('selection-layer');
-const preview=document.getElementById('drag-preview');
-const box=document.getElementById('drag-box');
-
-function idFromEl(el){const g=el&&el.closest?el.closest('[id^="csn"]'):null;if(!g)return null;const m=g.id.match(/^csn(\d+)$/);return m?Number(m[1]):null;}
-function noteEl(id){return document.getElementById('csn'+id);}
-function refreshSelection(){
- layer.innerHTML='';
- const cr=container.getBoundingClientRect();
- for(const id of window.csSelectedIds||[]){
-  const el=noteEl(id); if(!el)continue;
-  const r=el.getBoundingClientRect(); const d=document.createElement('div'); d.className='cs-sel';
-  d.style.left=(r.left-cr.left+container.scrollLeft-3)+'px';d.style.top=(r.top-cr.top+container.scrollTop-3)+'px';
-  d.style.width=(r.width+6)+'px';d.style.height=(r.height+6)+'px';layer.appendChild(d);
- }
- csSetStatus((window.csSelectedIds||[]).length+' Note(n) markiert · '+(csBridgeReady()?'Bridge aktiv':'Bridge fehlt'));
-}
-function allNoteIdsInRect(rect){
- const out=[];
- for(const el of container.querySelectorAll('[id^="csn"]')){
-  const m=el.id.match(/^csn(\d+)$/);if(!m)continue;const r=el.getBoundingClientRect();
-  if(!(r.right<rect.left||r.left>rect.right||r.bottom<rect.top||r.top>rect.bottom))out.push(Number(m[1]));
- }
- return out;
-}
-function beginMovePreview(){
- preview.innerHTML='';
- const cr=container.getBoundingClientRect();
- const ns='http://www.w3.org/2000/svg';
- const ov=document.createElementNS(ns,'svg');
- ov.setAttribute('width',String(container.scrollWidth));
- ov.setAttribute('height',String(container.scrollHeight));
- ov.setAttribute('viewBox','0 0 '+container.scrollWidth+' '+container.scrollHeight);
- const grp=document.createElementNS(ns,'g');
- grp.setAttribute('id','cs-ghost-group');
- grp.setAttribute('opacity','0.78');
- grp.style.filter='drop-shadow(0 0 1px rgba(0,102,204,.9))';
- ov.appendChild(grp);
-
- let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
- for(const id of window.csSelectedIds||[]){
-  const el=noteEl(id); if(!el)continue;
-  const r=el.getBoundingClientRect();
-  minX=Math.min(minX,r.left-cr.left+container.scrollLeft);
-  minY=Math.min(minY,r.top-cr.top+container.scrollTop);
-  maxX=Math.max(maxX,r.right-cr.left+container.scrollLeft);
-  maxY=Math.max(maxY,r.bottom-cr.top+container.scrollTop);
-
-  const clone=el.cloneNode(true);
-  clone.removeAttribute('id');
-  const svg=el.ownerSVGElement;
-  if(svg){
-   const srect=svg.getBoundingClientRect();
-   const tx=srect.left-cr.left+container.scrollLeft;
-   const ty=srect.top-cr.top+container.scrollTop;
-   const holder=document.createElementNS(ns,'g');
-   holder.setAttribute('transform','translate('+tx+','+ty+')');
-   holder.appendChild(clone);
-   grp.appendChild(holder);
-  }
- }
- preview.appendChild(ov);
-
- const guide=document.createElement('div');
- guide.className='cs-ghost-guide';
- guide.id='cs-ghost-guide';
- if(isFinite(minX)){
-  guide.style.left=minX+'px';
-  guide.style.top=minY+'px';
-  guide.style.width=Math.max(12,maxX-minX)+'px';
-  guide.style.height=Math.max(12,maxY-minY)+'px';
- }
- preview.appendChild(guide);
- preview.dataset.baseX=isFinite(minX)?String(minX):'0';
- preview.dataset.baseY=isFinite(minY)?String(minY):'0';
-}
-function previewMove(dx,dy){
- const q=dragQuant(dx,dy);
- const snapDx=q.dq*28;
- const snapDy=-q.dp*5;
- const grp=document.getElementById('cs-ghost-group');
- if(grp)grp.setAttribute('transform','translate('+snapDx+','+snapDy+')');
- const guide=document.getElementById('cs-ghost-guide');
- if(guide)guide.style.transform='translate('+snapDx+'px,'+snapDy+'px)';
- return q;
-}
-function clearPreview(){
- preview.innerHTML='';
-}
-function dragQuant(dx,dy){
- const dp=Math.round(-dy/5);
- const dq=Math.round((dx/28)/0.25)*0.25;
- return {dp,dq};
-}
-function bindInteraction(){
- container.onpointerdown=(e)=>{
-  if(e.button!==0)return;
-  const id=idFromEl(e.target);
-  drag={id,startX:e.clientX,startY:e.clientY,moved:false,mode:id?'move':'select'};
-  if(id){
-   if(!(window.csSelectedIds||[]).includes(id))window.csSelectedIds=[id];
-   refreshSelection();
-   beginMovePreview();
-  }else{
-   box.style.display='block';box.style.left=(e.clientX-container.getBoundingClientRect().left)+'px';box.style.top=(e.clientY-container.getBoundingClientRect().top)+'px';box.style.width='0';box.style.height='0';
-  }
-  try{container.setPointerCapture(e.pointerId);}catch(_){}
- };
- container.onpointermove=(e)=>{
-  if(!drag)return;const dx=e.clientX-drag.startX,dy=e.clientY-drag.startY;if(Math.abs(dx)>4||Math.abs(dy)>4)drag.moved=true;
-  if(drag.mode==='select'&&drag.moved){
-   const cr=container.getBoundingClientRect(),x0=drag.startX-cr.left,y0=drag.startY-cr.top,x=e.clientX-cr.left,y=e.clientY-cr.top;
-   box.style.left=Math.min(x0,x)+'px';box.style.top=Math.min(y0,y)+'px';box.style.width=Math.abs(x-x0)+'px';box.style.height=Math.abs(y-y0)+'px';
-  }else if(drag.mode==='move'&&drag.moved){
-   const q=previewMove(dx,dy);
-   const key=q.dp+':'+q.dq;
-   if(drag.lastQ!==key){
-    drag.lastQ=key;
-    csSetStatus('Ziel: '+(q.dp>=0?'+':'')+q.dp+' HT · '+(q.dq>=0?'+':'')+q.dq+' Viertel');
-   }
-  }
- };
- container.onpointerup=(e)=>{
-  if(!drag)return;
-  const d=drag;drag=null;box.style.display='none';
-  if(d.mode==='move'){
-   if(d.moved){
-    const dx=e.clientX-d.startX,dy=e.clientY-d.startY;
-    const q=dragQuant(dx,dy);
-    if(q.dp!==0||q.dq!==0){
-     if(!csSend({type:'move',csids:(window.csSelectedIds||[]).join(','),dpitch:q.dp,dqn:q.dq}))clearPreview();
-    }else clearPreview();
-   }else if(d.id){
-    clearPreview();
-    window.csSelectedIds=[d.id];refreshSelection();csSend({type:'select',csids:String(d.id)});
-   }
-  }else{
-   if(d.moved){
-    const rect={left:Math.min(d.startX,e.clientX),right:Math.max(d.startX,e.clientX),top:Math.min(d.startY,e.clientY),bottom:Math.max(d.startY,e.clientY)};
-    window.csSelectedIds=allNoteIdsInRect(rect);refreshSelection();if(window.csSelectedIds.length)csSend({type:'select',csids:window.csSelectedIds.join(',')});
-   }else{
-    window.csSelectedIds=[];refreshSelection();
-   }
-  }
- };
- container.onpointercancel=()=>{
-  if(drag&&drag.mode==='move')clearPreview();
-  drag=null;box.style.display='none';
- };
-}
-function renderCurrent(){
- if(!toolkit)return;
- clearPreview();
- toolkit.loadData(mei);
- toolkit.setOptions({pageWidth:2800,pageHeight:5000,scale:42,adjustPageHeight:true,breaks:'auto',header:'none',footer:'none',spacingStaff:8,spacingSystem:12,justifyVertically:false});
- const pages=toolkit.getPageCount();let html='';
- for(let p=1;p<=pages;p++)html+=toolkit.renderToSVG(p,{});
- const old=container.querySelectorAll('svg,.vrv-page');old.forEach(x=>x.remove());
- const wrap=document.createElement('div');wrap.className='vrv-page';wrap.innerHTML=html;container.insertBefore(wrap,layer);
- bindInteraction();refreshSelection();
-}
-window.csUpdateMEI=function(next){mei=next;renderCurrent();};
-try{
- const mod=await createVerovioModule();
- toolkit=new VerovioToolkit(mod);
- renderCurrent();
- csSetStatus('Verovio · '+(csBridgeReady()?'Bridge aktiv':'Bridge fehlt')+' · Note(n) markieren');
-}catch(e){
- document.body.insertAdjacentHTML('beforeend','<div id="error">Verovio-Fehler: '+String(e)+'</div>');
-}
-</script></body></html>]]
-end
-
-local function scoreflow_host_html(score_json)
- local base="https://cdn.jsdelivr.net/gh/IlyaSkorik/scoreflow@"..SCOREFLOW_COMMIT.."/assets/www/"
- return [[<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Composition Studio – Notation</title>
-<script src="]]..base..[[js/vexflow.js"></script>
-<style>
-html,body{margin:0;padding:0;background:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#111}
-#top{position:sticky;top:0;z-index:10;background:#f5f5f5;border-bottom:1px solid #bbb;padding:7px 10px;font-size:13px;display:flex;flex-direction:column;gap:6px;align-items:stretch} .cs-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap} #top button{font-size:14px;padding:5px 13px;min-width:42px} .cs-label{color:#555;margin-left:4px} #cs-status{margin-left:8px;color:#444}
-#notation-container{position:relative;width:100%;box-sizing:border-box;padding:8px;background:#fff}
-#notation-container svg{display:block}
-#playhead{position:absolute;top:8px;width:2px;background:#1687d9;opacity:0;pointer-events:none}
-.note-sel{position:absolute;background:rgba(0,102,204,.18);border-radius:3px;pointer-events:none}
-#engine-error{padding:16px;color:#c62828}
-#print-root{position:fixed;left:-10000px;top:0}
-</style></head><body>
-<div id="top">
-<div class="cs-row cs-player">
-<button onclick="csTransport('start')">|◀</button>
-<button onclick="csTransport('play')">▶</button>
-<button onclick="csTransport('pause')">Ⅱ</button>
-<button onclick="csTransport('stop')">■</button>
-<span class="cs-label">REAPER Player</span>
-</div>
-<div class="cs-row cs-edit">
-<button onclick="csCmd('pitch',-1)">−1 Halbton</button>
-<button onclick="csCmd('pitch',1)">+1 Halbton</button>
-<button onclick="csCmd('duration',0.5)">½ Dauer</button>
-<button onclick="csCmd('duration',2)">2× Dauer</button>
-<span id="cs-status">Note im Notenbild anklicken</span>
-</div>
-</div>
-<div id="notation-container"><div id="playhead"></div></div><div id="print-root"></div>
-<script>
-window.csSelectedIds=[];
-function csBridgeReady(){return !!(window.compositionStudioBridge&&window.compositionStudioBridge.postMessage);}
-function csSend(obj){
- try{
-  if(csBridgeReady()){window.compositionStudioBridge.postMessage(JSON.stringify(obj));return true;}
- }catch(e){}
- return false;
-}
-function csSetStatus(t){const el=document.getElementById('cs-status');if(el)el.textContent=t;}
-function csTransport(action){
- if(!csSend({type:'transport',action:action})) csSetStatus('WebView-Bridge fehlt – Player erreicht REAPER nicht');
-}
-function csCmd(kind,value){
- const ids=window.csSelectedIds||[];
- if(!ids.length){csSetStatus('Zuerst Note(n) markieren');return;}
- if(!csSend({type:'command',csids:ids.join(','),kind:kind,value:value})){
-   csSetStatus('WebView-Bridge fehlt – Bearbeitung erreicht REAPER nicht');
- }else{
-   csSetStatus(ids.length+' Note(n) · Befehl an REAPER gesendet');
- }
-}
-window.flutter_inappwebview={callHandler:function(name,data){
- if(name==='onNoteTap'&&data){
-  try{
-   const sc=window.csScore;
-   const n=(sc&&sc.parts&&data.part!=null)
-    ? sc.parts[data.part].measures[data.measure][data.voice][data.index]
-    : (sc&&sc.measures&&sc.measures[data.measure]&&sc.measures[data.measure][data.voice]&&sc.measures[data.measure][data.voice][data.index]);
-   if(n&&n.csid&&window.csSelectSingle){window.csSelectSingle(n.csid);}
-  }catch(e){}
- }
- return Promise.resolve(null);
-}};
-</script>
-<script type="module">
-import { render } from 'https://cdn.jsdelivr.net/gh/wibem1/Composition-Studio@73dfcb307c6448ba5e19fc851262627808fd0c07/web/scoreflow-cs-render.js';
-import { state } from ']]..base..[[js/utils/state.js';
-let score=]]..score_json..[[;
-window.csScore=score;
-setTimeout(function(){
- if(csBridgeReady()) csSetStatus('Bridge aktiv · Note(n) markieren');
- else csSetStatus('Bridge fehlt · Markieren geht, Bearbeiten nicht');
-},0);
-
-function noteByHit(h){
- try{
-  if(score.parts&&h.p!=null) return score.parts[h.p].measures[h.m][h.v][h.i];
-  return score.measures[h.m][h.v][h.i];
- }catch(e){return null;}
-}
-function ensureLayer(){
- let l=document.getElementById('cs-selection-layer');
- if(!l){
-  l=document.createElement('div'); l.id='cs-selection-layer';
-  l.style.position='absolute'; l.style.left='0'; l.style.top='0';
-  l.style.right='0'; l.style.bottom='0'; l.style.pointerEvents='none';
-  document.getElementById('notation-container').appendChild(l);
- }
- return l;
-}
-function drawSelected(ids){
- const set=new Set((ids||[]).map(Number)); const layer=ensureLayer(); layer.innerHTML='';
- for(const h of state.noteHits||[]){
-  const n=noteByHit(h); if(!n||!n.csid||!set.has(Number(n.csid))) continue;
-  const d=document.createElement('div');
-  d.style.position='absolute'; d.style.left=(8+h.x-4)+'px'; d.style.top=(8+h.y-4)+'px';
-  d.style.width=(h.w+8)+'px'; d.style.height=(h.h+8)+'px';
-  d.style.background='rgba(0,102,204,.22)'; d.style.border='2px solid rgba(0,102,204,.75)';
-  d.style.borderRadius='4px'; d.style.boxSizing='border-box';
-  layer.appendChild(d);
- }
- const st=document.getElementById('cs-status');
- if(st){
-  const suffix=csBridgeReady()?' · Bridge aktiv':' · Bridge fehlt';
-  st.textContent=(set.size===1?'1 Note markiert':(set.size+' Noten markiert'))+suffix;
- }
-}
-window.csSelectSingle=function(id){
- window.csSelectedIds=[Number(id)]; drawSelected(window.csSelectedIds);
- csSend({type:'select',csids:String(id)});
-};
-
-function hitAt(px,py){
- let best=null,bestD=Infinity;
- for(const h of state.noteHits||[]){
-  const cx=h.x+h.w/2, cy=h.y+h.h/2, dx=px-cx, dy=py-cy, d=dx*dx+dy*dy;
-  if(d<bestD){bestD=d;best=h;}
- }
- return best&&bestD<=90*90?best:null;
-}
-function idsInRect(x1,y1,x2,y2){
- const loX=Math.min(x1,x2), hiX=Math.max(x1,x2), loY=Math.min(y1,y2), hiY=Math.max(y1,y2), out=[];
- for(const h of state.noteHits||[]){
-  const cx=h.x+h.w/2, cy=h.y+h.h/2;
-  if(cx>=loX&&cx<=hiX&&cy>=loY&&cy<=hiY){
-   const n=noteByHit(h); if(n&&n.csid&&!out.includes(Number(n.csid))) out.push(Number(n.csid));
-  }
- }
- return out;
-}
-function directHit(px,py){
- for(const h of state.noteHits||[]){
-  if(px>=h.x-6&&px<=h.x+h.w+6&&py>=h.y-8&&py<=h.y+h.h+8) return h;
- }
- return null;
-}
-function dragDeltas(hit,dx,dy){
- let qn=0;
- try{
-  const g=state.lastLayout&&state.lastLayout.geom&&state.lastLayout.geom[hit.m];
-  if(g&&g.w>40){
-   const usable=Math.max(40,g.w-55);
-   qn=Math.round((dx/usable)*16)/4;
-  }
- }catch(e){}
- const dpitch=Math.round(-dy/6);
- return {dpitch:dpitch,dqn:qn};
-}
-function installSelection(){
- const c=document.getElementById('notation-container'); if(!c||c.dataset.csSelection==='1') return;
- c.dataset.csSelection='1';
- let down=false,sx=0,sy=0,drag=false,box=null,suppressNextClick=false,mode='select',startHit=null;
- c.addEventListener('click',e=>{
-  if(suppressNextClick){
-   suppressNextClick=false;
-   e.preventDefault();
-   e.stopImmediatePropagation();
-  }
- },true);
- c.addEventListener('pointerdown',e=>{
-  if(e.button!==0)return; const svg=c.querySelector('svg'); if(!svg)return;
-  const r=svg.getBoundingClientRect(); sx=e.clientX-r.left; sy=e.clientY-r.top; down=true; drag=false;
-  startHit=directHit(sx,sy);
-  mode=startHit?'move':'select';
-  if(mode==='move'){
-   const n=noteByHit(startHit);
-   if(n&&n.csid){
-    const id=Number(n.csid);
-    if(!(window.csSelectedIds||[]).includes(id)){
-      window.csSelectedIds=[id]; drawSelected(window.csSelectedIds);
-      csSend({type:'select',csids:String(id)});
-    }
-   }
-   csSetStatus((window.csSelectedIds||[]).length+' Note(n) · ziehen zum Verschieben');
-  }else{
-   box=document.createElement('div'); box.style.position='absolute'; box.style.pointerEvents='none';
-   box.style.border='1px dashed #0066cc'; box.style.background='rgba(0,102,204,.08)';
-   box.style.left=(8+sx)+'px'; box.style.top=(8+sy)+'px'; box.style.display='none';
-   c.appendChild(box);
-  }
-  c.setPointerCapture&&c.setPointerCapture(e.pointerId);
- },true);
- c.addEventListener('pointermove',e=>{
-  if(!down)return; const svg=c.querySelector('svg'); if(!svg)return;
-  const r=svg.getBoundingClientRect(); const x=e.clientX-r.left,y=e.clientY-r.top;
-  if(Math.abs(x-sx)>5||Math.abs(y-sy)>5)drag=true;
-  if(!drag)return;
-  if(mode==='select'&&box){
-   box.style.display='block';box.style.left=(8+Math.min(sx,x))+'px';box.style.top=(8+Math.min(sy,y))+'px';
-   box.style.width=Math.abs(x-sx)+'px';box.style.height=Math.abs(y-sy)+'px';
-  }else if(mode==='move'&&startHit){
-   const d=dragDeltas(startHit,x-sx,y-sy);
-   csSetStatus('Verschieben: '+(d.dpitch>=0?'+':'')+d.dpitch+' HT · '+(d.dqn>=0?'+':'')+d.dqn+' Viertel');
-  }
- },true);
- c.addEventListener('pointerup',e=>{
-  if(!down)return; down=false; const svg=c.querySelector('svg'); if(!svg)return;
-  const r=svg.getBoundingClientRect(); const x=e.clientX-r.left,y=e.clientY-r.top;
-  if(box){box.remove();box=null;}
-  if(mode==='move'&&startHit){
-   if(drag){
-    suppressNextClick=true;
-    const d=dragDeltas(startHit,x-sx,y-sy);
-    if(d.dpitch!==0||Math.abs(d.dqn)>0.0001){
-     const ids=window.csSelectedIds||[];
-     if(!csSend({type:'move',csids:ids.join(','),dpitch:d.dpitch,dqn:d.dqn})) csSetStatus('Bridge fehlt – Verschieben nicht übertragen');
-    }else csSetStatus('Keine Verschiebung');
-   }
-   startHit=null; return;
-  }
-  let ids=[];
-  if(drag){
-   suppressNextClick=true;
-   ids=idsInRect(sx,sy,x,y);
-  } else {
-   const h=hitAt(x,y); if(h){const n=noteByHit(h);if(n&&n.csid)ids=[Number(n.csid)];}
-  }
-  if(ids.length){
-   window.csSelectedIds=ids; drawSelected(ids);
-   if(!csSend({type:'select',csids:ids.join(',')})) csSetStatus(ids.length+' Note(n) markiert · Bridge fehlt');
-  } else if(drag){
-   window.csSelectedIds=[]; drawSelected([]);
-   csSetStatus('Keine Note im Auswahlrechteck');
-  }
- },true);
-}
-window.csUpdateScore=function(nextScore){
- try{
-  score=nextScore;
-  window.csScore=score;
-  render(score);
-  installSelection();
-  drawSelected(window.csSelectedIds||[]);
-  return true;
- }catch(e){
-  csSetStatus('Renderfehler: '+String(e));
-  return false;
- }
-};
-try{
- render(score);
- installSelection();
-}catch(e){
- document.body.insertAdjacentHTML('beforeend','<div id="engine-error">Rendererfehler: '+String(e)+'</div>');
-}
-</script></body></html>]]
-end
-local function notation_open_webview()
- score_capture_selection()
- local mei,err=verovio_score_mei()
- if not mei then notation_status=err or "Keine Partiturdaten."; return false end
- if type(reaper.WEBVIEW_Navigate)~="function" then
-  notation_status="Für die Notation fehlt die REAPER-Erweiterung reaper_webview."
-  notation_window_open=true
-  return false
- end
- local html=verovio_host_html(mei)
- if not write_file(SCOREFLOW_HOST_PATH,html) then
-  notation_status="Notations-Hostdatei konnte nicht geschrieben werden."
-  notation_window_open=true
-  return false
- end
- local url="file://"..url_encode_path(SCOREFLOW_HOST_PATH).."?v="..tostring(os.time())
- local opts='{"SetTitle":"Composition Studio – Notation","InstanceId":"wv_composition_studio_notation","ShowPanel":"always","BasicCtxMenu":true}'
- local ok,e=pcall(reaper.WEBVIEW_Navigate,url,opts)
- if not ok then
-  notation_status="WebView konnte nicht geöffnet werden: "..tostring(e)
-  notation_window_open=true
-  return false
- end
- notation_status="Verovio-Partitur geöffnet."
- notation_window_open=false
- return true
-end
-
-local function score_bridge_rerender()
- local mei=verovio_score_mei()
- if mei and type(reaper.WEBVIEW_Eval)=="function" then
-  local js='window.csUpdateMEI("'..json_escape(mei)..'");'
-  local ok=pcall(reaper.WEBVIEW_Eval,"wv_composition_studio_notation",js)
-  if ok then return end
- end
- if type(reaper.WEBVIEW_Navigate)=="function" then notation_open_webview() end
-end
-local function score_bridge_parse_ids(csv)
- local ids={}
- for x in tostring(csv or ""):gmatch("%d+") do
-  local n=tonumber(x)
-  if n and score_state.notes[n] then ids[#ids+1]=n end
- end
- return ids
-end
-local function score_bridge_apply_command(ids,kind,value)
- ids=ids or {}
- if #ids==0 then notation_status="Notation: keine gültige Auswahl aus WebView."; return end
- reaper.Undo_BeginBlock2(0)
- local touched={}
- for _,csid in ipairs(ids) do
-  local n=score_state.notes[csid]
-  if n and reaper.ValidatePtr2(0,n.take,"MediaItem_Take*") then
-   local ok,sel,mut,sp,ep,ch,p,vel=reaper.MIDI_GetNote(n.take,n.note_idx)
-   if ok then
-    if kind=="pitch" then
-     local np=math.max(0,math.min(127,p+(tonumber(value) or 0)))
-     reaper.MIDI_SetNote(n.take,n.note_idx,sel,mut,sp,ep,ch,np,vel,true)
-    elseif kind=="duration" then
-     local dur=math.max(1,ep-sp)
-     local nd=math.max(1,math.floor(dur*(tonumber(value) or 1)+0.5))
-     reaper.MIDI_SetNote(n.take,n.note_idx,sel,mut,sp,sp+nd,ch,p,vel,true)
-    end
-    touched[n.take]=true
-   end
-  end
- end
- for tk in pairs(touched) do reaper.MIDI_Sort(tk) end
- reaper.Undo_EndBlock2(0,"Composition Studio Notation – Auswahl bearbeiten",-1)
- reaper.UpdateArrange()
- score_capture_selection()
- notation_status=tostring(#ids).." Note(n) bearbeitet."
- score_bridge_rerender()
-end
-local function score_bridge_move(ids,dpitch,dqn)
- ids=ids or {}; dpitch=tonumber(dpitch) or 0; dqn=tonumber(dqn) or 0
- if #ids==0 then return end
- reaper.Undo_BeginBlock2(0)
- local touched={}
- for _,csid in ipairs(ids) do
-  local n=score_state.notes[csid]
-  if n and reaper.ValidatePtr2(0,n.take,"MediaItem_Take*") then
-   local ok,sel,mut,sp,ep,ch,pitch,vel=reaper.MIDI_GetNote(n.take,n.note_idx)
-   if ok then
-    local newPitch=math.max(0,math.min(127,pitch+dpitch))
-    local st=reaper.MIDI_GetProjTimeFromPPQPos(n.take,sp)
-    local q0=reaper.TimeMap2_timeToQN(0,st)
-    local t1=reaper.TimeMap2_QNToTime(0,q0+dqn)
-    local newSp=reaper.MIDI_GetPPQPosFromProjTime(n.take,t1)
-    local shift=newSp-sp
-    reaper.MIDI_SetNote(n.take,n.note_idx,sel,mut,sp+shift,ep+shift,ch,newPitch,vel,true)
-    touched[n.take]=true
-   end
-  end
- end
- for tk in pairs(touched) do reaper.MIDI_Sort(tk) end
- reaper.Undo_EndBlock2(0,"Composition Studio Notation – Noten verschieben",-1)
- reaper.UpdateArrange()
- score_capture_selection()
- score_bridge_rerender()
-end
-local function score_bridge_transport(action)
- if action=="play" then
-  reaper.OnPlayButton()
- elseif action=="pause" then
-  reaper.OnPauseButton()
- elseif action=="stop" then
-  reaper.OnStopButton()
- elseif action=="start" then
-  local q=nil
-  for _,n in ipairs(score_state.notes or {}) do q=q and math.min(q,n.start_qn) or n.start_qn end
-  if q then reaper.SetEditCurPos(reaper.TimeMap2_QNToTime(0,q),true,false) end
- end
-end
-local function score_bridge_poll()
- local seq=reaper.GetExtState("CompositionStudio","ScoreBridgeSeq") or ""
- if seq=="" or seq==score_bridge_seq then return end
- score_bridge_seq=seq
- local msg=reaper.GetExtState("CompositionStudio","ScoreBridgeMessage") or ""
- local typ=msg:match('"type"%s*:%s*"([^"]+)"')
- local csv=msg:match('"csids"%s*:%s*"([^"]*)"') or msg:match('"csid"%s*:%s*(%d+)')
- local ids=score_bridge_parse_ids(csv)
- if typ=="select" and #ids>0 then
-  score_state.selected=ids[1]
- elseif typ=="command" and #ids>0 then
-  local kind=msg:match('"kind"%s*:%s*"([^"]+)"')
-  local value=tonumber(msg:match('"value"%s*:%s*([%-]?[%d%.]+)'))
-  score_bridge_apply_command(ids,kind,value)
- elseif typ=="move" and #ids>0 then
-  local dpitch=tonumber(msg:match('"dpitch"%s*:%s*([%-]?[%d%.]+)')) or 0
-  local dqn=tonumber(msg:match('"dqn"%s*:%s*([%-]?[%d%.]+)')) or 0
-  score_bridge_move(ids,dpitch,dqn)
- elseif typ=="transport" then
-  local action=msg:match('"action"%s*:%s*"([^"]+)"')
-  score_bridge_transport(action)
- end
-end
-
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio "..VERSION.." arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD).."\n\nNEU IN "..VERSION.."\n\n• Mit A- und A+ wird die Schriftgröße auch auf Buttons, Modellauswahl, Menüs und Eingabefelder angewandt. Buttonhöhen und Eingabebereich passen sich an. Der Wert wird dauerhaft gespeichert.\n• Neue Klavierstücke und Fortsetzungen mit Taktangabe werden vollständig durch LilyPond in REAPER-MIDI übertragen. Fortsetzungen werden an das ausgewählte Stück angehängt und auf ihre Länge geprüft.\n• Keine Abschnittsübersetzung bei neuen Klavierstücken.\n• Neue Klavierstücke werden mit der offiziellen LilyPond-Engine in MIDI umgewandelt und direkt in REAPER importiert. Der Pfad ist über das Menü einstellbar.\n\nHINWEIS: Ein REAPER-Windows-Funktionstest steht noch aus." end
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
-local auto_update_at=nil -- manuelles Update verhindert unerwartete Rückkehr zur alten GitHub-Version
-local function loop() if auto_update_at and reaper.time_precise()>=auto_update_at and not busy then auto_update_at=nil; install_update() end; poll_update(); poll_job(); finish_save_panel(); score_bridge_poll(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx)
+local function loop() poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
