@@ -1,8 +1,9 @@
-name: REAPER Lua syntax
+name: REAPER Lua syntax and JSON bridge
 on:
   push:
     paths:
       - 'Composition Studio.lua'
+      - 'tests/json-bridge-test.lua'
       - '.github/workflows/lua-syntax.yml'
   workflow_dispatch:
 jobs:
@@ -26,3 +27,6 @@ jobs:
       - name: Parse REAPER script
         shell: bash
         run: luac -p 'Composition Studio.lua'
+      - name: Verify JSON bridge without API or REAPER
+        shell: bash
+        run: lua tests/json-bridge-test.lua
