@@ -21,4 +21,12 @@ assert(not translate('{"bpm":120,"tracks":[{"notes":[[0,1,155,80]]}]}'))
 local submit=assert(source:match("local function submit%(%)(.-)end\nlocal function wrap_text"))
 assert(submit:find("costs.begin()",1,true),"Direct JSON composition must reset order costs")
 
-print("Native Lua JSON adapter and cost reset checks passed")
+-- Verify the experimental two-call workflow is connected to both new-composition entry paths.
+assert(source:find('launch("engine_concept",p,key,data)',1,true))
+assert(source:find('if stage=="engine_concept" then',1,true))
+assert(source:find('launch("engine_json",prompt,key,data)',1,true))
+assert(source:find('diag_set("concept_result",text)',1,true))
+assert(source:find('launch_new_json(data.request,key,data)',1,true))
+assert(source:find('launch_new_json(request,key,{request=request',1,true))
+assert(source:find('composition_mode=="direct"',1,true))
+print("Native Lua JSON adapter, cost reset and two-step composition wiring checks passed")
