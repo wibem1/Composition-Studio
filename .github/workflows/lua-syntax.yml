@@ -22,11 +22,21 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y lua5.4
           else
-            brew install lua
+            brew install lua@5.4
           fi
       - name: Parse REAPER script
         shell: bash
-        run: luac -p 'Composition Studio.lua'
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            "$(brew --prefix lua@5.4)/bin/luac" -p 'Composition Studio.lua'
+          else
+            luac -p 'Composition Studio.lua'
+          fi
       - name: Verify JSON bridge without API or REAPER
         shell: bash
-        run: lua tests/json-bridge-test.lua
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            "$(brew --prefix lua@5.4)/bin/lua" tests/json-bridge-test.lua
+          else
+            lua tests/json-bridge-test.lua
+          fi
