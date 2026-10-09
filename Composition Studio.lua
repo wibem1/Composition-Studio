@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.57
+-- @version 1.0.58
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.57"
+local VERSION="1.0.58"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -103,7 +103,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.57')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.58')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -744,6 +744,12 @@ local function ai_poll(a)
   os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
   return nil,"KI-Aufruf fehlgeschlagen ("..status.."): "..excerpt:sub(1,350),true
  end
+ local stop_reason=raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"')
+ if stop_reason=="max_tokens" or stop_reason=="MAX_TOKENS" or stop_reason=="length" then
+  diag_set("api_error","Tokenlimit erreicht; unvollständige Komposition")
+  os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
+  return nil,"Die KI hat das Tokenlimit erreicht. Keine unvollständige Komposition importiert.",true
+ end
  local result=a.provider=="openai" and response_text(raw) or first_text_field(raw)
  if not result or trim(result)=="" then
   diag_set("api_error","Antwortformat nicht erkannt ("..a.provider..")")
@@ -809,6 +815,24 @@ local function continuation_bars(request)
  if n and n>=1 and n<=128 then return n end
  return nil
 end
+local function compact_music_excerpt(items,endpoint)
+ local first=math.max(0,endpoint-32)
+ local rows={string.format("Musikausschnitt: QN %.3f bis %.3f; Tempo %.2f BPM",first,endpoint,reaper.Master_GetTempo())}
+ for _,it in ipairs(items) do
+  local part={"Stimme: "..tostring(it.track_name or "Instrument")}
+  local notes={}
+  for _,n in ipairs(it.notes or {}) do
+   if n.start_qn>=first and n.start_qn<endpoint then notes[#notes+1]=n end
+  end
+  table.sort(notes,function(a,b) return a.start_qn<b.start_qn end)
+  for i=math.max(1,#notes-80),#notes do
+   local n=notes[i]
+   if n then part[#part+1]=string.format("%.3f:%.3f:%d",n.start_qn-first,n.duration_qn,n.pitch) end
+  end
+  rows[#rows+1]=table.concat(part," ")
+ end
+ return table.concat(rows,"\n")
+end
 local function continuation_prompt(request,items,tracks,count,at)
  return [[Komponiere die musikalische Fortsetzung des vorhandenen Werks: GENAU ]]..count..[[ NEUE Takte.
 Schreibe nur diese neuen ]]..count..[[ Takte als vollständige LilyPond-Partitur mit \score { ... }.
@@ -822,7 +846,7 @@ Für ein Klavierstück notiere rechte und linke Hand in separaten Staves.
 LilyPond muss ausführbar sein; nur Quellcode, keine Erläuterung.
 
 AUFTRAG:
-]]..request.."\n\nVORHANDENE MUSIK:\n"..music_context(items,tracks,false)
+]]..request.."\n\nMUSIKALISCHER KONTEXT:\n"..compact_music_excerpt(items,at)
 end
 
 local function lily_compile_import(source,insert_qn,expected_bars)
@@ -923,6 +947,26 @@ AUFTRAG:
 ]]..request
 end
 local function begin_process(request)
+ -- Explicit continuations can be dispatched deterministically without AI controller.
+ local bars=continuation_bars(request)
+ if bars then
+  local context=selected_items(true)
+  if #context==0 then add("KI","Bitte für die Fortsetzung die MIDI-Items des vorhandenen Stücks auswählen."); busy=false; return end
+  local endpoint=0
+  for _,it in ipairs(context) do endpoint=math.max(endpoint,it.end_qn or 0) end
+  if endpoint<=0 then add("KI","Ende des Ausgangsstücks nicht gefunden."); busy=false; return end
+  local key=get_key()
+  if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
+  local tracks=selected_tracks()
+  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}
+  diag_set("context",compact_context(context,tracks,false))
+  diag_set("continuation_start_qn",tostring(endpoint))
+  diag_set("continuation_bars",tostring(bars))
+  local prompt=continuation_prompt(request,context,tracks,bars,endpoint)
+  diag_set("composition_prompt",prompt)
+  launch("lily_continuation",prompt,key,{request=request,extension_start=endpoint,extension_bars=bars,full=context,music_tracks=tracks})
+  return
+ end
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
  local items=selected_items(false); local tracks=selected_tracks(); diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); launch("controller",prompt,key,{request=request,items=items,tracks=tracks})
 end
