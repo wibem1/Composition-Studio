@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.59
+-- @version 1.0.60
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.59"
+local VERSION="1.0.60"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -942,7 +942,7 @@ end
 -- They are not installed as separate REAPER apps.
 local JSON_ENGINE_VERSION="2.20.1"
 local function engine_json_prompt(request)
- return [[Komponiere das verlangte Musikstück vollständig und eigenständig.
+ return [=[Komponiere das verlangte Musikstück vollständig und eigenständig.
 Gib ausschließlich gültiges JSON aus, ohne Markdown oder Erläuterungen.
 Das JSON hat dieses technische Format:
 {"title":"Titel","bpm":120,"timeSignature":[4,4],"tracks":[{"name":"Klavier","program":0,"channel":0,"notes":[[0,1,60,80],[1,1,64,80]]}]}
@@ -953,7 +953,7 @@ Pausen sind Lücken; Akkordtöne haben dieselbe Startposition.
 Wähle Musik, Instrumentierung, Artikulation, Form, Harmonik und Rhythmus frei entsprechend dem Auftrag.
 Keine zusätzliche musikalische Vorgabe. Alle geforderten Takte vollständig komponieren.
 AUFTRAG:
-]]..request
+]=]..request
 end
 local function engine_translate_json(answer)
  if not IS_WINDOWS then return nil,"Der lokale Engine-Adapter ist derzeit für Windows eingerichtet." end
