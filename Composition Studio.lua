@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.67
+-- @version 1.0.68
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.67"
+local VERSION="1.0.68"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1023,7 +1023,17 @@ Technisches Datenformat (die Zahlen darin sind nur Platzhalter, keine musikalisc
 {"idea":"Eigene Klangvorstellung und musikalische Umsetzung","title":"Titel","bpm":86,"timeSignature":[3,4],"tracks":[{"name":"Klavier","program":0,"channel":0,"notes":[[0,1,60,80],[1,0.5,64,76]]}]}
 Jede Note [Start in Vierteln, Dauer in Vierteln, MIDI-Pitch, Velocity].
 Positionen starten bei 0. Pausen sind Lücken; gleichzeitig klingende Töne
-haben dieselbe Startposition. Erzeuge das vollständige Werk.
+haben dieselbe Startposition.
+Musikalische Ausdrucksgestaltung (Kann-Bestimmung): Nutze die verfügbaren
+Möglichkeiten zur Gestaltung von Tempo, Dynamik, Artikulation, Phrasierung und
+Klang, soweit sie deiner musikalischen Vorstellung dienen. Du entscheidest
+frei über Art, Umfang und Verwendung. Auch ein bewusster Verzicht ist sinnvoll.
+Arpeggien, Triller und ähnliche Spielfiguren komponierst du bei Bedarf direkt
+mit individuellen Noten-Anschlagszeitpunkten und Notendauern.
+Optional sind "tempoEvents":[{"at":24,"bpm":72}] für Tempowechsel und
+"pedalEvents":[{"at":4,"value":127},{"at":8,"value":0}] für Sustain-Pedal
+(CC64) erlaubt; Positionen in Viertelnoten. Keine Pflicht zur Verwendung.
+Erzeuge das vollständige Werk.
 ]=]
 end
 local function launch_new_json(request,key,data)
@@ -1130,6 +1140,29 @@ local function engine_translate_json(answer)
  if not numeric(bpm) or bpm<20 or bpm>400 then return nil,"Tempo ungültig." end
  if not numeric(num) or num%1~=0 or num<1 or num>32 or not numeric(den) or den%1~=0 or den<1 or den>64 then return nil,"Taktart ungültig." end
  local lines={"CSMETA|tempo|0|"..bpm,"CSMETA|timesig|0|"..num.."|"..den}
+ if score.tempoEvents~=nil then
+  if type(score.tempoEvents)~="table" then return nil,"Tempoereignisse müssen eine Liste sein." end
+  for j,e in ipairs(score.tempoEvents) do
+   local at=type(e)=="table" and tonumber(e.at)
+   local value=type(e)=="table" and tonumber(e.bpm)
+   if not numeric(at) or at<0 or not numeric(value) or value<20 or value>400 then return nil,"Ungültiges Tempoereignis "..j end
+   lines[#lines+1]=string.format("CSMETA|tempo|%.6f|%.6f",at,value)
+  end
+ end
+ if score.pedalEvents~=nil then
+  if type(score.pedalEvents)~="table" then return nil,"Pedalereignisse müssen eine Liste sein." end
+  for j,e in ipairs(score.pedalEvents) do
+   local at=type(e)=="table" and tonumber(e.at)
+   local value=type(e)=="table" and tonumber(e.value)
+   if not numeric(at) or at<0 or not numeric(value) or value%1~=0 or value<0 or value>127 then return nil,"Ungültiges Pedalereignis "..j end
+   for k,tr in ipairs(score.tracks) do
+    local name=tostring(tr.name or ("Spur "..k)):gsub("[|\\r\\n]"," "):sub(1,120)
+    local channel=tonumber(tr.channel or ((k-1)%16))
+    if not numeric(channel) or channel%1~=0 or channel<0 or channel>15 then return nil,"Ungültiger Pedalkanal "..k end
+    lines[#lines+1]=string.format("CSCTRL|%s|%.6f|%d|cc|64|%d",name,at,channel,value)
+   end
+  end
+ end
  local count=0
  for k,tr in ipairs(score.tracks) do
   if type(tr)~="table" or type(tr.notes)~="table" then return nil,"Notenliste fehlt: Spur "..k end
