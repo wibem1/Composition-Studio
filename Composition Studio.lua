@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.68
+-- @version 1.0.69
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.68"
+local VERSION="1.0.69"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1119,7 +1119,7 @@ local function decode_engine_json(src)
   elseif s:sub(i,i+4)=="false" then i=i+5;out=false
   elseif s:sub(i,i+3)=="null" then i=i+4;out=false
   else
-   local token=s:sub(i):match("^-?%d+%.?%d*[eE]?[+%-]?%d*")
+   local token=s:sub(i):match("^-?%d+%.?%d*[eE]?[+%-]?%d*") or s:sub(i):match("^-?%.%d+[eE]?[+%-]?%d*")
    if not token or token=="" then bad("Wert") end
    out=tonumber(token);if not out then bad("Zahl") end;i=i+#token
   end
