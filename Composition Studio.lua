@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.54
+-- @version 1.0.55
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.54"
+local VERSION="1.0.55"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -105,7 +105,7 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
   h[#h+1]="$request.Content = New-Object System.Net.Http.ByteArrayContent -ArgumentList (,[IO.File]::ReadAllBytes("..ps_quote(request_file).."))"
   h[#h+1]="$request.Content.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse('application/json')"
  end
- h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.54')"
+ h[#h+1]="$null = $request.Headers.TryAddWithoutValidation('User-Agent','CompositionStudio/1.0.55')"
  for _,v in ipairs(method_headers) do
   local name,value=v:match("^([^:]+):%s*(.*)$")
   if name and name:lower()~="content-type" then h[#h+1]="$null = $request.Headers.TryAddWithoutValidation("..ps_quote(name)..","..ps_quote(value)..")" end
@@ -530,7 +530,7 @@ local function parse_action(line,items) line=trim(line or ""); local typ,a,b,des
 local function execute_action(a) reaper.Undo_BeginBlock2(0); local ok,err=xpcall(function() if a.kind=="INIT_HALION" then local tr,sl=initialize_halion_project(); a.desc=string.format("HALion Sonic initialisiert: %d Instanzspur(en), %d Slot(s)",tr,sl); diag_set("halion_result",a.desc) elseif a.kind=="TRANSPOSE" then local take=a.item.take; local _,nc=reaper.MIDI_CountEvts(take); for i=0,(nc or 0)-1 do local yes,sel,mut,s,e,ch,p,v=reaper.MIDI_GetNote(take,i); if yes and not mut then local np=p+a.n; if np<0 or np>127 then error("Transposition würde den MIDI-Bereich verlassen.") end; reaper.MIDI_SetNote(take,i,sel,mut,s,e,ch,np,v,true) end end; reaper.MIDI_Sort(take) elseif a.kind=="MOVE_ITEM" then local pos=reaper.GetMediaItemInfo_Value(a.item.item,"D_POSITION"); local qn=reaper.TimeMap2_timeToQN(0,pos)+a.q; if qn<0 then error("Item würde vor Projektbeginn liegen.") end; reaper.SetMediaItemInfo_Value(a.item.item,"D_POSITION",reaper.TimeMap2_QNToTime(0,qn)) elseif a.kind=="COPY_ITEM" then local src=a.item.item; local okc,chunk=reaper.GetItemStateChunk(src,"",false); if not okc then error("Item konnte nicht gelesen werden.") end; local ni=reaper.AddMediaItemToTrack(a.item.track); if not reaper.SetItemStateChunk(ni,chunk,false) then error("Item konnte nicht kopiert werden.") end; local qn=reaper.TimeMap2_timeToQN(0,reaper.GetMediaItemInfo_Value(src,"D_POSITION"))+a.q; if qn<0 then error("Kopie würde vor Projektbeginn liegen.") end; reaper.SetMediaItemInfo_Value(ni,"D_POSITION",reaper.TimeMap2_QNToTime(0,qn)); reaper.SetMediaItemSelected(ni,true) elseif a.kind=="RENAME_TRACK" then reaper.GetSetMediaTrackInfo_String(a.track,"P_NAME",a.name,true) end end,debug.traceback); if not ok then reaper.Undo_EndBlock2(0,"Composition Studio – fehlgeschlagen",-1); reaper.Undo_DoUndo2(0); return nil,err end; reaper.UpdateArrange(); reaper.Undo_EndBlock2(0,"Composition Studio – "..a.kind,-1); return true end
 local function parse_notes(text) local notes={}; for t in (text or ""):gmatch("[^;]+") do local a,b,c,d,e=t:match("^%s*([%d%.%-]+),([%d%.%-]+),(%d+),(%d+),(%d+)%s*$"); a,b,c,d,e=tonumber(a),tonumber(b),tonumber(c),tonumber(d),tonumber(e); if not(a and b and c and d and e) then return nil end; notes[#notes+1]={start_qn=a,duration_qn=b,pitch=c,velocity=d,channel=e} end; return #notes>0 and notes or nil end
 local function create_track(name,index) index=index or reaper.CountTracks(0); reaper.InsertTrackAtIndex(index,true); local t=reaper.GetTrack(0,index); if t then reaper.GetSetMediaTrackInfo_String(t,"P_NAME",name,true) end; return t end
-local function existing_program(track) for i=0,reaper.CountTrackMediaItems(track)-1 do local item=reaper.GetTrackMediaItem(track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local _,_,_,cc=reaper.MIDI_CountEvts(take); for n=0,(cc or 0)-1 do local ok,_,muted,_,chanmsg,_,msg2=reaper.MIDI_GetCC(take,n); if ok and not muted and chanmsg==0xC0 then return msg2 end end end end; return nil end
+local function existing_program(track) if not track or not reaper.ValidatePtr2(0,track,"MediaTrack*") then return nil end; for i=0,reaper.CountTrackMediaItems(track)-1 do local item=reaper.GetTrackMediaItem(track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local _,_,_,cc=reaper.MIDI_CountEvts(take); for n=0,(cc or 0)-1 do local ok,_,muted,_,chanmsg,_,msg2=reaper.MIDI_GetCC(take,n); if ok and not muted and chanmsg==0xC0 then return msg2 end end end end; return nil end
 local function program_for_name(name,proposed) local n=(name or ""):lower(); local map={{"violin",40},{"violine",40},{"geige",40},{"viola",41},{"bratsche",41},{"cello",42},{"violoncello",42},{"kontrabass",43},{"double bass",43},{"gitarre",24},{"guitar",24},{"harfe",46},{"harp",46},{"flöte",73},{"floete",73},{"flute",73},{"oboe",68},{"klarinette",71},{"clarinet",71},{"fagott",70},{"bassoon",70},{"trompete",56},{"trumpet",56},{"horn",60},{"posaune",57},{"trombone",57},{"sax",65},{"klavier",0},{"piano",0},{"orgel",19},{"organ",19}}; for _,p in ipairs(map) do if n:find(p[1],1,true) then return p[2] end end; local v=tonumber(proposed); if v and v>=0 and v<=127 then return math.floor(v) end; return 0 end
 local function create_midi(track,name,notes,program) local lo,hi=math.huge,-math.huge; for _,n in ipairs(notes) do lo=math.min(lo,n.start_qn); hi=math.max(hi,n.start_qn+n.duration_qn) end; if hi<=lo then return nil end; local item=reaper.CreateNewMIDIItemInProj(track,reaper.TimeMap2_QNToTime(0,lo),reaper.TimeMap2_QNToTime(0,hi),false); local take=item and reaper.GetActiveTake(item); if not take then return nil end; reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME",name,true); local ch=math.max(0,math.min(15,(notes[1].channel or 0))); local ppq=reaper.MIDI_GetPPQPosFromProjTime(take,reaper.TimeMap2_QNToTime(0,lo)); local pg=math.max(0,math.min(127,program or 0)); reaper.MIDI_InsertCC(take,false,false,ppq,0xB0,ch,0,0); reaper.MIDI_InsertCC(take,false,false,ppq,0xB0,ch,32,0); reaper.MIDI_InsertCC(take,false,false,ppq,0xC0,ch,pg,0); for _,n in ipairs(notes) do local s=reaper.MIDI_GetPPQPosFromProjTime(take,reaper.TimeMap2_QNToTime(0,n.start_qn)); local e=reaper.MIDI_GetPPQPosFromProjTime(take,reaper.TimeMap2_QNToTime(0,n.start_qn+n.duration_qn)); reaper.MIDI_InsertNote(take,false,false,s,e,n.channel,n.pitch,n.velocity,true) end; reaper.MIDI_Sort(take); return item end
 local function apply_composition(text,items,tracks,force_single_piano) local src,targets={},{ }; for _,it in ipairs(items) do src[it.guid]=it end; for _,t in ipairs(tracks or {}) do targets[t.guid]=t.track end; local jobs={}; local musical_map={}; local controls={}; for line in text:gmatch("[^\r\n]+") do line=trim(line); local mt,q,bpm=line:match("^CSMETA|(tempo)|([^|]+)|([^|]+)$"); local ms,mq,num,den=line:match("^CSMETA|(timesig)|([^|]+)|([^|]+)|([^|]+)$"); if mt then q,bpm=tonumber(q),tonumber(bpm); if not q or not bpm or q<0 or bpm<=0 then return nil,"Ungültige Tempoangabe." end; musical_map[#musical_map+1]={kind="tempo",qn=q,bpm=bpm} elseif ms then mq,num,den=tonumber(mq),tonumber(num),tonumber(den); if not mq or not num or not den or mq<0 or num<1 or den<1 then return nil,"Ungültige Taktartangabe." end; musical_map[#musical_map+1]={kind="timesig",qn=mq,num=math.floor(num),den=math.floor(den)} elseif line:match("^CSCTRL|") then local name,cq,ch,kind,rest=line:match("^CSCTRL|([^|]+)|([^|]+)|([^|]+)|([^|]+)|(.+)$"); cq,ch=tonumber(cq),tonumber(ch); if not name or not cq or not ch or cq<0 or ch<0 or ch>15 then return nil,"Ungültiges Ausdrucksereignis." end; if kind=="cc" then local cc,val=rest:match("^(%d+)|(%d+)$"); cc,val=tonumber(cc),tonumber(val); if not cc or not val or cc>127 or val>127 then return nil,"Ungültiges CC-Ausdrucksereignis." end; controls[#controls+1]={name=trim(name),qn=cq,ch=ch,kind="cc",a=cc,b=val} elseif kind=="program" then local pg=tonumber(rest); if not pg or pg<0 or pg>127 then return nil,"Ungültiger Program Change." end; controls[#controls+1]={name=trim(name),qn=cq,ch=ch,kind="program",a=math.floor(pg)} else return nil,"Unbekanntes Ausdrucksereignis." end else local k,g,rest=line:match("^CS|([^|]+)|([^|]+)|?(.*)$"); if not k then return nil,"Unerwartete Kompositionsantwort." end; if k=="unchanged" then if not src[g] then return nil,"Unbekannte Quelle." end elseif k=="revised" or k=="target" or k=="track" or k=="new" then local name,pg,nt=rest:match("^([^|]+)|(%d+)|(.+)$"); local notes=parse_notes(nt); local program=tonumber(pg); if not name or not notes or not program or program<0 or program>127 then return nil,"Ungültige Kompositionsdaten." end; if (k=="revised" or k=="target") and not src[g] then return nil,"Unbekannte Quelle." end; if k=="track" and not targets[g] then return nil,"Unbekannte Zielspur." end; if k=="new" and g~="-" then return nil,"Ungültige neue Spur." end; local merged=nil; for _,j in ipairs(jobs) do if j.kind==k and j.guid==g and j.name==trim(name) then merged=j; break end end; if merged then for _,note in ipairs(notes) do merged.notes[#merged.notes+1]=note end else jobs[#jobs+1]={kind=k,guid=g,name=trim(name),program=program_for_name(name,program),notes=notes} end else return nil,"Unbekannter Ergebnistyp." end end end;
@@ -734,7 +734,32 @@ local function midi_score(src)
  end
  return src
 end
-local function lily_compile_import(source)
+
+-- A continuation is a new passage appended after the latest selected MIDI item.
+local function continuation_bars(request)
+ local r=tostring(request or ""):lower():gsub("%s+"," ")
+ if not (r:find("weitere",1,true) or r:find("fortsetz",1,true) or r:find("anhäng",1,true)) then return nil end
+ local n=tonumber(r:match("(%d+)%s*takt"))
+ if n and n>=1 and n<=128 then return n end
+ return nil
+end
+local function continuation_prompt(request,items,tracks,count,at)
+ return [[Komponiere die musikalische Fortsetzung des vorhandenen Werks: GENAU ]]..count..[[ NEUE Takte.
+Schreibe nur diese neuen ]]..count..[[ Takte als vollständige LilyPond-Partitur mit \score { ... }.
+Die App setzt sie nach dem Ende des bisher vorhandenen Werks bei Viertelposition ]]..at..[[ ein.
+Du darfst vorhandene Takte nicht nochmals ausgeben. Keine MIDI-QN-Codierung.
+Nutze die übergebenen Originalnoten als musikalischen Kontext und entwickle
+eine wirkliche Variation mit neuer melodischer Gestalt, verändertem Rhythmus
+und einer dazugehörigen eigenständigen Begleitung. Keine reine Oktavierung,
+keine bloße Transposition, keine starre Viertelkette.
+Für ein Klavierstück notiere rechte und linke Hand in separaten Staves.
+LilyPond muss ausführbar sein; nur Quellcode, keine Erläuterung.
+
+AUFTRAG:
+]]..request.."\n\nVORHANDENE MUSIK:\n"..music_context(items,tracks,false)
+end
+
+local function lily_compile_import(source,insert_qn,expected_bars)
  if not IS_WINDOWS then return nil,"LilyPond-MIDI-Integration derzeit für Windows." end
  local exe=lily_exe()
  if not exe then return nil,"LilyPond-Pfad nicht gefunden. Menü ... → LilyPond-Pfad einstellen." end
@@ -752,11 +777,41 @@ local function lily_compile_import(source)
  local prior=reaper.CountTracks(0)
  local cursor=reaper.GetCursorPosition()
  reaper.Undo_BeginBlock2(0)
- reaper.SetEditCurPos(0,false,false)
+ local at=insert_qn and reaper.TimeMap2_QNToTime(0,insert_qn) or 0
+ reaper.SetEditCurPos(at,false,false)
  local n=reaper.InsertMedia(midi,1)
  reaper.SetEditCurPos(cursor,false,false)
- reaper.Undo_EndBlock2(0,"Composition Studio – LilyPond MIDI",-1)
  local tracks=reaper.CountTracks(0)-prior
+ if expected_bars then
+  local num,den=reaper.TimeMap_GetTimeSigAtTime(0,at)
+  num=tonumber(num) or 4; den=tonumber(den) or 4
+  local expected_qn=expected_bars*4*num/den
+  local highest=insert_qn
+  local total_items=0
+  local earliest=math.huge
+  for ix=prior,reaper.CountTracks(0)-1 do
+   local tr=reaper.GetTrack(0,ix)
+   for j=0,reaper.CountTrackMediaItems(tr)-1 do
+    local item=reaper.GetTrackMediaItem(tr,j)
+    local take=reaper.GetActiveTake(item)
+    if take and reaper.TakeIsMIDI(take) then
+     total_items=total_items+1
+     local st=reaper.GetMediaItemInfo_Value(item,"D_POSITION")
+     local en=st+reaper.GetMediaItemInfo_Value(item,"D_LENGTH")
+     earliest=math.min(earliest,reaper.TimeMap2_timeToQN(0,st))
+     highest=math.max(highest,reaper.TimeMap2_timeToQN(0,en))
+    end
+   end
+  end
+  local valid=tracks>0 and total_items>0 and math.abs(earliest-insert_qn)<0.05 and math.abs(highest-(insert_qn+expected_qn))<0.05
+  reaper.Undo_EndBlock2(0,"Composition Studio – MIDI-Fortsetzung",-1)
+  if not valid then
+   reaper.Undo_DoUndo2(0)
+   return nil,"Fortsetzung nicht übernommen: importierte MIDI-Länge oder Startposition stimmt nicht mit "..expected_bars.." Takten überein (Soll-QN "..string.format("%.2f",expected_qn)..", Ist-QN "..string.format("%.2f",highest-insert_qn)..")."
+  end
+ else
+  reaper.Undo_EndBlock2(0,"Composition Studio – LilyPond MIDI",-1)
+ end
  if tracks<=0 then return nil,"MIDI-Datei erzeugt, aber REAPER-Import fehlgeschlagen ("..tostring(n)..")." end
  local made,ids={},{}
  for ix=prior,reaper.CountTracks(0)-1 do
@@ -808,6 +863,14 @@ end
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  if not text then add("KI",e); busy=false; return end; text=trim(text)
+ if stage=="lily_continuation" then
+  diag_set("composition_music",text)
+  update_status="LilyPond übersetzt Fortsetzung nach MIDI …"
+  local tracks,why=lily_compile_import(text,data.extension_start,data.extension_bars)
+  diag_set("apply_result",tracks and ("LilyPond Fortsetzung: "..tracks.." Spuren; startQN="..data.extension_start.."; bars="..data.extension_bars) or ("ERROR: "..tostring(why)))
+  if not tracks then add("KI","Die Fortsetzung wurde nicht übernommen: "..tostring(why)) else add("KI","Fortsetzung mit "..data.extension_bars.." Takten ab QN "..data.extension_start.." eingefügt. Das Original bleibt erhalten.") end
+  busy=false; return
+ end
  if stage=="lily_composition" then
   diag_set("composition_music",text)
   update_status="LilyPond übersetzt nach MIDI …"
@@ -824,7 +887,17 @@ local function poll_job()
  if stage=="controller" then
   diag_set("controller_answer",text); local chat=text:match("^CHAT|(.*)$"); if chat then add("KI",trim(chat)); busy=false; return end; local ask=text:match("^ASK|(.*)$"); if ask then add("KI",trim(ask)); busy=false; return end
   local awhy=text:match("^NEED_ANALYSIS|(.*)$"); if awhy then local full=selected_items(true); if #full==0 and #data.tracks>0 then full=track_context_items(data.tracks) end; if #full==0 then add("KI","Für die Analyse ist kein MIDI-Material ausgewählt."); busy=false; return end; launch("analysis",analysis_prompt(data.request,full,data.tracks),key,data); return end
-  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or selected_items(true); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil); diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; if newwhy and tostring(data.request or ""):lower():find("klavier",1,true) then
+  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or selected_items(true); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil); diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; local ext=why and continuation_bars(data.request) or nil
+  if ext then
+   if #full==0 then add("KI","Für die Fortsetzung muss das vorhandene MIDI-Stück ausgewählt sein."); busy=false; return end
+   local endpoint=0; for _,it in ipairs(full) do endpoint=math.max(endpoint,it.end_qn or 0) end
+   if endpoint<=0 then add("KI","Kein gültiges Ende der vorhandenen Komposition gefunden."); busy=false; return end
+   data.extension_start=endpoint; data.extension_bars=ext
+   diag_set("continuation_start_qn",tostring(endpoint)); diag_set("continuation_bars",tostring(ext))
+   local lp=continuation_prompt(data.request,full,tracks,ext,endpoint)
+   diag_set("composition_prompt",lp)
+   launch("lily_continuation",lp,key,data)
+  elseif newwhy and tostring(data.request or ""):lower():find("klavier",1,true) then
     local lp=lily_composition_prompt(data.request); diag_set("composition_prompt",lp)
     launch("lily_composition",lp,key,data)
    else launch(newwhy and "composition_music" or "composition",cp,key,data) end; return end
@@ -2016,7 +2089,7 @@ local function score_bridge_poll()
  end
 end
 
-local function info_text() return "AKTUELLER STAND\n\nComposition Studio "..VERSION.." arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD).."\n\nNEU IN "..VERSION.."\n\n• Mit A- und A+ wird die Schriftgröße auch auf Buttons, Modellauswahl, Menüs und Eingabefelder angewandt. Buttonhöhen und Eingabebereich passen sich an. Der Wert wird dauerhaft gespeichert.\n• Keine eigene LilyPond-Notenauswertung mehr. Die vollständige Partitur geht an die LilyPond-Engine.\n• Keine Abschnittsübersetzung bei neuen Klavierstücken.\n• Neue Klavierstücke werden mit der offiziellen LilyPond-Engine in MIDI umgewandelt und direkt in REAPER importiert. Der Pfad ist über das Menü einstellbar.\n\nHINWEIS: Ein REAPER-Windows-Funktionstest steht noch aus." end
+local function info_text() return "AKTUELLER STAND\n\nComposition Studio "..VERSION.." arbeitet direkt in REAPER.\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD).."\n\nNEU IN "..VERSION.."\n\n• Mit A- und A+ wird die Schriftgröße auch auf Buttons, Modellauswahl, Menüs und Eingabefelder angewandt. Buttonhöhen und Eingabebereich passen sich an. Der Wert wird dauerhaft gespeichert.\n• Neue Klavierstücke und Fortsetzungen mit Taktangabe werden vollständig durch LilyPond in REAPER-MIDI übertragen. Fortsetzungen werden an das ausgewählte Stück angehängt und auf ihre Länge geprüft.\n• Keine Abschnittsübersetzung bei neuen Klavierstücken.\n• Neue Klavierstücke werden mit der offiziellen LilyPond-Engine in MIDI umgewandelt und direkt in REAPER importiert. Der Pfad ist über das Menü einstellbar.\n\nHINWEIS: Ein REAPER-Windows-Funktionstest steht noch aus." end
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project) end end
