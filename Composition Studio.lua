@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.60
+-- @version 1.0.61
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.60"
+local VERSION="1.0.61"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -957,11 +957,11 @@ AUFTRAG:
 end
 local function engine_translate_json(answer)
  if not IS_WINDOWS then return nil,"Der lokale Engine-Adapter ist derzeit für Windows eingerichtet." end
- local source=temp_path(".json"),output=temp_path(".cs"),script=temp_path(".ps1")
+ local source,output,script=temp_path(".json"),temp_path(".cs"),temp_path(".ps1")
  if not write_file(source,answer) then return nil,"KI-JSON konnte nicht gespeichert werden." end
  local root=os.getenv("SystemRoot") or "C:/Windows"
  local ps=root.."/System32/WindowsPowerShell/v1.0/powershell.exe"
- local bridge_file=TEMP_DIR.."/engine-bridge.js",engine_file=TEMP_DIR.."/composition-engine.js"
+ local bridge_file,engine_file=TEMP_DIR.."/engine-bridge.js",TEMP_DIR.."/composition-engine.js"
  local commands={
   "$ErrorActionPreference = 'Stop'",
   "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12",
