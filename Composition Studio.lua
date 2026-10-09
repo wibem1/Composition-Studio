@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.69
+-- @version 1.0.70
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.69"
+local VERSION="1.0.70"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -998,14 +998,18 @@ NUTZERAUFTRAG:
 ]=]..request
 end
 local function composed_json_prompt(request,framework)
- return [=[Du bist die komponierende KI. Du erhältst zunächst ausschließlich
-einen MUSIKALISCHEN RAHMEN. Entwickle nun SELBST daraus eine konkrete musikalische
-Vorstellung bzw. Kompositionsidee, bevor du die Noten setzt.
-Verwirkliche deine eigene Idee anschließend als vollständige Komposition.
-Entwickle musikalisches Material, harmonisches Fundament, Melodieführung,
-Intervalle, Vorhalte, Atembereiche sowie Rhythmus und Dynamik so, dass sie
-zusammengehören. Die Idee und ihre musikalische Realisation sind DEINE Aufgabe,
-nicht die bloße Ausführung einer Idee aus dem ersten Schritt.
+ return [=[Du bist die komponierende KI. Du erhältst ausschließlich einen
+MUSIKALISCHEN RAHMEN, keine bereits festgelegte Kompositionsidee.
+Entwickle daraus SELBST eine lebendige, eigenständige Klang- und
+Charaktervorstellung und komponiere das vollständige Stück aus ihr heraus.
+Lass musikalische Einfälle, Kontraste und Entwicklungen frei aus diesem
+Charakter entstehen: überraschend, wo es musikalisch überzeugt, und
+zusammenhängend durch die erkennbare Identität des Stücks.
+Eine einmal gefundene Figur oder Begleitung ist kein starres Muster, das
+über die gesamte Dauer fortgesetzt werden muss. Ebenso wenig ist
+Abwechslung um ihrer selbst willen erforderlich.
+Die konkrete musikalische Erfindung und ihre vollständige Verwirklichung
+sind DEINE Aufgabe im selben Kompositionsvorgang.
 Halte alle ausdrücklichen Anforderungen des ursprünglichen Nutzerauftrags ein.
 MUSIKALISCHER RAHMEN:
 ]=]..framework..[=[
