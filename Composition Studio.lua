@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.70
+-- @version 1.0.71
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.70"
+local VERSION="1.0.71"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -1002,12 +1002,25 @@ local function composed_json_prompt(request,framework)
 MUSIKALISCHEN RAHMEN, keine bereits festgelegte Kompositionsidee.
 Entwickle daraus SELBST eine lebendige, eigenständige Klang- und
 Charaktervorstellung und komponiere das vollständige Stück aus ihr heraus.
-Lass musikalische Einfälle, Kontraste und Entwicklungen frei aus diesem
-Charakter entstehen: überraschend, wo es musikalisch überzeugt, und
-zusammenhängend durch die erkennbare Identität des Stücks.
-Eine einmal gefundene Figur oder Begleitung ist kein starres Muster, das
-über die gesamte Dauer fortgesetzt werden muss. Ebenso wenig ist
-Abwechslung um ihrer selbst willen erforderlich.
+
+Der Rahmen setzt Leitplanken, aber er nimmt dir keine konkreten musikalischen
+Entscheidungen ab. Form, Stimmführung, Zusammenhang und Machbarkeit sind Ziele,
+keine Schablone für einzelne Takte oder Noten.
+
+Komponiere fortlaufend aus dem bereits entstandenen musikalischen Verlauf heraus.
+Behandle jede neu entstandene Phrase und jeden neuen Takt als veränderten Kontext
+für das Folgende. Entscheide während des Komponierens immer wieder neu, was das
+konkrete Material jetzt musikalisch verlangt: fortführen, variieren, kontrastieren,
+modulieren, verdichten, ausdünnen, überleiten, zurücknehmen oder etwas Neues
+einführen. Keine dieser Möglichkeiten ist Pflicht. Wähle sie nur, wenn sie aus
+dem bisherigen Verlauf musikalisch sinnvoll folgt.
+
+Arbeite keinen im Voraus festgelegten Notenplan und kein starres Variationsschema
+mechanisch ab. Eine einmal gefundene Figur, Harmonie oder Begleitung darf sich
+entwickeln, verändern oder verschwinden. Ebenso wenig ist Abwechslung um ihrer
+selbst willen erforderlich. Zusammenhang entsteht dadurch, dass spätere
+Entscheidungen auf das tatsächlich zuvor Komponierte reagieren.
+
 Die konkrete musikalische Erfindung und ihre vollständige Verwirklichung
 sind DEINE Aufgabe im selben Kompositionsvorgang.
 Halte alle ausdrücklichen Anforderungen des ursprünglichen Nutzerauftrags ein.
@@ -1017,12 +1030,11 @@ MUSIKALISCHER RAHMEN:
 URSPRÜNGLICHER NUTZERAUFTRAG:
 ]=]..request..[=[
 
-Gib als Antwort NUR gültiges JSON ohne Markdown aus. Füge ein Feld "idea" hinzu:
-Darin beschreibst du DEINE eigene konkrete musikalische Idee als kurze nachvollziehbare
-Klangvorstellung sowie die daraus abgeleiteten melodischen und harmonischen Mittel.
-Diese Beschreibung gehört zur fertigen Komposition und ist keine vorgeschaltete
-Konzeptstufe oder ein zusätzlicher KI-Aufruf. Entwickle und verwirkliche die Idee
-innerhalb desselben Kompositionsauftrags.
+Gib als Antwort NUR gültiges JSON ohne Markdown aus. Füge ein Feld "idea" hinzu.
+Beschreibe darin knapp die musikalische Identität und die tatsächlich entstandene
+Entwicklung des fertigen Stücks. "idea" ist keine vorgeschaltete Planungsstufe
+und kein vorher abzuarbeitendes Schema, sondern eine kurze Beschreibung der
+Komposition, die du im selben Vorgang erschaffst.
 Technisches Datenformat (die Zahlen darin sind nur Platzhalter, keine musikalische Vorgabe):
 {"idea":"Eigene Klangvorstellung und musikalische Umsetzung","title":"Titel","bpm":86,"timeSignature":[3,4],"tracks":[{"name":"Klavier","program":0,"channel":0,"notes":[[0,1,60,80],[1,0.5,64,76]]}]}
 Jede Note [Start in Vierteln, Dauer in Vierteln, MIDI-Pitch, Velocity].
