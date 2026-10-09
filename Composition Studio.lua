@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.62
+-- @version 1.0.63
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.62"
+local VERSION="1.0.63"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -246,7 +246,7 @@ end
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
@@ -670,6 +670,24 @@ do
  function costs.record(a,raw)
   if a.cost_recorded then return end; a.cost_recorded=true
   local n=costs.usage(a.provider,raw); local usd=costs.price(n,a.cost_rate)
+  -- Diagnose shows real provider usage, not an estimate from response length.
+  -- Anthropic reports thinking within output_tokens, not as a separate usage field.
+  if n then
+   diag_set("usage_input_tokens",tostring(n.input))
+   diag_set("usage_output_tokens",tostring(n.output))
+   diag_set("usage_cached_tokens",tostring(n.cached))
+   diag_set("usage_cache_write_5m_tokens",tostring(n.write5))
+   diag_set("usage_cache_write_1h_tokens",tostring(n.write1))
+   diag_set("usage_reasoning_tokens",a.provider=="anthropic" and "nicht separat ausgewiesen (in Ausgabe enthalten)" or "nicht separat ausgewiesen")
+  else
+   diag_set("usage_cost_status","Verbrauchsdaten fehlen oder sind ungültig")
+  end
+  if usd then
+   diag_set("usage_estimated_usd",string.format("%.6f",usd))
+   diag_set("usage_cost_status","USD-Schätzung aus API-Verbrauch und hinterlegtem Tarif")
+  elseif n then
+   diag_set("usage_cost_status","Verbrauch bekannt, aber kein gültiger Preis hinterlegt")
+  end
   for _,s in ipairs({costs.total,a.cost_order}) do
    if n then s.input=s.input+n.input; s.output=s.output+n.output end
    if usd then s.usd=s.usd+usd; s.unknown=math.max(0,s.unknown-1) end
