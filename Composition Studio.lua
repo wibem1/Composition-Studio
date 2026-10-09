@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.64
+-- @version 1.0.65
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.64"
+local VERSION="1.0.65"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -246,7 +246,7 @@ end
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
@@ -973,6 +973,60 @@ Keine zusätzliche musikalische Vorgabe. Alle geforderten Takte vollständig kom
 AUFTRAG:
 ]=]..request
 end
+-- Experimental two-stage musical workflow. Preserves direct JSON as an option.
+local COMPOSITION_MODE_KEY="CompositionModeV1"
+local composition_mode=reaper.GetExtState(EXT_SECTION,COMPOSITION_MODE_KEY)
+if composition_mode~="concept" and composition_mode~="direct" then composition_mode="concept" end
+local function concept_prompt(request)
+ return [=[Du entwirfst das MUSIKALISCHE GRUNDGERÜST einer eigenständigen Komposition, noch keine Noten.
+Entscheide selbst alle Aspekte, die der Nutzer nicht ausdrücklich festgelegt hat:
+Besetzung, Länge, Tonart/tonales Zentrum, Taktart, Tempo, Charakter und Stimmung,
+eine bildhafte Klangvorstellung, Textur/Begleitprinzip, harmonische Richtung,
+melodische Grundidee sowie Form, Steigerung, Höhepunkt und Ausklang.
+Gestalte eine zusammenhängende individuelle musikalische Identität; nicht bloß eine Liste
+beliebiger Merkmale. Feste Nutzerwünsche sind verbindlich. Keine konkreten Notenfolgen,
+keine Takt-für-Takt-Konstruktion, kein MIDI, kein JSON. Formuliere ein prägnantes
+musikalisches Grundgerüst (etwa 150 bis 250 Wörter), das kompositorische Freiheit
+für die eigentliche Ausarbeitung lässt. Gib nur den Entwurf aus.
+NUTZERAUFTRAG:
+]=]..request
+end
+local function composed_json_prompt(request,concept)
+ return [=[Komponiere ein vollständiges, musikalisch eigenständiges Werk aus dem folgenden
+bereits entwickelten musikalischen Grundgerüst. Stelle dir dessen Klangverlauf als Ganzes vor.
+Entwickle die melodischen Gedanken, die Harmonik, Stimmenführung, rhythmische Gestalt,
+Satzdichte und dynamische Dramaturgie als zusammenhängende Musik. Die Konzeption
+ist Ausgangspunkt, kein fertiger Notenplan; gestalte die konkrete Musik schöpferisch.
+Musikalische Wiederholung ist erlaubt, wenn sie den Charakter trägt.
+Befolge die ausdrücklichen Wünsche des Nutzers.
+ERSTELLTES MUSIKALISCHES GRUNDGERÜST:
+]=]..concept..[=[
+
+URSPRÜNGLICHER NUTZERAUFTRAG:
+]=]..request..[=[
+
+Gib NUR die fertige Komposition als gültiges JSON, ohne Erklärungen oder Markdown,
+im folgenden exakt technisch auswertbaren Format aus:
+{"title":"Titel","bpm":86,"timeSignature":[3,4],"tracks":[{"name":"Klavier","program":0,"channel":0,"notes":[[0,1,60,80],[1,0.5,64,76]]}]}
+Jede Note [Start in Vierteln, Dauer in Vierteln, MIDI-Pitch, Velocity].
+Positionen starten bei 0, Pausen sind Lücken, gleichzeitig klingende Töne
+haben dieselbe Startposition. Vollständige musikalische Komposition, alle Takte.
+]=]
+end
+local function launch_new_json(request,key,data)
+ data=data or {request=request,full={},music_tracks={}}
+ if composition_mode=="concept" then
+  local p=concept_prompt(request)
+  diag_set("composition_mode","Konzeption + Komposition")
+  diag_set("concept_prompt",p)
+  update_status="Musikalisches Grundgerüst wird entwickelt …"
+  return launch("engine_concept",p,key,data)
+ end
+ diag_set("composition_mode","Direktes JSON")
+ local p=engine_json_prompt(request)
+ diag_set("composition_prompt",p)
+ return launch("engine_json",p,key,data)
+end
 -- Cross-platform Lua adapter for the shared Composition Engine JSON score schema.
 -- No JavaScript runtime or extra installation required.
 local function decode_engine_json(src)
@@ -1103,9 +1157,7 @@ local function begin_process(request)
   local key=get_key()
   if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
   last_diag={version=VERSION,composition_engine="Composition Engine JSON bridge "..JSON_ENGINE_VERSION,composition_engine_build="22001",provider=provider,model=model,request=request}
-  local jp=engine_json_prompt(request)
-  diag_set("composition_prompt",jp)
-  launch("engine_json",jp,key,{request=request,full={},music_tracks={}})
+  launch_new_json(request,key,{request=request,full={},music_tracks={}})
   return
  end
  -- Explicit continuations can be dispatched deterministically without AI controller.
@@ -1149,6 +1201,14 @@ end
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  if not text then add("KI",e); busy=false; return end; text=trim(text)
+ if stage=="engine_concept" then
+  diag_set("concept_result",text)
+  local prompt=composed_json_prompt(data.request,text)
+  diag_set("composition_prompt",prompt)
+  update_status="Musikalische Konzeption wird komponiert …"
+  launch("engine_json",prompt,key,data)
+  return
+ end
  if stage=="engine_json" then
   diag_set("composition_music",text)
   local cs,why=engine_translate_json(text)
@@ -1200,8 +1260,7 @@ local function poll_job()
    diag_set("composition_prompt",lp)
    launch("lily_continuation",lp,key,data)
   elseif newwhy then
-    local jp=engine_json_prompt(data.request); diag_set("composition_prompt",jp)
-    launch("engine_json",jp,key,data)
+    launch_new_json(data.request,key,data)
    else launch(newwhy and "composition_music" or "composition",cp,key,data) end; return end
   if text:match("^ACTION|") then local a,pe=parse_action(text,data.items); if not a then add("KI","Ich führe nichts aus: "..pe); busy=false; return end; local ok,ae=execute_action(a); if not ok then add("KI","Die Aktion wurde nicht ausgeführt: "..tostring(ae)); else add("KI",trim(a.desc).." – erledigt. REAPER Undo kann die Änderung rückgängig machen.") end; busy=false; return end
   add("KI","Ich konnte den Auftrag nicht eindeutig einem sicheren Vorgang zuordnen und habe nichts verändert."); busy=false; return
@@ -1303,6 +1362,8 @@ reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
+if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(composition_mode=="concept" and " ✓" or "")) then composition_mode="concept"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Konzeption + Komposition (2 KI-Aufrufe)." end
+if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); reaper.ImGui_TextWrapped(ctx,"Auftrag: "..costs.amount(costs.order)); reaper.ImGui_TextWrapped(ctx,"Gesamt: "..costs.amount(costs.total)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local scale=font_size/14; local ih=math.floor(112*scale+0.5); local bh=math.floor(34*scale+0.5); local ch=math.max(120,h-ih-bh*2-math.floor(84*scale+0.5)); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=math.max(4,math.floor(6*scale)); local bw=math.max(80,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
