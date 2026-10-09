@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.66
+-- @version 1.0.67
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.66"
+local VERSION="1.0.67"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -246,13 +246,13 @@ end
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
  local raw=read_file(DIAG_CACHE_PATH) or reaper.GetExtState(EXT_SECTION,DIAG_STATE_KEY)
  if not raw or raw=="" then return end
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error","lilypond_log"}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error","lilypond_log"}
  for _,k in ipairs(keys) do
   local pat='"'..k..'"%s*:%s*"'
   local _,e=raw:find(pat)
@@ -779,7 +779,13 @@ local function ai_poll(a)
  os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
  return result,nil,true
 end
-launch=function(stage,prompt,key,data) if stage=="controller" or stage=="swam_interpretation" or stage=="work_title" then costs.begin() end; local a,e=ai_command(prompt,key); if not a then add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
+local function log_communication(stage,kind,body)
+ local prior=last_diag.communication_log or ""
+ local entry=os.date("%Y-%m-%d %H:%M:%S").." ["..tostring(stage).."] "..kind.."\n"..tostring(body or "").."\n"
+ diag_set("communication_log",prior..entry)
+end
+launch=function(stage,prompt,key,data) if stage=="controller" or stage=="swam_interpretation" or stage=="work_title" then costs.begin() end; log_communication(stage,"APP → KI (Prompt; Modell "..tostring(model)..", Provider "..tostring(provider)..")",prompt)
+ local a,e=ai_command(prompt,key); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 
 -- The official LilyPond compiler handles the musical semantics.
 local LILYPOND_PATH_KEY="LilyPondExe"
@@ -1007,9 +1013,14 @@ MUSIKALISCHER RAHMEN:
 URSPRÜNGLICHER NUTZERAUFTRAG:
 ]=]..request..[=[
 
-Gib als Antwort NUR die fertige Komposition als gültiges JSON ohne Markdown aus.
+Gib als Antwort NUR gültiges JSON ohne Markdown aus. Füge ein Feld "idea" hinzu:
+Darin beschreibst du DEINE eigene konkrete musikalische Idee als kurze nachvollziehbare
+Klangvorstellung sowie die daraus abgeleiteten melodischen und harmonischen Mittel.
+Diese Beschreibung gehört zur fertigen Komposition und ist keine vorgeschaltete
+Konzeptstufe oder ein zusätzlicher KI-Aufruf. Entwickle und verwirkliche die Idee
+innerhalb desselben Kompositionsauftrags.
 Technisches Datenformat (die Zahlen darin sind nur Platzhalter, keine musikalische Vorgabe):
-{"title":"Titel","bpm":86,"timeSignature":[3,4],"tracks":[{"name":"Klavier","program":0,"channel":0,"notes":[[0,1,60,80],[1,0.5,64,76]]}]}
+{"idea":"Eigene Klangvorstellung und musikalische Umsetzung","title":"Titel","bpm":86,"timeSignature":[3,4],"tracks":[{"name":"Klavier","program":0,"channel":0,"notes":[[0,1,60,80],[1,0.5,64,76]]}]}
 Jede Note [Start in Vierteln, Dauer in Vierteln, MIDI-Pitch, Velocity].
 Positionen starten bei 0. Pausen sind Lücken; gleichzeitig klingende Töne
 haben dieselbe Startposition. Erzeuge das vollständige Werk.
@@ -1202,21 +1213,35 @@ local function summary_prompt(request,comp,made)
 end
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
+ log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
+ log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
  if not text then add("KI",e); busy=false; return end; text=trim(text)
  if stage=="engine_concept" then
   diag_set("concept_result",text)
   local prompt=composed_json_prompt(data.request,text)
   diag_set("composition_prompt",prompt)
   update_status="Musikalische Konzeption wird komponiert …"
+  data.concept_mode=true
   launch("engine_json",prompt,key,data)
   return
  end
  if stage=="engine_json" then
   diag_set("composition_music",text)
+  if data and data.concept_mode then
+   local ok,parsed=pcall(decode_engine_json,text)
+   local idea=ok and type(parsed)=="table" and parsed.idea or nil
+   if type(idea)=="string" and trim(idea)~="" then
+    diag_set("composition_idea",idea)
+    add("KI · Kompositionsidee",idea)
+   else
+    diag_set("composition_idea","(Die KI hat keine separate Idee ausgegeben.)")
+   end
+  end
   local cs,why=engine_translate_json(text)
   if not cs then diag_set("apply_result","ERROR: "..tostring(why)); add("KI",tostring(why)); busy=false; return end
   local made,err=apply_composition(cs,{},{})
   diag_set("apply_result",made and ("Engine JSON MIDI: "..tostring(#made).." Items") or ("ERROR: "..tostring(err)))
+  log_communication("MIDI","APP: technische Umsetzung",last_diag.apply_result)
   if not made then add("KI","JSON-MIDI konnte nicht eingefügt werden: "..tostring(err)); busy=false; return end
   last_made=made
   local ids={}
@@ -1335,7 +1360,7 @@ local function poll_job()
   diag_set("composition_answer",text); local made,ae=apply_composition(text,data.full,data.music_tracks,data.chunk_piano); diag_set("apply_result",made and ("created_items="..tostring(#made)) or ("ERROR: "..tostring(ae))); if not made then add("KI","Die musikalische Antwort konnte nicht sicher angewendet werden: "..tostring(ae)); busy=false; return end; local htr,hsl=initialize_halion_project(); diag_set("halion_result",string.format("auto_initialized_tracks=%d slots=%d",htr,hsl)); data.comp=text; data.made=made; last_made=made; local gs={}; for _,it in ipairs(made) do gs[#gs+1]=item_guid(it) end; reaper.SetProjExtState(0,EXT_SECTION,"LastMadeGUIDs",table.concat(gs,"\n")); persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); launch("summary",summary_prompt(data.request,text,made),key,data); return
  elseif stage=="summary" then add("KI",text); busy=false; return end
 end
-local function submit() local r=trim(input); if r=="" or busy then return end; input=""; info_visible=false; history_mode=false; costs.begin(); add("Du",r); busy=true; begin_process(r) end
+local function submit() local r=trim(input); if r=="" or busy then return end; input=""; info_visible=false; history_mode=false; costs.begin(); last_diag.communication_log=""; last_diag.composition_idea=""; add("Du",r); busy=true; begin_process(r) end
 local function wrap_text(s,limit) limit=math.max(12,math.floor(limit or 40)); local out={}; for line in (tostring(s or "").."\n"):gmatch("(.-)\n") do while #line>limit do local cut=limit; local part=line:sub(1,limit); local sp=part:match("^.*()%s+"); if sp and sp>math.floor(limit*0.55) then cut=sp end; out[#out+1]=line:sub(1,cut):gsub("%s+$",""); line=line:sub(cut+1):gsub("^%s+","") end; out[#out+1]=line end; return table.concat(out,"\n"):gsub("\n$","") end
 local function clipboard_set(s) if type(reaper.ImGui_SetClipboardText)=="function" then reaper.ImGui_SetClipboardText(ctx,s or "") end end
 local function clipboard_get() if type(reaper.ImGui_GetClipboardText)=="function" then return reaper.ImGui_GetClipboardText(ctx) or "" end return "" end
@@ -1353,7 +1378,7 @@ end
 
 local function info_text()
  return "Composition Studio "..VERSION.."\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..
- "\n\nNEU IN "..VERSION.."\n\n• Experiment: erste KI legt nur den musikalischen Rahmen fest; zweite KI entwickelt selbst die konkrete Kompositionsidee und komponiert.\n• Im Menü auf Direktes JSON mit einem Aufruf umschaltbar; MIDI-Umsetzung unverändert.\n• Kostenanzeige pro Auftrag und insgesamt; Details und eigene Preise im Menü.\n• LilyPond-Exitcodes werden korrekt ausgewertet; der Import prüft echte MIDI-Items.\n• Ungenutzte ScoreFlow-/Verovio-Prototypen und die alte WebView-Bridge wurden entfernt.\n• Neue Klavierstücke und Fortsetzungen werden durch LilyPond in REAPER-MIDI übertragen. Der Pfad ist im Menü einstellbar.\n\nGeprüft unter Windows mit REAPER 7.82 und LilyPond 2.26.0: Kompilierung, MIDI-Import und Fortsetzungsprüfung."
+ "\n\nLETZTE KOMPOSITIONSIDEE\n"..(last_diag.composition_idea and last_diag.composition_idea~="" and last_diag.composition_idea or "Noch keine Kompositionsidee gespeichert.").."\n\nNEU IN "..VERSION.."\n\n• Neue KI-Kompositionsidee im Infofenster und persistenten Verlauf; vollständiger APP/KI-Kommunikationsverlauf in Diagnose.\n• Experiment: erste KI legt nur den musikalischen Rahmen fest; zweite KI entwickelt selbst die konkrete Kompositionsidee und komponiert.\n• Im Menü auf Direktes JSON mit einem Aufruf umschaltbar; MIDI-Umsetzung unverändert.\n• Kostenanzeige pro Auftrag und insgesamt; Details und eigene Preise im Menü.\n• LilyPond-Exitcodes werden korrekt ausgewertet; der Import prüft echte MIDI-Items.\n• Ungenutzte ScoreFlow-/Verovio-Prototypen und die alte WebView-Bridge wurden entfernt.\n• Neue Klavierstücke und Fortsetzungen werden durch LilyPond in REAPER-MIDI übertragen. Der Pfad ist im Menü einstellbar.\n\nGeprüft unter Windows mit REAPER 7.82 und LilyPond 2.26.0: Kompilierung, MIDI-Import und Fortsetzungsprüfung."
 end
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
