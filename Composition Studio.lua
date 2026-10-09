@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.61
+-- @version 1.0.62
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.61"
+local VERSION="1.0.62"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -955,32 +955,116 @@ Keine zusätzliche musikalische Vorgabe. Alle geforderten Takte vollständig kom
 AUFTRAG:
 ]=]..request
 end
-local function engine_translate_json(answer)
- if not IS_WINDOWS then return nil,"Der lokale Engine-Adapter ist derzeit für Windows eingerichtet." end
- local source,output,script=temp_path(".json"),temp_path(".cs"),temp_path(".ps1")
- if not write_file(source,answer) then return nil,"KI-JSON konnte nicht gespeichert werden." end
- local root=os.getenv("SystemRoot") or "C:/Windows"
- local ps=root.."/System32/WindowsPowerShell/v1.0/powershell.exe"
- local bridge_file,engine_file=TEMP_DIR.."/engine-bridge.js",TEMP_DIR.."/composition-engine.js"
- local commands={
-  "$ErrorActionPreference = 'Stop'",
-  "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12",
-  "$node = Get-Command node.exe -ErrorAction SilentlyContinue",
-  "if (-not $node) { throw 'Node.js ist nicht installiert oder nicht im PATH. Bitte Node.js LTS installieren.' }",
-  "$client = New-Object Net.WebClient",
-  "$client.Headers.Add('Cache-Control','no-cache')",
-  "$client.DownloadFile('https://raw.githubusercontent.com/wibem1/Composition-Studio/main/engine-bridge.js',"..ps_quote(bridge_file)..")",
-  "$client.DownloadFile('https://raw.githubusercontent.com/wibem1/Composition-Engine/main/composition-engine.js',"..ps_quote(engine_file)..")",
-  "& $node.Source "..ps_quote(bridge_file).." "..ps_quote(engine_file).." "..ps_quote(source).." "..ps_quote(output),
-  "if ($LASTEXITCODE -ne 0) { throw 'Engine-Adapter: JSON ungültig oder nicht übersetzbar.' }"
- }
- write_file(script,table.concat(commands,"\r\n"))
- local cmd=shell_quote(ps)..' -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '..shell_quote(script)
- local ok,result=pcall(reaper.ExecProcess,cmd,30000)
- if not ok or not result or not read_file(output) then
-  return nil,"Die Composition Engine konnte das JSON nicht übertragen: "..tostring(result or "kein Ergebnis")
+-- Cross-platform Lua adapter for the shared Composition Engine JSON score schema.
+-- No JavaScript runtime or extra installation required.
+local function decode_engine_json(src)
+ local s=tostring(src or ""):gsub("^%s+",""):gsub("%s+$","")
+ if s:sub(1,3)==string.rep(string.char(96),3) then
+  s=s:gsub("^[^\n]*\n",""):gsub("%s*"..string.rep(string.char(96),3).."%s*$","")
  end
- return read_file(output)
+ local i,n,depth=1,#s,0
+ local function ws() while i<=n and s:sub(i,i):match("%s") do i=i+1 end end
+ local function bad(m) error("JSON Zeichen "..i..": "..m,0) end
+ local function quote()
+  if s:sub(i,i)~='"' then bad("Text erwartet") end
+  i=i+1;local out={}
+  while i<=n do
+   local ch=s:sub(i,i);i=i+1
+   if ch=='"' then return table.concat(out) end
+   if ch=="\\" then
+    local x=s:sub(i,i);i=i+1
+    local esc={['"']='"',["\\"]="\\",["/"]="/",b="\b",f="\f",n="\n",r="\r",t="\t"}
+    if esc[x] then out[#out+1]=esc[x]
+    elseif x=="u" then
+     local hex=s:sub(i,i+3)
+     if not hex:match("^%x%x%x%x$") then bad("Unicode-Escape") end
+     local cp=tonumber(hex,16);i=i+4
+     if cp>=0xD800 and cp<=0xDBFF and s:sub(i,i+1)=="\\u" then
+      local lo=tonumber(s:sub(i+2,i+5),16)
+      if lo and lo>=0xDC00 and lo<=0xDFFF then cp=0x10000+(cp-0xD800)*1024+lo-0xDC00;i=i+6 end
+     end
+     if cp>=0xD800 and cp<=0xDFFF then bad("Unicode-Surrogat") end
+     out[#out+1]=utf8.char(cp)
+    else bad("Escape") end
+   else
+    if ch:byte()<32 then bad("Steuerzeichen") end
+    out[#out+1]=ch
+   end
+  end
+  bad("Text nicht abgeschlossen")
+ end
+ local parse
+ parse=function()
+  depth=depth+1;if depth>48 then bad("Verschachtelung") end;ws()
+  local ch=s:sub(i,i);local out
+  if ch=='"' then out=quote()
+  elseif ch=="{" then
+   i=i+1;out={};ws()
+   if s:sub(i,i)=="}" then i=i+1 else
+    while true do
+     ws();local k=quote();ws()
+     if s:sub(i,i)~=":" then bad("Doppelpunkt") end
+     i=i+1;out[k]=parse();ws()
+     local sep=s:sub(i,i);i=i+1
+     if sep=="}" then break end
+     if sep~="," then bad("Komma oder }") end
+    end
+   end
+  elseif ch=="[" then
+   i=i+1;out={};ws()
+   if s:sub(i,i)=="]" then i=i+1 else
+    while true do
+     out[#out+1]=parse();ws()
+     local sep=s:sub(i,i);i=i+1
+     if sep=="]" then break end
+     if sep~="," then bad("Komma oder ]") end
+    end
+   end
+  elseif s:sub(i,i+3)=="true" then i=i+4;out=true
+  elseif s:sub(i,i+4)=="false" then i=i+5;out=false
+  elseif s:sub(i,i+3)=="null" then i=i+4;out=false
+  else
+   local token=s:sub(i):match("^-?%d+%.?%d*[eE]?[+%-]?%d*")
+   if not token or token=="" then bad("Wert") end
+   out=tonumber(token);if not out then bad("Zahl") end;i=i+#token
+  end
+  depth=depth-1;return out
+ end
+ local value=parse();ws()
+ if i<=n then bad("Zeichen nach JSON") end
+ return value
+end
+local function engine_translate_json(answer)
+ local ok,object=pcall(decode_engine_json,answer)
+ if not ok then return nil,"Kompositions-JSON ungültig: "..tostring(object) end
+ local score=type(object)=="table" and (object.score or object) or nil
+ if type(score)~="table" or type(score.tracks)~="table" or #score.tracks<1 then return nil,"JSON enthält keine Spuren." end
+ local function numeric(x) return type(x)=="number" and x==x and x~=math.huge and x~=-math.huge end
+ local bpm=tonumber(score.bpm)
+ local ts=score.timeSignature or {4,4};local num,den=tonumber(ts[1]),tonumber(ts[2])
+ if not numeric(bpm) or bpm<20 or bpm>400 then return nil,"Tempo ungültig." end
+ if not numeric(num) or num%1~=0 or num<1 or num>32 or not numeric(den) or den%1~=0 or den<1 or den>64 then return nil,"Taktart ungültig." end
+ local lines={"CSMETA|tempo|0|"..bpm,"CSMETA|timesig|0|"..num.."|"..den}
+ local count=0
+ for k,tr in ipairs(score.tracks) do
+  if type(tr)~="table" or type(tr.notes)~="table" then return nil,"Notenliste fehlt: Spur "..k end
+  local name=tostring(tr.name or ("Spur "..k)):gsub("[|\r\n]"," "):sub(1,120)
+  local pg,channel=tonumber(tr.program or 0),tonumber(tr.channel or ((k-1)%16))
+  if not numeric(pg) or pg%1~=0 or pg<0 or pg>127 or not numeric(channel) or channel%1~=0 or channel<0 or channel>15 then return nil,"Ungültiges Programm oder Kanal: Spur "..k end
+  local notes={}
+  for j,note in ipairs(tr.notes) do
+   if type(note)~="table" or #note<4 then return nil,"Unvollständige Note "..j.." in Spur "..k end
+   local st,dur,pitch,vel=tonumber(note[1]),tonumber(note[2]),tonumber(note[3]),tonumber(note[4])
+   if not numeric(st) or st<0 or not numeric(dur) or dur<=0 or
+      not numeric(pitch) or pitch%1~=0 or pitch<0 or pitch>127 or
+      not numeric(vel) or vel%1~=0 or vel<1 or vel>127 then return nil,"Ungültige Note "..j.." in Spur "..k end
+   notes[#notes+1]=string.format("%.6f,%.6f,%d,%d,%d",st,dur,pitch,vel,channel)
+   count=count+1
+  end
+  if #notes>0 then lines[#lines+1]="CS|new|-|"..name.."|"..pg.."|"..table.concat(notes,";") end
+ end
+ if count==0 then return nil,"JSON enthält keine MIDI-Noten." end
+ return table.concat(lines,"\n")
 end
 local function lily_composition_prompt(request)
  return [[Komponiere das vollständige verlangte Musikstück als LilyPond-Partitur.
