@@ -401,3 +401,19 @@ Grenzen:
 - Update-Installation nur über lokale Fixtures geprüft; kein Menü-/Netzwerk-/Neustart-End-to-End-Test.
 - Kein erneuter realer MIDI-Import in REAPER für diese Änderung; die in v1.0.56 live geprüfte Importfunktion ist unverändert und die automatisierten Import-/Compilerregressionen wurden erneut ausgeführt.
 - Reproduzierbar: `python tools/test_cost_accounting.py` und `python tools/test_lilypond_import.py` (Python + lupa/Lua 5.4; optional installierter LilyPond).
+
+
+## v1.0.73 · 10.10.2026 – Denkaufwand
+
+- Vier sichtbare Optionen Kurz / Mittel / Hoch / Automatisch; neue Installationen bzw. fehlende/ungültige gespeicherte Werte starten mit Mittel. Dauerhaft in ReasoningEffortV1 gespeichert; während laufender Aufträge gesperrt.
+- Gilt für alle vorhandenen KI-Aufrufstufen. Musikalische Prompts, Ablauf und MIDI-Umsetzung unverändert.
+- Native Parameter: OpenAI reasoning.effort; Anthropic output_config.effort; Gemini 3 generationConfig.thinkingConfig.thinkingLevel. Explizit low/medium/high; Automatisch lässt diese Felder vollständig aus.
+- Gemini 2.5: appseitige Budgetzuordnung 2048 / 8192 / 24576; im Fenster sichtbar erläutert. Diese Budgets sind keine anbieterübergreifend identischen Denkstufen.
+- Diagnose speichert reasoning_mode und reasoning_requested; Kommunikationsprotokoll enthält beide für jede Anfrage. Laufendes Requestobjekt hält die tatsächlich verwendete Auswahl fest.
+- Geprüft: 28 erzeugte native JSON-Anfragen über sieben Modell-IDs und vier Modi; Standard, Speicherung/Neuladen, Busy-Sperre, ungültige Werte und Diagnose. 32 Kostenprüfungen sowie 29 Syntax-/Start-/Import-/Updateprüfungen bestanden.
+- Kein kostenpflichtiger API-Lauf und kein realer REAPER-GUI-Test. LilyPond-Compilerprüfung mangels lokalem Compiler übersprungen. Der vorhandene Testharness erhielt die inzwischen im Skript verwendete Kommunikationsdiagnose.
+
+API-Grundlagen:
+- https://developers.openai.com/api/docs/guides/reasoning
+- https://platform.claude.com/docs/en/build-with-claude/effort
+- https://ai.google.dev/gemini-api/docs/generate-content/thinking

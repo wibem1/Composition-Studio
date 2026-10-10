@@ -1,10 +1,10 @@
 -- @description Composition Studio
--- @version 1.0.72
+-- @version 1.0.73
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.72"
+local VERSION="1.0.73"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.1"
@@ -246,13 +246,13 @@ end
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
  local raw=read_file(DIAG_CACHE_PATH) or reaper.GetExtState(EXT_SECTION,DIAG_STATE_KEY)
  if not raw or raw=="" then return end
- local keys={"version","composition_engine","composition_engine_build","provider","model","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error","lilypond_log"}
+ local keys={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error","lilypond_log"}
  for _,k in ipairs(keys) do
   local pat='"'..k..'"%s*:%s*"'
   local _,e=raw:find(pat)
@@ -722,11 +722,42 @@ do
 end
 -- End cost accounting.
 local job=nil
+-- Thinking control: persisted UI choice and native provider request parameters.
+local REASONING_KEY="ReasoningEffortV1"
+local REASONING_LABELS={low="Kurz",medium="Mittel",high="Hoch",auto="Automatisch"}
+local reasoning_mode=reaper.GetExtState(EXT_SECTION,REASONING_KEY)
+if not REASONING_LABELS[reasoning_mode] then reasoning_mode="medium" end
+local function set_reasoning_mode(value)
+ if busy or not REASONING_LABELS[value] then return end
+ reasoning_mode=value
+ reaper.SetExtState(EXT_SECTION,REASONING_KEY,value,true)
+end
+local function reasoning_parameters(pv,md,choice)
+ if choice=="auto" then return "","provider_default" end
+ local effort=REASONING_LABELS[choice] and choice or "medium"
+ if pv=="openai" then
+  local value='"reasoning":{"effort":"'..effort..'"}'
+  return ","..value,value
+ elseif pv=="anthropic" then
+  local value='"output_config":{"effort":"'..effort..'"}'
+  return ","..value,value
+ elseif md:match("^gemini%-2%.5") then
+  local budget=({low=2048,medium=8192,high=24576})[effort]
+  local value='"generationConfig":{"thinkingConfig":{"thinkingBudget":'..budget..'}}'
+  return ","..value,value
+ else
+  local value='"generationConfig":{"thinkingConfig":{"thinkingLevel":"'..effort..'"}}'
+  return ","..value,value
+ end
+end
+-- End thinking control.
 local function ai_command(prompt,key)
+ local thinking,requested=reasoning_parameters(provider,model,reasoning_mode)
+ diag_set("reasoning_mode",reasoning_mode); diag_set("reasoning_requested",requested)
  local base=temp_path(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers,win_headers
- if provider=="openai" then body='{"model":"'..json_escape(model)..'","input":"'..json_escape(prompt)..'"}'; url="https://api.openai.com/v1/responses"; win_headers={"Authorization: Bearer "..key,"Content-Type: application/json"}
- elseif provider=="anthropic" then body='{"model":"'..json_escape(model)..'","max_tokens":16000,"messages":[{"role":"user","content":"'..json_escape(prompt)..'"}]}'; url="https://api.anthropic.com/v1/messages"; win_headers={"x-api-key: "..key,"anthropic-version: 2023-06-01","Content-Type: application/json"}
- else body='{"contents":[{"parts":[{"text":"'..json_escape(prompt)..'"}]}]}'; url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key; win_headers={"Content-Type: application/json"} end
+ if provider=="openai" then body='{"model":"'..json_escape(model)..'","input":"'..json_escape(prompt)..'"'..thinking..'}'; url="https://api.openai.com/v1/responses"; win_headers={"Authorization: Bearer "..key,"Content-Type: application/json"}
+ elseif provider=="anthropic" then body='{"model":"'..json_escape(model)..'","max_tokens":16000,"messages":[{"role":"user","content":"'..json_escape(prompt)..'"}]'..thinking..'}'; url="https://api.anthropic.com/v1/messages"; win_headers={"x-api-key: "..key,"anthropic-version: 2023-06-01","Content-Type: application/json"}
+ else body='{"contents":[{"parts":[{"text":"'..json_escape(prompt)..'"}]}]'..thinking..'}'; url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key; win_headers={"Content-Type: application/json"} end
  if not write_file(rq,body) then return nil,"Anfrage konnte nicht geschrieben werden: "..rq end
  if IS_WINDOWS then
   local script=windows_curl_script(nil,rq,rs,cd,win_headers,url,180)
@@ -737,7 +768,7 @@ local function ai_command(prompt,key)
   local cmd="/usr/bin/curl -sS --max-time 180 -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(cd).." 2>/dev/null &"
   os.execute(cmd)
  end
- local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,deadline=reaper.time_precise()+200}
+ local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,reasoning_mode=reasoning_mode,reasoning_requested=requested,deadline=reaper.time_precise()+200}
  costs.start(a)
  return a,nil
 end
@@ -784,7 +815,7 @@ local function log_communication(stage,kind,body)
  local entry=os.date("%Y-%m-%d %H:%M:%S").." ["..tostring(stage).."] "..kind.."\n"..tostring(body or "").."\n"
  diag_set("communication_log",prior..entry)
 end
-launch=function(stage,prompt,key,data) if stage=="controller" or stage=="swam_interpretation" or stage=="work_title" then costs.begin() end; log_communication(stage,"APP → KI (Prompt; Modell "..tostring(model)..", Provider "..tostring(provider)..")",prompt)
+launch=function(stage,prompt,key,data) if stage=="controller" or stage=="swam_interpretation" or stage=="work_title" then costs.begin() end; local _,requested=reasoning_parameters(provider,model,reasoning_mode); log_communication(stage,"APP → KI (Denkaufwand "..reasoning_mode.."; gesendet "..requested.."; Prompt; Modell "..tostring(model)..", Provider "..tostring(provider)..")",prompt)
  local a,e=ai_command(prompt,key); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 
 -- The official LilyPond compiler handles the musical semantics.
@@ -1434,7 +1465,7 @@ end
 
 local function info_text()
  return "Composition Studio "..VERSION.."\n"..COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION.." · Build "..tostring(COMPOSITION_ENGINE_BUILD)..
- "\n\nLETZTE KOMPOSITIONSIDEE\n"..(last_diag.composition_idea and last_diag.composition_idea~="" and last_diag.composition_idea or "Noch keine Kompositionsidee gespeichert.").."\n\nNEU IN "..VERSION.."\n\n• Neue KI-Kompositionsidee im Infofenster und persistenten Verlauf; vollständiger APP/KI-Kommunikationsverlauf in Diagnose.\n• Experiment: erste KI legt nur den musikalischen Rahmen fest; zweite KI entwickelt selbst die konkrete Kompositionsidee und komponiert.\n• Im Menü auf Direktes JSON mit einem Aufruf umschaltbar; MIDI-Umsetzung unverändert.\n• Kostenanzeige pro Auftrag und insgesamt; Details und eigene Preise im Menü.\n• LilyPond-Exitcodes werden korrekt ausgewertet; der Import prüft echte MIDI-Items.\n• Ungenutzte ScoreFlow-/Verovio-Prototypen und die alte WebView-Bridge wurden entfernt.\n• Neue Klavierstücke und Fortsetzungen werden durch LilyPond in REAPER-MIDI übertragen. Der Pfad ist im Menü einstellbar.\n\nGeprüft unter Windows mit REAPER 7.82 und LilyPond 2.26.0: Kompilierung, MIDI-Import und Fortsetzungsprüfung."
+ "\nStand: 10.10.2026 · Denkaufwand: "..REASONING_LABELS[reasoning_mode].."\n\nLETZTE KOMPOSITIONSIDEE\n"..(last_diag.composition_idea and last_diag.composition_idea~="" and last_diag.composition_idea or "Noch keine Kompositionsidee gespeichert.").."\n\nNEU IN "..VERSION.."\n\n• Denkaufwand: Kurz / Mittel / Hoch / Automatisch; Mittel ist voreingestellt. Auswahl bleibt nach Neustart erhalten.\n• Jeder KI-Aufruf protokolliert Auswahl und gesendete Parameter. Gemini 2.5 verwendet entsprechende Tokenbudgets.\n• Neue KI-Kompositionsidee im Infofenster und persistenten Verlauf; vollständiger APP/KI-Kommunikationsverlauf in Diagnose.\n• Experiment: erste KI legt nur den musikalischen Rahmen fest; zweite KI entwickelt selbst die konkrete Kompositionsidee und komponiert.\n• Im Menü auf Direktes JSON mit einem Aufruf umschaltbar; MIDI-Umsetzung unverändert.\n• Kostenanzeige pro Auftrag und insgesamt; Details und eigene Preise im Menü.\n• LilyPond-Exitcodes werden korrekt ausgewertet; der Import prüft echte MIDI-Items.\n• Ungenutzte ScoreFlow-/Verovio-Prototypen und die alte WebView-Bridge wurden entfernt.\n• Neue Klavierstücke und Fortsetzungen werden durch LilyPond in REAPER-MIDI übertragen. Der Pfad ist im Menü einstellbar.\n\nGeprüft unter Windows mit REAPER 7.82 und LilyPond 2.26.0: Kompilierung, MIDI-Import und Fortsetzungsprüfung."
 end
 local function draw_history() if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
@@ -1449,5 +1480,15 @@ if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(compositi
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
-if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); reaper.ImGui_TextWrapped(ctx,"Auftrag: "..costs.amount(costs.order)); reaper.ImGui_TextWrapped(ctx,"Gesamt: "..costs.amount(costs.total)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local scale=font_size/14; local ih=math.floor(112*scale+0.5); local bh=math.floor(34*scale+0.5); local ch=math.max(120,h-ih-bh*2-math.floor(84*scale+0.5)); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=math.max(4,math.floor(6*scale)); local bw=math.max(80,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); reaper.ImGui_Text(ctx,"Denkaufwand:"); reaper.ImGui_SameLine(ctx)
+if reaper.ImGui_Button(ctx,REASONING_LABELS[reasoning_mode].." v##reasoning") and not busy then reaper.ImGui_OpenPopup(ctx,"##reasoning_menu") end
+if reaper.ImGui_BeginPopup(ctx,"##reasoning_menu") then
+ for _,choice in ipairs({"low","medium","high","auto"}) do
+  if reaper.ImGui_MenuItem(ctx,REASONING_LABELS[choice],nil,reasoning_mode==choice,not busy) then set_reasoning_mode(choice) end
+ end
+ reaper.ImGui_TextWrapped(ctx,"Automatisch verwendet die Modellvorgabe. Die Wirkung der Stufen hängt vom Modell ab.")
+ reaper.ImGui_EndPopup(ctx)
+end
+if provider=="google" and model:match("^gemini%-2%.5") then reaper.ImGui_TextWrapped(ctx,"Gemini 2.5: Denkbudget 2048 / 8192 / 24576 Tokens für Kurz / Mittel / Hoch.") end
+reaper.ImGui_TextWrapped(ctx,"Auftrag: "..costs.amount(costs.order)); reaper.ImGui_TextWrapped(ctx,"Gesamt: "..costs.amount(costs.total)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local scale=font_size/14; local ih=math.floor(112*scale+0.5); local bh=math.floor(34*scale+0.5); local ch=math.max(120,h-ih-bh*2-math.floor(84*scale+0.5)); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=math.max(4,math.floor(6*scale)); local bw=math.max(80,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
 loop()

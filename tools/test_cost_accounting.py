@@ -35,6 +35,7 @@ def env(saved=None):
     local update_status=""
     local IS_WINDOWS=true
     local diagnostics={}
+    local last_diag=diagnostics
     local function trim(s) return (s or ""):gsub("^%s+",""):gsub("%s+$","") end
     local function shell_quote(s) return '"'..s..'"' end
     local function json_escape(s) return s end
@@ -51,6 +52,7 @@ def env(saved=None):
     end
     """+module+ai+"""
     return {costs=costs,command=ai_command,poll=ai_poll,launch=launch,
+      set_reasoning=set_reasoning_mode,reasoning=function() return reasoning_mode end,diagnostics=diagnostics,
       job=function() return job end,status=function() return update_status end}
     """)
     return r,api,api.costs
