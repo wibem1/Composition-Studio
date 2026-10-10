@@ -417,3 +417,8 @@ API-Grundlagen:
 - https://developers.openai.com/api/docs/guides/reasoning
 - https://platform.claude.com/docs/en/build-with-claude/effort
 - https://ai.google.dev/gemini-api/docs/generate-content/thinking
+
+
+## v1.0.74 · 10.10.2026 – Altmodell kennzeichnen
+
+Gemini 2.5 Pro bleibt für bestehende Nutzer verfügbar, erscheint aber ausdrücklich als Altmodell mit eingeschränktem Zugang. Das Hauptfenster erklärt den Zugang nur für bisherige Nutzer und die Budgetzuordnung statt fester Denkstufen. Mittel bleibt Voreinstellung. Grundlage: https://ai.google.dev/gemini-api/docs/deprecations/ . Syntax, simulierte Startoberfläche, 28 Denksteuerungsfixtures, 32 Kosten- und 29 Import-/Updateprüfungen bestanden; kein realer REAPER-Test oder bezahlter API-Aufruf.
