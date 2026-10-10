@@ -1,14 +1,14 @@
 -- @description Composition Studio
--- @version 1.0.74
+-- @version 1.0.75
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.0.74"
+local VERSION="1.0.75"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
-local COMPOSITION_ENGINE_VERSION="2.3.1"
-local COMPOSITION_ENGINE_BUILD=231
+local COMPOSITION_ENGINE_VERSION="2.3.2"
+local COMPOSITION_ENGINE_BUILD=232
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local KEY_NAMES={openai="OpenAIAPIKey",anthropic="AnthropicAPIKey",google="GoogleAPIKey"}
 local MODELS={openai={{"GPT-5.6 Sol","gpt-5.6-sol"},{"GPT-5.6 Terra","gpt-5.6-terra"},{"GPT-5.6 Luna","gpt-5.6-luna"}},anthropic={{"Claude Fable 5","claude-fable-5"},{"Claude Sonnet 5","claude-sonnet-5"},{"Claude Opus 5","claude-opus-5"}},google={{"Gemini 3.8 Flash","gemini-3.8-flash"},{"Gemini 3.1 Pro","gemini-3.1-pro-preview"},{"Gemini 2.5 Pro · Altmodell (Zugang eingeschränkt)","gemini-2.5-pro"}}}
@@ -1038,29 +1038,13 @@ Der Rahmen setzt Leitplanken, aber er nimmt dir keine konkreten musikalischen
 Entscheidungen ab. Form, Stimmführung, Zusammenhang und Machbarkeit sind Ziele,
 keine Schablone für einzelne Takte oder Noten.
 
-Komponiere fortlaufend aus dem bereits entstandenen musikalischen Verlauf heraus.
-Behandle das tatsächlich Geschriebene als neuen musikalischen Kontext für alles,
-was folgt.
+Entwickle aus dem musikalischen Rahmen eine eigenständige Komposition.
+Gestalte Melodie, Begleitung, Harmonik, Rhythmus und Form als
+zusammenhängendes musikalisches Ganzes. Entwickle deine musikalischen
+Gedanken mit der Konsequenz, die sie verlangen.
+Entscheide selbst über Wiederholung, Veränderung, Kontrast und Fortführung.
+Musikalische Schlüssigkeit hat Vorrang vor äußerer Wirkung und bloßer Originalität.
 
-Prüfe während des Komponierens immer wieder, ob im bisherigen Verlauf etwas
-musikalisch Eigenständiges oder Unerwartetes entstanden ist: eine Geste, eine
-rhythmische Verschiebung, eine neue Rollenverteilung der Stimmen, eine harmonische
-Spannung, eine Pause, eine Verdichtung, eine melodische Nebenidee oder etwas
-anderes, das sich nicht bloß wie die Fortsetzung der bisherigen Routine anfühlt.
-Wenn so etwas entsteht, frage nicht nach mehr Abwechslung, sondern danach, ob
-gerade DIESER konkrete Gedanke eine musikalische Konsequenz eröffnet. Wenn ja,
-gib ihm Raum und entwickle die Konsequenz weiter. Wenn nein, zwinge nichts hinein.
-
-Erkenne außerdem die bequemste oder naheliegendste Fortsetzung des bisherigen
-Musters. Übernimm sie nicht automatisch. Prüfe, ob sie das Stück wirklich stärker
-macht oder nur die bisherige Denkweise wiederholt.
-
-Arbeite keinen im Voraus festgelegten Notenplan, kein starres Variationsschema
-und keine Checkliste von Kontrasten ab. Zusammenhang entsteht dadurch, dass
-spätere Entscheidungen auf das tatsächlich zuvor Komponierte reagieren.
-
-Die konkrete musikalische Erfindung und ihre vollständige Verwirklichung
-sind DEINE Aufgabe im selben Kompositionsvorgang.
 Halte alle ausdrücklichen Anforderungen des ursprünglichen Nutzerauftrags ein.
 MUSIKALISCHER RAHMEN:
 ]=]..framework..[=[
