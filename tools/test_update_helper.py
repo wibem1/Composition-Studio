@@ -20,9 +20,12 @@ def case(name,statuses=('200',),payload=fresh,installed=old,cancel=False,rename_
     assert 'FromSeconds(20)' in ps and 'SecurityProtocolType]::Tls12' in ps
    else:
     # Parse the shipped Unix command rather than replacing fetch_update.
-    lexer=shlex.shlex(shlex.split(command)[2],posix=True,punctuation_chars=';');lexer.whitespace_split=True
+    argv=shlex.split(command)
+    assert len(argv)==2 and argv[0]=='/bin/sh' and Path(argv[1]).suffix=='.sh'
+    shell_script=Path(argv[1]).read_text()
+    lexer=shlex.shlex(shell_script,posix=True,punctuation_chars=';');lexer.whitespace_split=True
     tokens=list(lexer);out=Path(tokens[tokens.index('-o')+1]);pending=tokens[tokens.index('>')+1]
-   status=statuses[min(len(calls),len(statuses)-1)];calls.append(command)
+   status=statuses[min(len(calls),len(statuses)-1)];calls.append(ps if windows else shell_script)
    if not cancel:
     out.write_text(payload);Path(pending.removesuffix('.pending')).write_text(status)
    return ''

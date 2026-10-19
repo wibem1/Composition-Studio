@@ -101,7 +101,15 @@ local function fetch_update(url,raw)
   local cmd="/usr/bin/curl -sS -L --connect-timeout 10 --max-time 20"
   for _,h in ipairs(headers) do cmd=cmd.." -H "..shell_quote(h) end
   cmd=cmd.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code..".pending").."; mv "..shell_quote(code..".pending").." "..shell_quote(code)
-  reaper.ExecProcess("/bin/sh -c "..shell_quote(cmd),-2)
+  -- ExecProcess is not a shell: pass a script filename instead of nested shell quoting.
+  script=temp_path(".sh")
+  local f=io.open(script,"wb")
+  if not f then return nil end
+  local wrote=f:write("#!/bin/sh\n"..cmd.."\nrm -f "..shell_quote(script).."\n")
+  local closed=f:close()
+  if not wrote or not closed then os.remove(script);return nil end
+  local ok,result=pcall(reaper.ExecProcess,'/bin/sh "'..script:gsub('"','\\"')..'"',-2)
+  if not ok or result==nil then os.remove(script);return nil end
  end
  return {rs=tmp,cd=code,script=script,deadline=reaper.time_precise()+30}
 end

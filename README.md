@@ -2,7 +2,7 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
-Aktueller Stand: **v1.1.4 · 19.10.2026 · TEST CANDIDATE**.
+Aktueller Stand: **v1.1.5 · 19.10.2026 · TEST CANDIDATE**.
 
 Denkaufwand im Hauptfenster: **Kurz / Mittel / Hoch / Automatisch**, mit **Mittel** als Voreinstellung. Die Auswahl wird dauerhaft gespeichert und gilt für die KI-Aufrufe des Auftrags einschließlich Konzeption und Komposition. Während eines laufenden Auftrags ist sie gesperrt. Automatisch sendet keine Denksteuerung und verwendet die Modellvorgabe.
 
@@ -52,3 +52,11 @@ Der Updateklick wird bei einem laufenden Auftrag nicht mehr still ignoriert. Wä
 Wenn das vorhandene Studio-Menü nicht reagiert: Studio schließen, [Composition-Studio-Update.lua](Composition-Studio-Update.lua) herunterladen, in REAPER über Aktionen → Aktionsliste anzeigen → ReaScript: Laden laden und einmal ausführen. Danach Composition Studio erneut öffnen. Der Updater benötigt kein ReaImGui, verwendet die bereits registrierte Studio-Datei, prüft Download und Lua-Syntax und sichert die vorherige Fassung als .backup. Er startet keinen KI-Aufruf und verändert keine Projektdateien.
 
 Der eigenständige Updater wird mit tools/build_update_helper.py aus dem aktuellen Transport- und Installationscode erzeugt. Geprüft sind Installation, Ersatzadresse, Fehler, Abbruch, fehlender Zielpfad und Rückkehr bei fehlgeschlagenem Dateiaustausch, mit simulierten Windows-/Unix-Prozessen und echten temporären Dateien. Layoutprüfung: 64 Varianten einschließlich laufendem Update.
+
+### macOS-Update und Offline-Installation 1.1.5
+
+Der Unix-Download startet jetzt eine vorbereitete .sh-Datei über /bin/sh statt eines mehrfach verschachtelt quotierten Befehls mit -c. Die einfachen Argumente an ExecProcess werden von den Shell-Befehlen innerhalb der Datei getrennt.
+
+Für die Wiederherstellung ohne Download aus REAPER: Studio schließen, [Composition-Studio-Offline-Install.lua](Composition-Studio-Offline-Install.lua) im Browser herunterladen, in REAPER über die Aktionsliste laden und ausführen. Danach Studio erneut öffnen. Dieser Installer enthält die vollständige Version 1.1.5. Er benötigt weder Netzwerk, externe Prozesse noch ReaImGui und installiert in die bereits registrierte Skriptdatei; vorherige Fassung als .backup.
+
+Erzeugung mit tools/build_offline_installer.py. Tests installieren die enthaltenen Bytes ausgehend von vier bisherigen Versionen, mit ausschließlich GetExtState/SetExtState/ShowMessageBox als verfügbaren REAPER-Aufrufen. Bei Schreibfehlern, fehlgeschlagenem Austausch, beschädigtem Inhalt oder unbekanntem Ziel bleibt die ursprüngliche Datei erhalten.
