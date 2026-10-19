@@ -197,19 +197,31 @@ updater=section("local function version_parts(v)", "local function utf8(cp)")
 def update_env(tmp):
     r=LuaRuntime(unpack_returned_tuples=True)
     r.globals().TEST_ROOT=tmp.as_posix()
-    r.execute("reaper={SetExtState=function() end,defer=function(f) deferred=f end}")
+    r.execute("reaper={SetExtState=function() end,defer=function(f) deferred=f end,ShowMessageBox=function(text) update_message=text end}")
     api=r.execute(header+files+"""
 local VERSION="1.0.55"
+local UPDATE_URL="https://example.invalid/update.lua"
 local SCRIPT_PATH=TEST_ROOT.."/installed.lua"
 local SCRIPT_NAME="Composition Studio"
 local WINDOW_STATE_KEY="WindowOpen"
 local busy,open,restarting=false,true,false
 local update_status=""
 """+updater+"""
-return {newer=version_is_newer,complete=complete_update,
+return {newer=version_is_newer,complete=complete_update,install=install_update,set_busy=function(value)busy=value end,
  status=function() return update_status,busy,open,restarting end}
 """)
     return r,api
+def update_entry_feedback():
+    with tempfile.TemporaryDirectory(dir=root) as d:
+        r,api=update_env(Path(d))
+        api.set_busy(True);api.install()
+        assert 'läuft noch ein Auftrag' in r.globals().update_message
+        api.set_busy(False)
+        r.execute('windows_curl_script=function()return nil end')
+        api.install()
+        assert 'nicht gestartet' in r.globals().update_message and api.status()[1] is False
+check("update click gives explicit feedback when busy or launch fails",update_entry_feedback)
+
 for name,version,status,body,expected in [
     ("update same version","1.0.55","200",None,"Bereits aktuell"),
     ("update older version","1.0.54","200",None,"Kein neueres"),

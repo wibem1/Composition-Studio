@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.3
+-- @version 1.1.4
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.3"
+local VERSION="1.1.4"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -188,21 +188,27 @@ local function fetch_update(url,raw)
  if raw then headers[#headers+1]="Accept: application/vnd.github.raw+json" end
  local script
  if IS_WINDOWS then
-  script=windows_curl_script(nil,nil,tmp,code,headers,url,60)
+  script=windows_curl_script(nil,nil,tmp,code,headers,url,20)
   if not script or not ps_launch(script,true) then if script then os.remove(script) end; return nil end
  else
-  local cmd="/usr/bin/curl -sS -L --connect-timeout 15 --max-time 60"
+  local cmd="/usr/bin/curl -sS -L --connect-timeout 10 --max-time 20"
   for _,h in ipairs(headers) do cmd=cmd.." -H "..shell_quote(h) end
   cmd=cmd.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code..".pending").."; mv "..shell_quote(code..".pending").." "..shell_quote(code)
   reaper.ExecProcess("/bin/sh -c "..shell_quote(cmd),-2)
  end
- return {rs=tmp,cd=code,script=script,deadline=reaper.time_precise()+75}
+ return {rs=tmp,cd=code,script=script,deadline=reaper.time_precise()+30}
 end
 local function install_update()
- if busy then return end
- busy=true; update_status="Update wird im Hintergrund geprüft …"
- update_job=fetch_update("https://api.github.com/repos/wibem1/Composition-Studio/contents/Composition%20Studio.lua?ref=main&nocache="..os.time(),true)
- if not update_job then busy=false; update_status="Update-Prozess konnte nicht gestartet werden." end
+ if busy then
+  reaper.ShowMessageBox(update_job and "Das Update läuft bereits. Bitte auf die Abschlussmeldung warten." or "Es läuft noch ein Auftrag. Bitte dessen Abschluss abwarten oder das Studio schließen und erneut öffnen.",SCRIPT_NAME.." – Update",0)
+  return
+ end
+ busy=true; update_status="Update wird geladen …"
+ update_job=fetch_update(UPDATE_URL.."?version_check="..os.time(),false)
+ if not update_job then
+  busy=false;update_status="Update-Prozess konnte nicht gestartet werden."
+  reaper.ShowMessageBox(update_status,SCRIPT_NAME.." – Update",0)
+ end
 end
 local function complete_update(status,fresh)
  local rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
@@ -277,10 +283,11 @@ local function poll_update()
  local fresh=read_file(j.rs); os.remove(j.rs); os.remove(j.cd)
  update_job=nil
  if (trim(status)~="200" or not fresh or not fresh:match("%-%- @version%s+")) and not j.fallback then
-  update_job=fetch_update(UPDATE_URL.."?version_check="..os.time(),false)
+  update_job=fetch_update("https://api.github.com/repos/wibem1/Composition-Studio/contents/Composition%20Studio.lua?ref=main&nocache="..os.time(),true)
   if update_job then update_job.fallback=true; return end
  end
  complete_update(trim(status)=="" and "TIMEOUT" or trim(status),fresh)
+ if not restarting then reaper.ShowMessageBox(update_status,SCRIPT_NAME.." – Update",0) end
 end
 
 local function utf8(cp) if cp<=0x7f then return string.char(cp) elseif cp<=0x7ff then return string.char(0xc0+math.floor(cp/64),0x80+cp%64) elseif cp<=0xffff then return string.char(0xe0+math.floor(cp/4096),0x80+math.floor(cp/64)%64,0x80+cp%64) else return string.char(0xf0+math.floor(cp/262144),0x80+math.floor(cp/4096)%64,0x80+cp%64) end end
@@ -1867,6 +1874,8 @@ if reaper.ImGui_BeginPopup(ctx,"##reasoning_menu") then
  reaper.ImGui_EndPopup(ctx)
 end
 
+-- Update feedback must remain visible even when the conversation is scrolled.
+if update_job then reaper.ImGui_Text(ctx,"Update wird geladen …") end
 -- Keep variable-height messages inside the scrolling conversation.
 reaper.ImGui_Separator(ctx)
 local w,h=reaper.ImGui_GetContentRegionAvail(ctx)

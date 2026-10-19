@@ -2,7 +2,7 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
-Aktueller Stand: **v1.1.3 · 19.10.2026 · TEST CANDIDATE**.
+Aktueller Stand: **v1.1.4 · 19.10.2026 · TEST CANDIDATE**.
 
 Denkaufwand im Hauptfenster: **Kurz / Mittel / Hoch / Automatisch**, mit **Mittel** als Voreinstellung. Die Auswahl wird dauerhaft gespeichert und gilt für die KI-Aufrufe des Auftrags einschließlich Konzeption und Komposition. Während eines laufenden Auftrags ist sie gesperrt. Automatisch sendet keine Denksteuerung und verwendet die Modellvorgabe.
 
@@ -44,3 +44,11 @@ Beispiele:
 Andere freie Formulierungen werden vom KI-Controller eingeordnet. Unklare Übergangslängen werden nachgefragt. Die technischen Grenzen für Übergänge (2/3/4 Takte und keine überspannten Noten) bleiben bestehen. Erzeugte Musik wird als Vorschlag gesichert und erst über „Änderungen anwenden“ übernommen. Die normale Updatefunktion installiert 1.1.3.
 
 Geprüft: echte Lua-Parser und Auftrags-/Antwortpfade ohne Anbieteraufruf, Analyse nach erneutem Laden, Vorschlagsablauf, 48 Größen-/Schriftkombinationen gegen Dear ImGui. Kein praktischer Test in einem laufenden REAPER.
+
+### Update-Rückmeldung 1.1.4
+
+Der Updateklick wird bei einem laufenden Auftrag nicht mehr still ignoriert. Während des Downloads erscheint eine kurze Meldung außerhalb des scrollbaren Chats. Fehler und „Bereits aktuell“ werden ausdrücklich in einem Dialog gemeldet. Der Download verwendet zunächst die direkte Skriptadresse und bei Fehlern die GitHub-API; beide Wege haben begrenzte Wartezeiten.
+
+Wenn das vorhandene Studio-Menü nicht reagiert: Studio schließen, [Composition-Studio-Update.lua](Composition-Studio-Update.lua) herunterladen, in REAPER über Aktionen → Aktionsliste anzeigen → ReaScript: Laden laden und einmal ausführen. Danach Composition Studio erneut öffnen. Der Updater benötigt kein ReaImGui, verwendet die bereits registrierte Studio-Datei, prüft Download und Lua-Syntax und sichert die vorherige Fassung als .backup. Er startet keinen KI-Aufruf und verändert keine Projektdateien.
+
+Der eigenständige Updater wird mit tools/build_update_helper.py aus dem aktuellen Transport- und Installationscode erzeugt. Geprüft sind Installation, Ersatzadresse, Fehler, Abbruch, fehlender Zielpfad und Rückkehr bei fehlgeschlagenem Dateiaustausch, mit simulierten Windows-/Unix-Prozessen und echten temporären Dateien. Layoutprüfung: 64 Varianten einschließlich laufendem Update.

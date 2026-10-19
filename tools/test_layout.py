@@ -26,6 +26,7 @@ def case(width,height,font_size,state):
     composition_mode="concept";reasoning_mode="auto";REASONING_LABELS={auto="Automatisch"}
     info_visible=false;history_mode=STATE=="history";chat_start=1
     history={{role="KI",text="Analyse und Komposition"}}
+    update_job=STATE=="updating" and {} or nil
     update_status=string.rep("Ein langer Hinweis zur letzten Aktion. ",30)
     workflow_core={version="1",readable=function(s)return s end}
     local result={stage="composition",state="ready",created="2026-10-19 16:00",raw_response="Music"}
@@ -101,5 +102,5 @@ def case(width,height,font_size,state):
 
 for size in [(360,480),(360,620),(480,620),(800,900)]:
     for font in (10,14,20,26):
-        for state in ('empty','proposal','history'):case(*size,font,state)
-print('PASS 48 real Dear ImGui layouts: fonts 10–26, small/large windows, long UTF-8 models/status, proposal and history; footer visible without outer scrolling')
+        for state in ('empty','proposal','history','updating'):case(*size,font,state)
+print('PASS 64 real Dear ImGui layouts: fonts 10–26, small/large windows, long UTF-8 models/status, proposal and history; footer visible without outer scrolling')
