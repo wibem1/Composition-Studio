@@ -45,7 +45,7 @@ def env(saved=None):
     local function temp_path(ext) seq=seq+1; return TEST_ROOT.."/cost_"..seq..(ext or "") end
     local function windows_curl_script() return "mock.ps1" end
     local function ps_launch() return true end
-    """+json_helpers+files+"""
+    """+section("-- BEGIN SHARED WORKFLOW CORE","-- END SHARED WORKFLOW CORE")+json_helpers+files+"""
     local function first_text_field(raw)
      local _,e=raw:find('"text"%s*:'); local q=e and raw:find('"',e+1,true)
      return q and read_json_string(raw,q)

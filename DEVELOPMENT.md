@@ -422,3 +422,7 @@ API-Grundlagen:
 ## v1.0.74 · 10.10.2026 – Altmodell kennzeichnen
 
 Gemini 2.5 Pro bleibt für bestehende Nutzer verfügbar, erscheint aber ausdrücklich als Altmodell mit eingeschränktem Zugang. Das Hauptfenster erklärt den Zugang nur für bisherige Nutzer und die Budgetzuordnung statt fester Denkstufen. Mittel bleibt Voreinstellung. Grundlage: https://ai.google.dev/gemini-api/docs/deprecations/ . Syntax, simulierte Startoberfläche, 28 Denksteuerungsfixtures, 32 Kosten- und 29 Import-/Updateprüfungen bestanden; kein realer REAPER-Test oder bezahlter API-Aufruf.
+
+## 19.10.2026 · 1.1.0 TEST CANDIDATE
+
+Aktueller lokaler Kandidat auf Basis von main 1.0.75: gemeinsame Workflow-Regeln aus Composition-Engine/workflow-core, explizite Vorschläge, sofort gespeicherter Ergebnisverlauf, Originalprüfung, Analyse → Überarbeitung, Übergangstakte und dynamische Modellkataloge. Die bisherigen Kompositionsverfahren bleiben erhalten. Auslieferung über main und den bestehenden Updater; nicht praktisch als SAFE bestätigt.

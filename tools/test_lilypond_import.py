@@ -40,6 +40,7 @@ def startup_smoke():
       GetExtState=function() return "" end,
       GetProjExtState=function() return 0,"" end,
       GetResourcePath=function() return "memory" end,
+      GetProjectGUID=function() return "test-project" end,
       GetOS=function() return "Win64" end,
       EnumProjects=function() return 1 end,
       ImGui_CreateContext=function() return {} end,
@@ -264,5 +265,36 @@ if exe.is_file():
     check("actual LilyPond compiles MIDI; production importer with simulated REAPER API",real_compiler)
 else:
     print("SKIP actual LilyPond compilation: set LILYPOND_EXE to an installed compiler")
+
+# Transition copies the preserved prefix inside the import's Undo block.
+def transition_prefix_case(mismatch=False):
+    r,api,state=env()
+    r.execute('''
+    local original=state.tracks[1]
+    original.items={{id="original",midi=true,start=0,length=12}}
+    function reaper.GetMediaTrackInfo_Value(tr) for i,t in ipairs(state.tracks) do if tr==t then return i end end end
+    function reaper.GetItemStateChunk()return true,"ORIGINAL CHUNK" end
+    function reaper.genGuid()return "{NEW-GUID}" end
+    function reaper.AddMediaItemToTrack(tr)local it={id="prefixCopy",midi=true,start=0,length=12};tr.items[#tr.items+1]=it;return it end
+    function reaper.SetItemStateChunk(it,chunk)return chunk=="ORIGINAL CHUNK" end
+    function reaper.SetMediaItemInfo_Value(it,key,value)if key=="D_LENGTH" then it.length=value end end
+    function reaper.Undo_BeginBlock2()state.begins=(state.begins or 0)+1 end
+    function reaper.Undo_EndBlock2()state.ends=(state.ends or 0)+1 end
+    ''')
+    state.start=8;state.length=4
+    prefix=r.table_from([r.table_from({'track':state.tracks[1],'item':state.tracks[1]['items'][1]})])
+    if mismatch:prefix[2]=r.table_from({'track':state.tracks[2],'item':state.tracks[1]['items'][1]})
+    result=api.compile(fixture,8,1,prefix)
+    assert state.begins==1 and state.ends==1
+    if mismatch:
+        assert isinstance(result,tuple) and result[0] is None and state.undo==1 and len(state.tracks)==2
+    else:
+        assert result==1 and len(api.made())==2
+        assert state.tracks[1]['items'][1].length==12
+        assert state.tracks[2]['items'][2].length==8
+        assert 'prefixCopy' in state.metadata
+check('transition variant retains original and prefix in one Undo block',transition_prefix_case)
+check('ambiguous transition track mapping rolls back import',lambda:transition_prefix_case(True))
+
 scratch.cleanup()
 print(len(results),"tests passed")
