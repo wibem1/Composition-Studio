@@ -69,6 +69,18 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
  local f=io.open(script,"wb"); if not f then return nil end
  f:write("\239\187\191"..table.concat(h,"\r\n")); f:close(); return script
 end
+-- ExecProcess parses arguments itself; keep shell syntax inside a script file.
+local function unix_launch_script(command)
+ local script=temp_path(".sh")
+ local f,err=io.open(script,"wb")
+ if not f then return nil,err end
+ local wrote=f:write("#!/bin/sh\n"..command.."\nrm -f "..shell_quote(script).."\n")
+ local closed=f:close()
+ if not wrote or not closed then os.remove(script);return nil,"Startdatei konnte nicht geschrieben werden." end
+ local ok,result=pcall(reaper.ExecProcess,'/bin/sh "'..script:gsub('"','\\"')..'"',-2)
+ if not ok or result==nil then os.remove(script);return nil,"Hintergrundprozess konnte nicht gestartet werden." end
+ return script
+end
 local function read_file(p) local f=io.open(p,"rb"); if not f then return nil end; local s=f:read("*a"); f:close(); return s end
 local function write_file(p,s) local f=io.open(p,"wb"); if not f then return false end; f:write(s); f:close(); return true end
 local function version_parts(v)
@@ -101,15 +113,8 @@ local function fetch_update(url,raw)
   local cmd="/usr/bin/curl -sS -L --connect-timeout 10 --max-time 20"
   for _,h in ipairs(headers) do cmd=cmd.." -H "..shell_quote(h) end
   cmd=cmd.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code..".pending").."; mv "..shell_quote(code..".pending").." "..shell_quote(code)
-  -- ExecProcess is not a shell: pass a script filename instead of nested shell quoting.
-  script=temp_path(".sh")
-  local f=io.open(script,"wb")
-  if not f then return nil end
-  local wrote=f:write("#!/bin/sh\n"..cmd.."\nrm -f "..shell_quote(script).."\n")
-  local closed=f:close()
-  if not wrote or not closed then os.remove(script);return nil end
-  local ok,result=pcall(reaper.ExecProcess,'/bin/sh "'..script:gsub('"','\\"')..'"',-2)
-  if not ok or result==nil then os.remove(script);return nil end
+  script=unix_launch_script(cmd)
+  if not script then return nil end
  end
  return {rs=tmp,cd=code,script=script,deadline=reaper.time_precise()+30}
 end

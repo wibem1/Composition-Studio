@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.5
+-- @version 1.1.6
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.5"
+local VERSION="1.1.6"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -161,6 +161,18 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
  local f=io.open(script,"wb"); if not f then return nil end
  f:write("\239\187\191"..table.concat(h,"\r\n")); f:close(); return script
 end
+-- ExecProcess parses arguments itself; keep shell syntax inside a script file.
+local function unix_launch_script(command)
+ local script=temp_path(".sh")
+ local f,err=io.open(script,"wb")
+ if not f then return nil,err end
+ local wrote=f:write("#!/bin/sh\n"..command.."\nrm -f "..shell_quote(script).."\n")
+ local closed=f:close()
+ if not wrote or not closed then os.remove(script);return nil,"Startdatei konnte nicht geschrieben werden." end
+ local ok,result=pcall(reaper.ExecProcess,'/bin/sh "'..script:gsub('"','\\"')..'"',-2)
+ if not ok or result==nil then os.remove(script);return nil,"Hintergrundprozess konnte nicht gestartet werden." end
+ return script
+end
 local function json_escape(s) return tostring(s or ""):gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t") end
 local function read_file(p) local f=io.open(p,"rb"); if not f then return nil end; local s=f:read("*a"); f:close(); return s end
 local function write_file(p,s) local f=io.open(p,"wb"); if not f then return false end; f:write(s); f:close(); return true end
@@ -194,15 +206,8 @@ local function fetch_update(url,raw)
   local cmd="/usr/bin/curl -sS -L --connect-timeout 10 --max-time 20"
   for _,h in ipairs(headers) do cmd=cmd.." -H "..shell_quote(h) end
   cmd=cmd.." -o "..shell_quote(tmp).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code..".pending").."; mv "..shell_quote(code..".pending").." "..shell_quote(code)
-  -- ExecProcess is not a shell: pass a script filename instead of nested shell quoting.
-  script=temp_path(".sh")
-  local f=io.open(script,"wb")
-  if not f then return nil end
-  local wrote=f:write("#!/bin/sh\n"..cmd.."\nrm -f "..shell_quote(script).."\n")
-  local closed=f:close()
-  if not wrote or not closed then os.remove(script);return nil end
-  local ok,result=pcall(reaper.ExecProcess,'/bin/sh "'..script:gsub('"','\\"')..'"',-2)
-  if not ok or result==nil then os.remove(script);return nil end
+  script=unix_launch_script(cmd)
+  if not script then return nil end
  end
  return {rs=tmp,cd=code,script=script,deadline=reaper.time_precise()+30}
 end
@@ -1564,7 +1569,11 @@ end
 workflow_adapter_guard=workflow_adapter.guard
 workflow_adapter.load()
 -- Dynamic provider catalog; cached IDs are data, never executable code.
-workflow_adapter.models={job=nil}
+workflow_adapter.models={job=nil,message=""}
+function workflow_adapter.models.report(text,notify)
+ workflow_adapter.models.message=text;update_status=text
+ if notify then reaper.ShowMessageBox(text,SCRIPT_NAME.." – Modelle",0) end
+end
 function workflow_adapter.models.parse(pv,value)
  local source=pv=="google" and value.models or value.data
  assert(type(source)=="table","Die Modellliste konnte nicht gelesen werden.")
@@ -1586,26 +1595,38 @@ function workflow_adapter.models.page(j,token)
  elseif j.provider=="anthropic" then url="https://api.anthropic.com/v1/models?limit=1000"..(token and "&after_id="..enc(token) or "");headers={"x-api-key: "..j.key,"anthropic-version: 2023-06-01"}
  else url="https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000"..(token and "&pageToken="..enc(token) or "");headers={"x-goog-api-key: "..j.key} end
  local output,code=temp_path(".models.json"),temp_path(".models.code")
- j.output=output;j.code=code;j.deadline=reaper.time_precise()+75
+ j.output=output;j.code=code;j.deadline=reaper.time_precise()+30
  if IS_WINDOWS then
-  local script=windows_curl_script(nil,nil,output,code,headers,url,60)
+  local script=windows_curl_script(nil,nil,output,code,headers,url,20);j.script=script
   assert(script and ps_launch(script,true),"Modellabfrage konnte nicht gestartet werden.")
  else
   -- Store the secret header in a private curl config, not in the command line.
-  local config=temp_path(".curl-config")
+  local config=temp_path(".curl-config");j.config=config
   local f=assert(io.open(config,"wb")); for _,h in ipairs(headers) do f:write('header = "'..h:gsub('\\','\\\\'):gsub('"','\\"')..'"\n') end;f:close()
-  local cmd="umask 077; chmod 600 "..shell_quote(config).."; /usr/bin/curl --config "..shell_quote(config).." -sS --connect-timeout 15 --max-time 60 -o "..shell_quote(output).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code..".pending").."; rm -f "..shell_quote(config).."; mv "..shell_quote(code..".pending").." "..shell_quote(code)
-  reaper.ExecProcess("/bin/sh -c "..shell_quote(cmd),-2)
+  local cmd="umask 077; chmod 600 "..shell_quote(config).."; /usr/bin/curl --config "..shell_quote(config).." -sS --connect-timeout 10 --max-time 20 -o "..shell_quote(output).." -w '%{http_code}' "..shell_quote(url).." > "..shell_quote(code..".pending").."; rm -f "..shell_quote(config).."; mv "..shell_quote(code..".pending").." "..shell_quote(code)
+  j.script=assert(unix_launch_script(cmd))
  end
  workflow_adapter.models.job=j
 end
 function workflow_adapter.models.refresh(quiet)
- if busy or workflow_adapter.models.job then return end
+ if busy then
+  if not quiet then workflow_adapter.models.report("Bitte den laufenden Auftrag abwarten.",true) end
+  return
+ end
+ if workflow_adapter.models.job then return end
  local key=quiet and trim(reaper.GetExtState(EXT_SECTION,KEY_NAMES[provider])) or get_key()
- if not key or key=="" then return end
- local j={provider=provider,key=key,rows={},seen={}}
+ if not key or key=="" then
+  workflow_adapter.models.report("Für "..provider_name().." fehlt der API-Key. Im Studio-Menü hinterlegen.",false)
+  return
+ end
+ local j={provider=provider,key=key,rows={},seen={},quiet=quiet}
  local ok,err=pcall(workflow_adapter.models.page,j)
- update_status=ok and "Verfügbare Modelle werden eingelesen …" or tostring(err)
+ if ok then workflow_adapter.models.report("Verfügbare Modelle für "..provider_name().." werden eingelesen …",false)
+ else
+  if j.config then os.remove(j.config) end
+  if j.script then os.remove(j.script) end
+  workflow_adapter.models.report("Modellabfrage konnte nicht gestartet werden. Bitte erneut versuchen.",not quiet)
+ end
 end
 function workflow_adapter.models.poll()
  local j=workflow_adapter.models.job; if not j then return end
@@ -1613,7 +1634,14 @@ function workflow_adapter.models.poll()
  if not status and reaper.time_precise()<j.deadline then return end
  workflow_adapter.models.job=nil
  local raw=read_file(j.output);os.remove(j.code);os.remove(j.output)
- if trim(status or "")~="200" then update_status="Modellabfrage fehlgeschlagen ("..trim(status or "Zeitlimit").."). Bisherige Auswahl bleibt verfügbar.";return end
+ if j.config then os.remove(j.config) end
+ if j.script then os.remove(j.script) end
+ if trim(status or "")~="200" then
+  local code=trim(status or "Zeitlimit")
+  local hint=(code=="401" or code=="403") and " Bitte API-Key und Zugriffsrechte prüfen." or code=="429" and " Bitte später erneut versuchen." or ""
+  workflow_adapter.models.report("Modellabfrage fehlgeschlagen ("..code..")."..hint.." Bisherige Auswahl bleibt verfügbar.",not j.quiet)
+  return
+ end
  local ok,err=pcall(function()
   local page,next_page=workflow_adapter.models.parse(j.provider,decode_engine_json(raw or ""))
   for _,row in ipairs(page) do if not j.seen[row[2]] then j.seen[row[2]]=true;j.rows[#j.rows+1]=row end end
@@ -1622,9 +1650,13 @@ function workflow_adapter.models.poll()
   table.sort(j.rows,function(a,b)return a[1]<b[1] end)
   MODELS[j.provider]=j.rows
   reaper.SetExtState(EXT_SECTION,"ModelCatalogV1-"..j.provider,workflow_adapter.encode(j.rows),true)
-  update_status=tostring(#j.rows).." verfügbare Modelle eingelesen."
+  workflow_adapter.models.report(tostring(#j.rows).." verfügbare Modelle eingelesen.",false)
  end)
- if not ok then update_status="Modellabfrage fehlgeschlagen; bisherige Auswahl bleibt verfügbar." end
+ if not ok then
+  if j.config then os.remove(j.config) end
+  if j.script then os.remove(j.script) end
+  workflow_adapter.models.report("Die Modellantwort konnte nicht gelesen werden. Bisherige Auswahl bleibt verfügbar.",not j.quiet)
+ end
 end
 for _,pv in ipairs({"openai","anthropic","google"}) do
  local raw=reaper.GetExtState(EXT_SECTION,"ModelCatalogV1-"..pv)
@@ -1871,7 +1903,7 @@ if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(compositi
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
-if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if workflow_adapter.models.message and workflow_adapter.models.message~="" then reaper.ImGui_TextWrapped(ctx,workflow_adapter.models.message) end; if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
 if reaper.ImGui_Button(ctx,"Denken: "..REASONING_LABELS[reasoning_mode].." v##reasoning",model_width) and not busy then reaper.ImGui_OpenPopup(ctx,"##reasoning_menu") end
 if reaper.ImGui_BeginPopup(ctx,"##reasoning_menu") then
  for _,choice in ipairs({"low","medium","high","auto"}) do

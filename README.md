@@ -2,7 +2,7 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
-Aktueller Stand: **v1.1.5 · 19.10.2026 · TEST CANDIDATE**.
+Aktueller Stand: **v1.1.6 · 19.10.2026 · TEST CANDIDATE**.
 
 Denkaufwand im Hauptfenster: **Kurz / Mittel / Hoch / Automatisch**, mit **Mittel** als Voreinstellung. Die Auswahl wird dauerhaft gespeichert und gilt für die KI-Aufrufe des Auftrags einschließlich Konzeption und Komposition. Während eines laufenden Auftrags ist sie gesperrt. Automatisch sendet keine Denksteuerung und verwendet die Modellvorgabe.
 
@@ -60,3 +60,11 @@ Der Unix-Download startet jetzt eine vorbereitete .sh-Datei über /bin/sh statt 
 Für die Wiederherstellung ohne Download aus REAPER: Studio schließen, [Composition-Studio-Offline-Install.lua](Composition-Studio-Offline-Install.lua) im Browser herunterladen, in REAPER über die Aktionsliste laden und ausführen. Danach Studio erneut öffnen. Dieser Installer enthält die vollständige Version 1.1.5. Er benötigt weder Netzwerk, externe Prozesse noch ReaImGui und installiert in die bereits registrierte Skriptdatei; vorherige Fassung als .backup.
 
 Erzeugung mit tools/build_offline_installer.py. Tests installieren die enthaltenen Bytes ausgehend von vier bisherigen Versionen, mit ausschließlich GetExtState/SetExtState/ShowMessageBox als verfügbaren REAPER-Aufrufen. Bei Schreibfehlern, fehlgeschlagenem Austausch, beschädigtem Inhalt oder unbekanntem Ziel bleibt die ursprüngliche Datei erhalten.
+
+### Modellabfrage auf macOS 1.1.6
+
+Auch die dynamische Modellliste startet curl jetzt über eine vorbereitete Shell-Datei mit einfachem ExecProcess-Aufruf. Update und Modellabfrage teilen sich denselben Unix-Starter. Fortschritt und Ergebnis sind im Modellmenü sichtbar; ausdrücklich angeforderte Aktualisierungen melden Fehler direkt. Fehlende Schlüssel, Startfehler, Zeitlimit und nicht lesbare Antworten lassen die bisherige Liste erhalten. Temporäre Schlüsseldateien werden auch bei Fehlern entfernt.
+
+Die Modellliste bezieht sich auf den aktuell gewählten Anbieter. Modellmenü öffnen → „Verfügbare Modelle aktualisieren“. Andere Anbieter lassen sich über deren Einträge wählen und anschließend ebenfalls aktualisieren.
+
+Prüfung: tools/test_model_transport.py führt den tatsächlichen Lua-Abfragecode mit curl und einem lokalen HTTP-Testserver aus: alle drei Anbieter, fünf Antwortseiten, Authentifizierungsheader, neue Modellkennungen, Filter, Cache sowie Fehlerfälle. Die äußeren ExecProcess-Argumente bestehen nur aus /bin/sh und einem Dateipfad; kein verschachtelter Shell-Befehl. Echte Anbieterschlüssel werden nicht benötigt; kein praktischer REAPER-Test auf macOS.
