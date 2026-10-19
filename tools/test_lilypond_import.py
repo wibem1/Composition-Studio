@@ -31,16 +31,18 @@ check("full script Lua 5.4 syntax", lambda: assert_true(syntax(source)[0]))
 def startup_smoke():
     r=LuaRuntime(unpack_returned_tuples=True)
     r.execute("""
-    writes={}
+    writes={};project_state={}
     io.open=function(path,mode)
       if mode=="rb" then return nil end
       return {write=function(_,s) writes[path]=s end,close=function() end}
     end
     reaper=setmetatable({
       GetExtState=function() return "" end,
-      GetProjExtState=function() return 0,"" end,
+      GetProjExtState=function(_,_,k) return 1,project_state[k] or "" end,
+      SetProjExtState=function(_,_,k,v) project_state[k]=v end,
+      genGuid=function() return "{test-project}" end,
       GetResourcePath=function() return "memory" end,
-      GetProjectGUID=function() return "test-project" end,
+
       GetOS=function() return "Win64" end,
       EnumProjects=function() return 1 end,
       ImGui_CreateContext=function() return {} end,
@@ -53,7 +55,7 @@ def startup_smoke():
       ImGui_GetContentRegionAvail=function() return 360,600 end,
       ImGui_InputTextMultiline=function(_,_,text) return false,text end,
       defer=function(fn) deferred=fn end
-    },{__index=function() return function() return 0 end end})
+    },{__index=function(_,key) if key=="GetProjectGUID" then return nil end;return function() return 0 end end})
     """)
     r.execute(source)
     assert r.globals().deferred is not None
@@ -245,6 +247,19 @@ os.rename=function(a,b) if a:match("%.pending$") then return nil,"simulated fail
         assert (p/"installed.lua").read_text()=="original"
         assert (p/"installed.lua.backup").read_text()=="original"
 check("update install rename failure restores original",rollback)
+
+def startup_rollback():
+    with tempfile.TemporaryDirectory(dir=root) as d:
+        p=Path(d); old='-- stable original\n';(p/"installed.lua").write_text(old)
+        r,api=update_env(p)
+        r.execute('reaper.ShowMessageBox=function(text) message=text end')
+        fresh='-- @version 9.9.9\nlocal SCRIPT_NAME="Composition Studio"\nerror("startup regression")\n'+'-- padding\n'*150
+        api.complete("200",fresh)
+        r.globals().deferred()
+        assert (p/"installed.lua").read_text()==old
+        assert (p/"installed.lua.failed-update").read_text()==fresh
+        assert 'wiederhergestellt' in r.globals().message
+check("update startup failure restores previous script",startup_rollback)
 
 # Execute the unchanged compiler command through the actual installed LilyPond.
 exe=Path(os.getenv("LILYPOND_EXE", str(Path.home()/"Downloads/lilypond-2.26.0-mingw-x86_64/lilypond-2.26.0/bin/lilypond.exe")))

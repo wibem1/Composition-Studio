@@ -17,7 +17,7 @@ local MODELS={openai={},anthropic={},google={}}
 local busy=false; local update_status=""; local provider="openai";local model="test";local input=""
 local function read_file(p) local f=io.open(p,"rb");if not f then return nil end;local s=f:read("*a");f:close();return s end
 local function write_file(p,s) local f=io.open(p,"wb");if not f then return false end;f:write(s);f:close();return true end
-local reaper={GetExtState=function()return "" end,GetResourcePath=function()return TEST_ROOT end,GetProjectGUID=function()return "TEST-PROJECT" end,RecursiveCreateDirectory=function(p)os.execute("mkdir -p '"..p.."'") end,CountTracks=function() return 1 end,GetTrack=function()return 1 end,GetTrackName=function()return true,"Piano" end,
+local reaper={GetExtState=function()return "" end,GetResourcePath=function()return TEST_ROOT end,genGuid=function()return "{TEST-PROJECT}" end,RecursiveCreateDirectory=function(p)os.execute("mkdir -p '"..p.."'") end,CountTracks=function() return 1 end,GetTrack=function()return 1 end,GetTrackName=function()return true,"Piano" end,
  CountTrackMediaItems=function()return 1 end,GetTrackMediaItem=function()return 1 end,GetItemStateChunk=function()return true,chunk end,
  Master_GetTempo=function()return 120 end,CountTempoTimeSigMarkers=function()return 0 end,
  SetProjExtState=function(_,_,k,v)saved[k]=v end,GetProjExtState=function(_,_,k)return 1,saved[k] or "" end,
@@ -48,6 +48,16 @@ return {a=workflow_adapter,mutate=function()chunk="EXTERNAL" end,original=functi
 ''')
 a=api.a
 data=r.table_from({'request':'Variation','full':r.table_from([r.table_from({'guid':'item1','track':1})]),'music_tracks':r.table_from([r.table_from({'guid':'track1','track':1})])})
+assert api.stored() is None
+first_path=a.history_path()
+assert first_path==a.history_path() and 'TEST-PROJECT' in first_path
+assert a.load() is True
+# Simulate a history-storage API failure: startup must remain recoverable.
+original_path=a.history_path
+a.history_path=r.eval('function() error("storage unavailable") end')
+assert a.load() is False and a.history_error is True
+a.history_path=original_path
+assert a.load() is True and a.history_error is False
 a.offer('engine_json','{"title":"Test"}',data)
 assert api.writes()==0 and a.pending.state=='ready'
 assert 'SECRET' not in api.stored() and 'ORIGINAL' in api.stored()

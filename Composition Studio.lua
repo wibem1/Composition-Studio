@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.0
+-- @version 1.1.1
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.0"
+local VERSION="1.1.1"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -252,7 +252,22 @@ local function complete_update(status,fresh)
  update_status="Update auf "..rv.." installiert. Neustart …"
  restarting=true; open=false; busy=false
  reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"1",true)
- reaper.defer(function() local ok,e=pcall(dofile,SCRIPT_PATH); if not ok then reaper.ShowMessageBox(tostring(e),SCRIPT_NAME,0) end end)
+ reaper.defer(function()
+  local ok,e=pcall(dofile,SCRIPT_PATH)
+  if not ok then
+   -- Keep the failed build for diagnosis and restore the verified original bytes.
+   local failed=SCRIPT_PATH..".failed-update"
+   os.remove(failed)
+   local restored=false
+   if write_file(staged,previous) and read_file(staged)==previous and os.rename(SCRIPT_PATH,failed) then
+    restored=os.rename(staged,SCRIPT_PATH) and true or false
+    if not restored then os.rename(failed,SCRIPT_PATH) end
+   end
+   reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true)
+   reaper.ShowMessageBox("Die neue Version konnte nicht starten: "..tostring(e)..
+    (restored and "\nDie vorherige Version wurde wiederhergestellt. Bitte das Skript erneut starten." or "\nSicherung: "..SCRIPT_PATH..".backup"),SCRIPT_NAME,0)
+  end
+ end)
 end
 
 local function poll_update()
@@ -1340,7 +1355,15 @@ end
 function workflow_adapter.history_path()
  local dir=reaper.GetResourcePath().."/CompositionStudioResults"
  reaper.RecursiveCreateDirectory(dir,0)
- local guid=reaper.GetProjectGUID(0):gsub("[^%w%-]","")
+ local _,identity=reaper.GetProjExtState(0,EXT_SECTION,"WorkflowProjectIdV1")
+ if not identity or identity=="" then
+  identity=reaper.genGuid("")
+  assert(type(identity)=="string" and identity~="","Projektbindung konnte nicht erzeugt werden.")
+  reaper.SetProjExtState(0,EXT_SECTION,"WorkflowProjectIdV1",identity)
+  local _,stored=reaper.GetProjExtState(0,EXT_SECTION,"WorkflowProjectIdV1")
+  assert(stored==identity,"Projektbindung konnte nicht gespeichert werden.")
+ end
+ local guid=identity:gsub("[^%w%-]","")
  assert(guid~="","Projektbindung fehlt")
  return dir.."/Workflow-"..guid..".json"
 end
@@ -1358,7 +1381,7 @@ function workflow_adapter.save()
  local _,actual=reaper.GetProjExtState(0,EXT_SECTION,"WorkflowHistoryV1")
  assert(actual==raw and read_file(path)==raw,"Der Arbeitsstand konnte nicht gesichert werden.")
 end
-function workflow_adapter.load()
+function workflow_adapter.load_unchecked()
  workflow_adapter.history_error=false
  workflow_adapter.pending=nil; workflow_adapter.analysis=nil; workflow_adapter.records={}
  local path=workflow_adapter.history_path()
@@ -1374,6 +1397,15 @@ function workflow_adapter.load()
    else update_status="Arbeitsverlauf konnte nicht gelesen werden; gespeicherte Daten bleiben erhalten.";workflow_adapter.history_error=true end
   end
  end
+end
+function workflow_adapter.load()
+ local ok,err=pcall(workflow_adapter.load_unchecked)
+ if not ok then
+  workflow_adapter.history_error=true
+  workflow_adapter.pending=nil;workflow_adapter.analysis=nil;workflow_adapter.records={}
+  update_status="Arbeitsverlauf nicht verfügbar: "..tostring(err)
+ end
+ return ok
 end
 function workflow_adapter.offer(stage,text,data)
  diag_set(stage=="analysis" and "analysis_answer" or "composition_answer",text)

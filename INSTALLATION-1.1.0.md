@@ -14,3 +14,9 @@ Neue Bedienung:
 Fortsetzungen verwenden wie bisher LilyPond unter Windows. Dessen Pfad im Studio-Menü einstellen. Taktwechsel, überspannende Noten oder Sustain und uneindeutige Spurzuordnung im Übergang werden abgelehnt. Änderungen am Original nach dem KI-Auftrag blockieren das Anwenden. Erneut einlesen bzw. einen neuen Auftrag starten.
 
 Technisch geprüft mit Lua 5.4 und simulierten REAPER-Schnittstellen. Der praktische Test in REAPER und das Abhören stehen aus. Die Fassung wird über den bestehenden Online-Updater ausgeliefert.
+
+## Korrektur 1.1.1
+
+Version 1.1.1 behebt den Startabbruch durch den ungültigen Aufruf GetProjectGUID. Wenn die installierte 1.1.0 nicht startet, Composition Studio Repair.lua einmal in REAPER über Aktionen → Aktionsliste anzeigen → ReaScript: Laden auswählen und ausführen. Danach Composition Studio öffnen und Studio-Menü → Update ausführen. Das Reparaturskript stellt ausschließlich die vorhandene Skriptsicherung wieder her und bewahrt die fehlerhafte Datei als .failed-1.1.0.
+
+Die neue Projektkennung für den Verlauf wird mit dem REAPER-Projekt gespeichert. Das Projekt bitte speichern, damit diese Zuordnung nach dem Schließen erhalten bleibt.
