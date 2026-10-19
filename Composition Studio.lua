@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.1
+-- @version 1.1.2
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.1"
+local VERSION="1.1.2"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -1769,11 +1769,30 @@ local function info_text()
  "\n\nModelllisten werden direkt beim Anbieter abgefragt. Ausdruck wird als Notendauer, Velocity, Tempo und MIDI-Controller übernommen; die Wirkung hängt vom Instrument ab."..
  "\n\nTechnische Tests verwenden simulierte REAPER-Schnittstellen. Der praktische Test dieser Version steht aus."
 end
+local function fit_label(text,width)
+ text=tostring(text or "")
+ local function measured(value) return reaper.ImGui_CalcTextSize(ctx,value) end
+ if measured(text)<=width then return text end
+ local chars={};for ch in text:gmatch("[\0-\127\194-\244][\128-\191]*") do chars[#chars+1]=ch end
+ while #chars>0 and measured(table.concat(chars).."…")>width do table.remove(chars) end
+ return table.concat(chars).."…"
+end
+local function draw_workflow_status()
+ local width=reaper.ImGui_GetContentRegionAvail(ctx)
+ if workflow_adapter.pending then
+  reaper.ImGui_TextWrapped(ctx,"Vorschlag: "..(workflow_adapter.labels[workflow_adapter.pending.stage] or "Musik").." · "..(workflow_adapter.states[workflow_adapter.pending.state] or ""))
+  if reaper.ImGui_Button(ctx,"Änderungen anwenden",width) then workflow_adapter.apply() end
+ end
+ if workflow_adapter.analysis and reaper.ImGui_Button(ctx,"Überarbeiten##review",width) then workflow_adapter.review() end
+ if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end
+end
 local function draw_history()
  if history_mode then
-  reaper.ImGui_Text(ctx,"Gespeicherte Ergebnisse (ohne neuen KI-Aufruf)")
+  reaper.ImGui_TextWrapped(ctx,"Gespeicherte Ergebnisse (ohne neuen KI-Aufruf)")
   for i=#workflow_adapter.records,1,-1 do local r=workflow_adapter.records[i]
-   if reaper.ImGui_Button(ctx,(r.created or "").." · "..(workflow_adapter.labels[r.stage] or r.stage).." · "..(workflow_adapter.states[r.state] or r.state).."##result"..i) then
+   local width=reaper.ImGui_GetContentRegionAvail(ctx)
+   local label=(r.created or "").." · "..(workflow_adapter.labels[r.stage] or r.stage).." · "..(workflow_adapter.states[r.state] or r.state)
+   if reaper.ImGui_Button(ctx,fit_label(label,math.max(1,width-20)).."##result"..i,width) then
     if r.stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
     add("Arbeitsstand",workflow_core.readable(r.raw_response)); history_mode=false
    end
@@ -1782,7 +1801,7 @@ local function draw_history()
  if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project); workflow_adapter.history_error=false; workflow_adapter.load() end end
-local function loop() workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio v"..VERSION); reaper.ImGui_SameLine(ctx)
+local function loop() workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); reaper.ImGui_SetNextWindowSizeConstraints(ctx,360,480,10000,10000); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio"); reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
@@ -1790,25 +1809,58 @@ reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(composition_mode=="concept" and " ✓" or "")) then composition_mode="concept"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Konzeption + Komposition (2 KI-Aufrufe)." end
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
+reaper.ImGui_Separator(ctx)
+for _,count in ipairs({0,2,3,4}) do
+ local label=count==0 and "Fortsetzung: Schluss erhalten" or "Fortsetzung: "..count.." Schlusstakte neu gestalten"
+ if reaper.ImGui_MenuItem(ctx,label,nil,workflow_adapter.transition_bars==count,not busy) then workflow_adapter.transition_bars=count end
+end
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
-if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; if reaper.ImGui_Button(ctx,model_label().." v") then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end; reaper.ImGui_SameLine(ctx); reaper.ImGui_Text(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks)); reaper.ImGui_Text(ctx,"Denkaufwand:"); reaper.ImGui_SameLine(ctx)
-if reaper.ImGui_Button(ctx,REASONING_LABELS[reasoning_mode].." v##reasoning") and not busy then reaper.ImGui_OpenPopup(ctx,"##reasoning_menu") end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
+if reaper.ImGui_Button(ctx,"Denken: "..REASONING_LABELS[reasoning_mode].." v##reasoning",model_width) and not busy then reaper.ImGui_OpenPopup(ctx,"##reasoning_menu") end
 if reaper.ImGui_BeginPopup(ctx,"##reasoning_menu") then
  for _,choice in ipairs({"low","medium","high","auto"}) do
   if reaper.ImGui_MenuItem(ctx,REASONING_LABELS[choice],nil,reasoning_mode==choice,not busy) then set_reasoning_mode(choice) end
  end
  reaper.ImGui_TextWrapped(ctx,"Automatisch verwendet die Modellvorgabe. Die Wirkung der Stufen hängt vom Modell ab.")
+ if provider=="google" and model:match("^gemini%-2%.5") then reaper.ImGui_TextWrapped(ctx,"Gemini 2.5: Kurz / Mittel / Hoch entsprechen Denkbudgets von 2048 / 8192 / 24576 Tokens.") end
  reaper.ImGui_EndPopup(ctx)
 end
-if provider=="google" and model:match("^gemini%-2%.5") then reaper.ImGui_TextWrapped(ctx,"Altmodell: API-Zugang nur für bisherige Nutzer. Kurz / Mittel / Hoch entsprechen Denkbudgets von 2048 / 8192 / 24576 Tokens, keinen festen Denkstufen.") end
-if reaper.ImGui_Button(ctx,"Übergang: "..(workflow_adapter.transition_bars==0 and "Schluss erhalten" or tostring(workflow_adapter.transition_bars).." Schlusstakte")) then
- local next_count={[0]=2,[2]=3,[3]=4,[4]=0}; workflow_adapter.transition_bars=next_count[workflow_adapter.transition_bars]
+
+-- Keep variable-height messages inside the scrolling conversation.
+reaper.ImGui_Separator(ctx)
+local w,h=reaper.ImGui_GetContentRegionAvail(ctx)
+local scale=font_size/14
+local _,spacing=reaper.ImGui_GetStyleVar(ctx,reaper.ImGui_StyleVar_ItemSpacing())
+spacing=spacing or 4
+local bh=math.max(reaper.ImGui_GetFrameHeight(ctx),math.floor(34*scale+0.5))
+local ih=math.min(math.floor(112*scale+0.5),math.max(bh*2,math.floor(h*0.32)))
+local ch=math.max(1,h-ih-bh*2-spacing*5-2)
+local child_visible=reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders())
+if child_visible then
+ reaper.ImGui_TextWrapped(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks))
+ reaper.ImGui_TextWrapped(ctx,"Auftrag: "..costs.amount(costs.order).." · Gesamt: "..costs.amount(costs.total))
+ if busy then reaper.ImGui_TextWrapped(ctx,job and (job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …") or "KI arbeitet …") end
+ draw_workflow_status()
+ draw_history()
+ reaper.ImGui_EndChild(ctx)
 end
-if workflow_adapter.pending then
- reaper.ImGui_TextWrapped(ctx,"Vorschlag: "..(workflow_adapter.labels[workflow_adapter.pending.stage] or "Musik").." · "..(workflow_adapter.states[workflow_adapter.pending.state] or ""))
- if reaper.ImGui_Button(ctx,"Änderungen anwenden") then workflow_adapter.apply() end
+local input_flags=0
+if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end
+local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags)
+if changed then input=v end
+input=text_context_menu("##request_context",input,true)
+local gap=math.max(4,math.floor(6*scale))
+local bw=math.max(1,(w-gap)/2)
+if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end
+reaper.ImGui_SameLine(ctx,0,gap)
+if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1;info_visible=false;history_mode=true end
+if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1;info_visible=false;history_mode=false end
+reaper.ImGui_SameLine(ctx,0,gap)
+if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end
+pop_font(pushed)
+reaper.ImGui_End(ctx)
 end
-if workflow_adapter.analysis and reaper.ImGui_Button(ctx,"Überarbeitung aus Analyse erstellen") then workflow_adapter.review() end
-reaper.ImGui_TextWrapped(ctx,"Auftrag: "..costs.amount(costs.order)); reaper.ImGui_TextWrapped(ctx,"Gesamt: "..costs.amount(costs.total)); if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end; if busy and job then local pushed_color=false; if type(reaper.ImGui_PushStyleColor)=="function" and type(reaper.ImGui_Col_Text)=="function" then reaper.ImGui_PushStyleColor(ctx,reaper.ImGui_Col_Text(),0x35C759FF); pushed_color=true end; reaper.ImGui_Text(ctx,job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …" or "KI arbeitet …"); if pushed_color then reaper.ImGui_PopStyleColor(ctx) end end; reaper.ImGui_Separator(ctx); local w,h=reaper.ImGui_GetContentRegionAvail(ctx); local scale=font_size/14; local ih=math.floor(112*scale+0.5); local bh=math.floor(34*scale+0.5); local ch=math.max(120,h-ih-bh*2-math.floor(84*scale+0.5)); if reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders()) then draw_history(); reaper.ImGui_EndChild(ctx) end; reaper.ImGui_Spacing(ctx); local input_flags=0; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local changed,v=reaper.ImGui_InputTextMultiline(ctx,"##request",input,w,ih,input_flags); if changed then input=v end; input=text_context_menu("##request_context",input,true); reaper.ImGui_Spacing(ctx); local gap=math.max(4,math.floor(6*scale)); local bw=math.max(80,(w-gap)/2); if reaper.ImGui_Button(ctx,busy and "Warten…" or "Senden",bw,bh) and not busy then submit() end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Verlauf",bw,bh) then chat_start=1; info_visible=false; history_mode=true end; if reaper.ImGui_Button(ctx,"Chat leeren",bw,bh) then chat_start=#history+1; info_visible=false; history_mode=false end; reaper.ImGui_SameLine(ctx,0,gap); if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end; pop_font(pushed); reaper.ImGui_End(ctx) end; if open then reaper.defer(loop) elseif not restarting then remember_closed() end end
+if open then reaper.defer(loop) elseif not restarting then remember_closed() end
+end
 loop()
