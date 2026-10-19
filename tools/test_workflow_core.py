@@ -33,7 +33,7 @@ local function initialize_halion_project()return 0,0 end
 local TITLE_KEY="title"
 local function trim(x)return x end
 local function get_key()return "SECRET" end
-local function composition_prompt()return "HOST FORMAT" end
+local function composition_prompt(task)return "HOST FORMAT "..task end
 local function track_context_items()return {{guid="item1",track=1,notes={}}} end
 local launched=nil
 local function launch(stage,prompt,key,data)launched={stage=stage,prompt=prompt,key=key,data=data} end
@@ -74,6 +74,11 @@ items=r.table_from([r.table_from({'take':1,'notes':r.table_from([r.table_from({'
 try:a.transition(items,32,2);raise AssertionError('Crossing note accepted')
 except Exception as e:assert 'überspannt' in str(e)
 api.set_busy(False);a.load();a.pending=a.records[1];api.original();a.apply();assert api.writes()==1
+# A typed review request reuses the latest persisted analysis after reload.
+api.set_busy(False);a.load();api.original()
+a.review('Überarbeite anhand der letzten Analyse, behalte die schlichte Begleitung')
+assert 'behalte die schlichte Begleitung' in api.launch().prompt and api.writes()==1
+
 print('PASS REAPER: preview without write, exact original guard, durable raw/source, apply once, reload, analysis→revision, model call only on review, transition boundary')
 
 # Catalog selection is discovered from provider data; future model IDs are accepted.

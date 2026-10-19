@@ -2,7 +2,7 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
-Aktueller Stand: **v1.1.2 · 19.10.2026 · TEST CANDIDATE**.
+Aktueller Stand: **v1.1.3 · 19.10.2026 · TEST CANDIDATE**.
 
 Denkaufwand im Hauptfenster: **Kurz / Mittel / Hoch / Automatisch**, mit **Mittel** als Voreinstellung. Die Auswahl wird dauerhaft gespeichert und gilt für die KI-Aufrufe des Auftrags einschließlich Konzeption und Komposition. Während eines laufenden Auftrags ist sie gesperrt. Automatisch sendet keine Denksteuerung und verwendet die Modellvorgabe.
 
@@ -27,3 +27,20 @@ Falls 1.1.0 nicht mehr startet: [Composition Studio Repair.lua](Composition%20St
 Kompakter Aufbau mit Modell- und Denkauswahl über dem Chat. Eingabefeld und die vier unteren Schaltflächen behalten ihren Platz, auch bei großer Schrift. Lange Modellnamen werden passend gekürzt; Meldungen, Kosten, gespeicherte Ergebnisse und die Aktionen Anwenden/Überarbeiten liegen im scrollbaren Gesprächsbereich. Die Übergangsoption steht im Studio-Menü.
 
 Prüfung: tools/test_layout.py führt den ausgelieferten Lua-Oberflächencode gegen Dear ImGui aus (48 Kombinationen aus Fenstergröße, Schriftgröße und Ergebniszustand). REAPER-spezifische Aufrufe werden ersetzt; dies ist kein Test in einem laufenden REAPER.
+
+### REAPER: Textsteuerung 1.1.3
+
+REAPER behält seine eigenständige, schmale Oberfläche. Musikalische Funktionen werden im vorhandenen Auftragsfeld formuliert. Keine zusätzlichen Funktionsseiten, kein größeres Fenster, keine Übergangs-Menüpunkte und kein gesonderter Überarbeiten-Button. Modell und Denkaufwand bleiben direkt auswählbar; Einstellungen, Export, Diagnose und Update stehen im Studio-Menü. Der gemeinsame Workflow-Kern bleibt unverändert.
+
+Beispiele:
+
+- „Verlängere um 16 Takte.“ Der bisherige Schluss bleibt erhalten.
+- „Verlängere um 16 Takte und gestalte die letzten zwei Takte neu.“ Zwei Übergangstakte plus 16 neue Takte.
+- „Ergänze eine weitere Cellostimme.“ Die ausgewählten Items oder Spuren liefern den Kontext.
+- „Analysiere die Komposition.“
+- „Überarbeite anhand der letzten Analyse und behalte die schlichte Begleitung.“ Verwendet die zuletzt geladene oder gespeicherte Analyse; die Originalprüfung bleibt wirksam.
+- „Interpretiere die Auswahl für SWAM.“
+
+Andere freie Formulierungen werden vom KI-Controller eingeordnet. Unklare Übergangslängen werden nachgefragt. Die technischen Grenzen für Übergänge (2/3/4 Takte und keine überspannten Noten) bleiben bestehen. Erzeugte Musik wird als Vorschlag gesichert und erst über „Änderungen anwenden“ übernommen. Die normale Updatefunktion installiert 1.1.3.
+
+Geprüft: echte Lua-Parser und Auftrags-/Antwortpfade ohne Anbieteraufruf, Analyse nach erneutem Laden, Vorschlagsablauf, 48 Größen-/Schriftkombinationen gegen Dear ImGui. Kein praktischer Test in einem laufenden REAPER.

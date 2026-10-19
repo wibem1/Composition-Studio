@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.2
+-- @version 1.1.3
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.2"
+local VERSION="1.1.3"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -486,9 +486,12 @@ ACTION|COPY_ITEM|ITEM_GUID|DELTA_QN|Beschreibung
 ACTION|RENAME_TRACK|TRACK_GUID|NEUER_NAME|Beschreibung
 ACTION|INIT_HALION|-|-|Beschreibung
 NEED_ANALYSIS|Begründung
+NEED_REVISE|Begründung
+NEED_CONTINUE|NEUE_TAKTE|UEBERGANGSTAKTE|Begründung
+NEED_SWAM|Begründung
 NEED_MUSIC|Begründung
 NEED_NEW|Begründung
-Nur angebotene IDs verwenden. Wenn der Benutzer HALion Sonic aus vorhandenen Program Changes initialisieren, vorbereiten oder die Instrumentierung übernehmen lassen will, verwende ACTION|INIT_HALION|-|-|Beschreibung. Diese Aktion setzt die HALion-Programmparameter einmalig und erzeugt keine dauerhaften MIDI-Links. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item das Ziel eines musikalischen Auftrags sein. TIME_SELECTION ist der markierte Zielbereich. Eine vollständige Neukomposition benötigt weder ein vorhandenes MIDI-Item noch eine ausgewählte Spur. Vorhandene REAPER-Auswahl und TIME_SELECTION sind nur Kontext, solange der Benutzer nicht sprachlich auf vorhandenes Material, Auswahl, Spur, Item, markierten Bereich, Fortsetzung oder Bearbeitung Bezug nimmt. Ein klarer eigenständiger Auftrag wie 'Erstelle ein Stück für Violine und Gitarre' ist NEED_NEW. Für Analyse des Notenmaterials: NEED_ANALYSIS. Für Komposition, Variation, Fortsetzung, Ergänzung oder musikalische Bearbeitung mit neuem MIDI: NEED_MUSIC. Für normale Unterhaltung: CHAT.]]
+Nur angebotene IDs verwenden. Wenn der Benutzer HALion Sonic aus vorhandenen Program Changes initialisieren, vorbereiten oder die Instrumentierung übernehmen lassen will, verwende ACTION|INIT_HALION|-|-|Beschreibung. Diese Aktion setzt die HALion-Programmparameter einmalig und erzeugt keine dauerhaften MIDI-Links. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item das Ziel eines musikalischen Auftrags sein. TIME_SELECTION ist der markierte Zielbereich. Eine vollständige Neukomposition benötigt weder ein vorhandenes MIDI-Item noch eine ausgewählte Spur. Vorhandene REAPER-Auswahl und TIME_SELECTION sind nur Kontext, solange der Benutzer nicht sprachlich auf vorhandenes Material, Auswahl, Spur, Item, markierten Bereich, Fortsetzung oder Bearbeitung Bezug nimmt. Ein klarer eigenständiger Auftrag wie 'Erstelle ein Stück für Violine und Gitarre' ist NEED_NEW. Für Analyse des Notenmaterials: NEED_ANALYSIS. Für Komposition, Variation, Fortsetzung, Ergänzung oder musikalische Bearbeitung mit neuem MIDI: NEED_MUSIC. Für eine Verlängerung mit bestimmter Länge: NEED_CONTINUE, NEUE_TAKTE ist eine ganze Zahl 1 bis 128. UEBERGANGSTAKTE ist 0 (Schluss erhalten) oder ausdrücklich freigegebene 2, 3 oder 4 Schlusstakte. Übergangstakte kommen zusätzlich zu den neuen Takten hinzu. Bei gewünschter Umgestaltung des Schlusses ohne eindeutige Anzahl: ASK, keine Anzahl erfinden. Für Überarbeitung anhand der letzten gespeicherten Analyse: NEED_REVISE. Für eine zusätzliche Stimme: NEED_MUSIC; vorhandene Stimmen bleiben erhalten, soweit ihre Änderung nicht verlangt ist. Für SWAM-Interpretation: NEED_SWAM. Für normale Unterhaltung: CHAT.]]
 local function parse_action(line,items) line=trim(line or ""); local typ,a,b,desc=line:match("^ACTION|([^|]+)|([^|]+)|([^|]+)|(.+)$"); if not typ then return nil,"Ungültiger ACTION-Aufruf." end; local bi,bt={},{}; for _,it in ipairs(items) do bi[it.guid]=it; bt[it.track_guid]=it.track end; for _,t in ipairs(selected_tracks()) do bt[t.guid]=t.track end; if typ=="INIT_HALION" then return {kind=typ,desc=desc} elseif typ=="TRANSPOSE" then local n=tonumber(b); if not bi[a] or not n or n~=math.floor(n) or n< -127 or n>127 then return nil,"Ungültige Transposition." end; return {kind=typ,item=bi[a],n=n,desc=desc} elseif typ=="MOVE_ITEM" or typ=="COPY_ITEM" then local q=tonumber(b); if not bi[a] or not q then return nil,"Ungültige Item-Verschiebung." end; return {kind=typ,item=bi[a],q=q,desc=desc} elseif typ=="RENAME_TRACK" then if not bt[a] or trim(b)=="" then return nil,"Ungültige Spurbenennung." end; return {kind=typ,track=bt[a],name=trim(b),desc=desc} end; return nil,"Diese Aktion ist nicht freigegeben." end
 local function execute_action(a) reaper.Undo_BeginBlock2(0); local ok,err=xpcall(function() if a.kind=="INIT_HALION" then local tr,sl=initialize_halion_project(); a.desc=string.format("HALion Sonic initialisiert: %d Instanzspur(en), %d Slot(s)",tr,sl); diag_set("halion_result",a.desc) elseif a.kind=="TRANSPOSE" then local take=a.item.take; local _,nc=reaper.MIDI_CountEvts(take); for i=0,(nc or 0)-1 do local yes,sel,mut,s,e,ch,p,v=reaper.MIDI_GetNote(take,i); if yes and not mut then local np=p+a.n; if np<0 or np>127 then error("Transposition würde den MIDI-Bereich verlassen.") end; reaper.MIDI_SetNote(take,i,sel,mut,s,e,ch,np,v,true) end end; reaper.MIDI_Sort(take) elseif a.kind=="MOVE_ITEM" then local pos=reaper.GetMediaItemInfo_Value(a.item.item,"D_POSITION"); local qn=reaper.TimeMap2_timeToQN(0,pos)+a.q; if qn<0 then error("Item würde vor Projektbeginn liegen.") end; reaper.SetMediaItemInfo_Value(a.item.item,"D_POSITION",reaper.TimeMap2_QNToTime(0,qn)) elseif a.kind=="COPY_ITEM" then local src=a.item.item; local okc,chunk=reaper.GetItemStateChunk(src,"",false); if not okc then error("Item konnte nicht gelesen werden.") end; local ni=reaper.AddMediaItemToTrack(a.item.track); if not reaper.SetItemStateChunk(ni,chunk,false) then error("Item konnte nicht kopiert werden.") end; local qn=reaper.TimeMap2_timeToQN(0,reaper.GetMediaItemInfo_Value(src,"D_POSITION"))+a.q; if qn<0 then error("Kopie würde vor Projektbeginn liegen.") end; reaper.SetMediaItemInfo_Value(ni,"D_POSITION",reaper.TimeMap2_QNToTime(0,qn)); reaper.SetMediaItemSelected(ni,true) elseif a.kind=="RENAME_TRACK" then reaper.GetSetMediaTrackInfo_String(a.track,"P_NAME",a.name,true) end end,debug.traceback); if not ok then reaper.Undo_EndBlock2(0,"Composition Studio – fehlgeschlagen",-1); reaper.Undo_DoUndo2(0); return nil,err end; reaper.UpdateArrange(); reaper.Undo_EndBlock2(0,"Composition Studio – "..a.kind,-1); return true end
 local function parse_notes(text) local notes={}; for t in (text or ""):gmatch("[^;]+") do local a,b,c,d,e=t:match("^%s*([%d%.%-]+),([%d%.%-]+),(%d+),(%d+),(%d+)%s*$"); a,b,c,d,e=tonumber(a),tonumber(b),tonumber(c),tonumber(d),tonumber(e); if not(a and b and c and d and e) or a<0 or b<=0 or c>127 or d<1 or d>127 or e>15 then return nil end; notes[#notes+1]={start_qn=a,duration_qn=b,pitch=c,velocity=d,channel=e} end; return #notes>0 and notes or nil end
@@ -523,7 +526,7 @@ local function composition_prompt(request,items,tracks,is_new)
  if is_new then
   return [[Komponiere jetzt das verlangte Stück vollständig. Erzeuge die Musik selbst – keinen Entwurf, keinen Formplan, kein Konzept, keine Klangbeschreibung und keine Erläuterung darüber, wie das Stück später komponiert werden könnte. Triff die musikalischen Entscheidungen unmittelbar in der Komposition: konkrete Stimmen, Tonhöhen, Dauern, Rhythmus, Harmonik, Artikulation, Dynamik und Verlauf. Die Komposition muss so vollständig und eindeutig notiert sein, dass eine nachfolgende technische Instanz sie ohne eigene musikalische Entscheidungen lediglich übertragen kann. Gib der fertigen Komposition einen kurzen Werktitel und, soweit musikalisch bestimmbar, Tonart und Tempo an. Denke nicht an MIDI-Codierung, QN-Werte, CS-Zeilen oder das technische Zielformat. Keine Analyse und keine Beschreibung der Arbeitsweise.]].."\n\nAUFTRAG:\n"..request
  end
- return [[Du komponierst Musik in Composition Studio. Nutze das konkret übergebene vorhandene Material als musikalischen Kontext und erfülle den freien Auftrag eigenständig; füge keine unnötigen Regeln hinzu. TIME_SELECTION ist nur bei ausdrücklichem Bezug auf den markierten Bereich ein Zielbereich. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item direkt Ziel sein. Jedes neu erzeugte MIDI-Item MUSS einen passenden General-MIDI-Program-Change (0-127) erhalten.
+ return [[Du komponierst Musik in Composition Studio. Nutze das konkret übergebene vorhandene Material als musikalischen Kontext und erfülle den freien Auftrag eigenständig; füge keine unnötigen Regeln hinzu. Bei einer reinen Ergänzung einer weiteren Stimme bleiben alle vorhandenen Stimmen unverändert: erzeuge die zusätzliche Stimme mit CS|new und kennzeichne vorhandene Items mit CS|unchanged. TIME_SELECTION ist nur bei ausdrücklichem Bezug auf den markierten Bereich ein Zielbereich. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item direkt Ziel sein. Jedes neu erzeugte MIDI-Item MUSS einen passenden General-MIDI-Program-Change (0-127) erhalten.
 Antworte ausschließlich:
 CS|unchanged|SOURCE_GUID
 CS|target|SOURCE_GUID|NAME|PROGRAM|startQN,durationQN,pitch,velocity,channel;...
@@ -927,12 +930,44 @@ local function midi_score(src)
 end
 
 -- A continuation is a new passage appended after the latest selected MIDI item.
+local function request_words(request)
+ local r=tostring(request or ""):lower():gsub("Ä","ä"):gsub("Ö","ö"):gsub("Ü","ü")
+ r=r:gsub("ä","ae"):gsub("ö","oe"):gsub("ü","ue"):gsub("ß","ss"):gsub("%s+"," ")
+ for word,n in pairs({ein=1,einen=1,eine=1,zwei=2,drei=3,vier=4,fuenf=5,acht=8,sechzehn=16}) do
+  r=r:gsub("%f[%a]"..word.."%f[%A]",tostring(n))
+ end
+ return r
+end
 local function continuation_bars(request)
- local r=tostring(request or ""):lower():gsub("%s+"," ")
- if not (r:find("weitere",1,true) or r:find("fortsetz",1,true) or r:find("anhäng",1,true)) then return nil end
- local n=tonumber(r:match("(%d+)%s*takt"))
+ local r=request_words(request)
+ if not (r:find("verlaenger",1,true) or r:find("fortsetz",1,true) or r:find("fort%s+um") or r:find("setze.-fort") or r:find("anhaeng",1,true) or r:find("haenge.-an") or r:find("%d+%s+weiteren?%s+takt")) then return nil end
+ local n=tonumber(r:match("um%s+(%d+)%s+takt") or r:match("(%d+)%s+weiteren?%s+takt"))
+ if not n then
+  local counts={};for value in r:gmatch("(%d+)%s+takt") do counts[#counts+1]=tonumber(value) end
+  if #counts==1 then n=counts[1] end
+ end
  if n and n>=1 and n<=128 then return n end
  return nil
+end
+local function request_transition(request)
+ local r=request_words(request)
+ local count=tonumber(r:match("(%d+)%s+uebergangstakt") or r:match("(%d+)%s+schlusstakte?%s+als%s+uebergang") or r:match("(%d+)%s+takte?%s+als%s+uebergang"))
+ if not count then
+  for clause in r:gmatch("[^,;%.]+") do
+   local n=clause:match("letzten%s+(%d+)%s+takt") or clause:match("(%d+)%s+schlusstakt")
+   if n and (clause:find("gestalt",1,true) or clause:find("ueberarbeit",1,true) or clause:find("ersetz",1,true) or clause:find("aender",1,true)) then count=tonumber(n);break end
+  end
+ end
+ local retain=r:find("schluss%s+erhalten") or r:find("schluss%s+unveraendert") or r:find("ohne%s+uebergang") or r:find("schluss.-nicht%s+veraender")
+ if retain and count and count>0 then return nil,"Soll der Schluss erhalten bleiben oder neu gestaltet werden?" end
+ if count then
+  if count~=2 and count~=3 and count~=4 then return nil,"Für den Übergang bitte 2, 3 oder 4 Schlusstakte angeben." end
+  return count
+ end
+ if not retain and (r:find("uebergang",1,true) or r:find("schluss.-neu%s+gestalt")) then
+  return nil,"Wie viele Schlusstakte darf ich für den Übergang neu gestalten: 2, 3 oder 4?"
+ end
+ return 0
 end
 local function compact_music_excerpt(items,endpoint)
  local first=math.max(0,endpoint-32)
@@ -1330,7 +1365,7 @@ AUFTRAG:
 ]]..request
 end
 -- Host adapter: source binding and durable, reloadable proposals. No AI keys in records.
-local workflow_adapter={labels={engine_json="Komposition",composition="Überarbeitung",analysis="Analyse",lily_continuation="Fortsetzung",lily_composition="Komposition",swam_translation="SWAM-Interpretation"},states={ready="Vorschlag",applied="Übernommen",draft="Analyse",invalid="Fehlerhafte Antwort"},records={},pending=nil,committing=false,analysis=nil,transition_bars=0}
+local workflow_adapter={labels={engine_json="Komposition",composition="Überarbeitung",analysis="Analyse",lily_continuation="Fortsetzung",lily_composition="Komposition",swam_translation="SWAM-Interpretation"},states={ready="Vorschlag",applied="Übernommen",draft="Analyse",invalid="Fehlerhafte Antwort"},records={},pending=nil,committing=false,analysis=nil}
 function workflow_adapter.encode(v)
  local kind=type(v)
  if kind=="nil" then return "null" elseif kind=="boolean" or kind=="number" then return tostring(v)
@@ -1424,7 +1459,7 @@ function workflow_adapter.offer(stage,text,data)
  workflow_adapter.records[#workflow_adapter.records+1]=r
  workflow_adapter.save()
  if stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
- update_status=stage=="analysis" and "Analyse gespeichert. Modell wählen und Überarbeitung aus Analyse erstellen." or "Vorschlag gespeichert. Mit Änderungen anwenden übernehmen."
+ update_status=stage=="analysis" and "Analyse gespeichert. Zur Umsetzung zum Beispiel eingeben: Überarbeite anhand dieser Analyse." or "Vorschlag gespeichert. Mit Änderungen anwenden übernehmen."
  add("KI",stage=="analysis" and workflow_core.readable(text) or update_status)
  busy=false
 end
@@ -1488,8 +1523,13 @@ function workflow_adapter.apply()
  end)
  if not ok then update_status=tostring(err); add("KI",update_status) end
 end
-function workflow_adapter.review()
- local r=workflow_adapter.analysis; if not r or busy then return end
+function workflow_adapter.review(task)
+ if busy then return end
+ local r=workflow_adapter.analysis
+ if not r then
+  for i=#workflow_adapter.records,1,-1 do if workflow_adapter.records[i].stage=="analysis" then r=workflow_adapter.records[i];break end end
+ end
+ if not r then update_status="Bitte zuerst die Komposition analysieren lassen oder eine gespeicherte Analyse im Verlauf öffnen.";return end
  local ok,err=pcall(function()
   assert(workflow_adapter.guard()==r.source_guard,"Das Original wurde verändert. Bitte neu analysieren.")
   local items,tracks=workflow_adapter.bindings(r)
@@ -1500,7 +1540,7 @@ function workflow_adapter.review()
   local full=track_context_items(tracks)
   assert(#full>0,"Bitte die analysierten Spuren auswählen und erneut analysieren.")
   local key=get_key(); assert(key,"API-Key fehlt.")
-  local task=trim(input)~="" and trim(input) or "Setze die musikalisch sinnvollen Vorschläge aus der Analyse um."
+  local task=task or (trim(input)~="" and trim(input) or "Setze die musikalisch sinnvollen Vorschläge aus der Analyse um.")
   local prompt=workflow_core.prompt("revise").."\nANALYSE:\n"..r.raw_response.."\n"..composition_prompt(task,full,tracks,false).."\nDie vorhandene Tempo- und Taktkarte erhalten. Keine CSMETA-Zeilen ausgeben. Ausdruck kann in CSCTRL stehen."
   busy=true; launch("composition",prompt,key,{request=task,full=full,music_tracks=tracks,workflow_guard=r.source_guard})
  end)
@@ -1578,6 +1618,29 @@ end
 
 -- End shared workflow host adapter.
 
+local function begin_continuation(request,bars,tail)
+ if type(bars)~="number" or bars~=math.floor(bars) or bars<1 or bars>128 or (tail~=0 and tail~=2 and tail~=3 and tail~=4) then
+  add("KI","Bitte eine Verlängerung von 1 bis 128 Takten und gegebenenfalls 2, 3 oder 4 Übergangstakte angeben.");busy=false;return
+ end
+ local tracks=selected_tracks()
+ local context=selected_items(true)
+ if #context==0 and #tracks>0 then context=track_context_items(tracks) end
+ if #context==0 then add("KI","Bitte die MIDI-Items oder Spuren des vorhandenen Stücks auswählen.");busy=false;return end
+ local endpoint=0;for _,it in ipairs(context) do endpoint=math.max(endpoint,it.end_qn or 0) end
+ if endpoint<=0 then add("KI","Ende des Ausgangsstücks nicht gefunden.");busy=false;return end
+ local ok,start=pcall(workflow_adapter.transition,context,endpoint,tail)
+ if not ok then add("KI",tostring(start));busy=false;return end
+ local key=get_key()
+ if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar.");busy=false;return end
+ last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}
+ diag_set("context",compact_context(context,tracks,false));diag_set("continuation_start_qn",tostring(start));diag_set("continuation_bars",tostring(bars));diag_set("transition_bars",tostring(tail))
+ local total=bars+tail
+ local prompt=workflow_core.prompt("continue").."\n"..continuation_prompt(request,context,tracks,total,start)
+ if tail>0 then prompt=prompt.."\nDie ersten "..tail.." Takte ersetzen die freigegebenen Schlusstakte; danach exakt "..bars.." NEUE Takte. Früheren Verlauf nicht erneut ausgeben." end
+ diag_set("composition_prompt",prompt)
+ launch("lily_continuation",prompt,key,{request=request,extension_start=start,extension_bars=total,transition_bars=tail,full=context,music_tracks=tracks})
+end
+
 local function begin_process(request)
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
@@ -1590,31 +1653,18 @@ local function begin_process(request)
   launch_new_json(request,key,{request=request,full={},music_tracks={}})
   return
  end
- -- Explicit continuations can be dispatched deterministically without AI controller.
+ -- Clear text requests avoid an extra routing call; other formulations use the AI controller.
  local bars=continuation_bars(request)
  if bars then
-  local context=selected_items(true)
-  if #context==0 then add("KI","Bitte für die Fortsetzung die MIDI-Items des vorhandenen Stücks auswählen."); busy=false; return end
-  local endpoint=0
-  for _,it in ipairs(context) do endpoint=math.max(endpoint,it.end_qn or 0) end
-  if endpoint<=0 then add("KI","Ende des Ausgangsstücks nicht gefunden."); busy=false; return end
-  local key=get_key()
-  if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
-  local tracks=selected_tracks()
-  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}
-  diag_set("context",compact_context(context,tracks,false))
-  diag_set("continuation_start_qn",tostring(endpoint))
-  diag_set("continuation_bars",tostring(bars))
-  local tail=workflow_adapter.transition_bars
-  local ok,start=pcall(workflow_adapter.transition,context,endpoint,tail)
-  if not ok then add("KI",tostring(start)); busy=false; return end
-  local total=bars+tail
-  local prompt=workflow_core.prompt("continue").."\n"..continuation_prompt(request,context,tracks,total,start)
-  if tail>0 then prompt=prompt.."\nDie ersten "..tail.." Takte ersetzen die freigegebenen Schlusstakte; danach exakt "..bars.." NEUE Takte. Früheren Verlauf nicht erneut ausgeben." end
-  diag_set("composition_prompt",prompt)
-  launch("lily_continuation",prompt,key,{request=request,extension_start=start,extension_bars=total,transition_bars=tail,full=context,music_tracks=tracks})
-  return
+  local tail,why=request_transition(request)
+  if tail==nil then add("KI",why);busy=false;return end
+  begin_continuation(request,bars,tail);return
  end
+ local words=request_words(request)
+ if (words:find("ueberarbeit",1,true) or words:find("umsetz",1,true)) and words:find("analyse",1,true) and not words:find("ohne%s+analyse") then
+  busy=false;workflow_adapter.review(request);return
+ end
+
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
  local items=selected_items(false); local tracks=selected_tracks(); diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); launch("controller",prompt,key,{request=request,items=items,tracks=tracks})
 end
@@ -1664,20 +1714,16 @@ local function poll_job()
  end
  if stage=="controller" then
   diag_set("controller_answer",text); local chat=text:match("^CHAT|(.*)$"); if chat then add("KI",trim(chat)); busy=false; return end; local ask=text:match("^ASK|(.*)$"); if ask then add("KI",trim(ask)); busy=false; return end
+  local cb,ct=text:match("^NEED_CONTINUE|(%d+)|(%d+)|")
+  if cb then begin_continuation(data.request,tonumber(cb),tonumber(ct));return end
+  if text:match("^NEED_REVISE|") then busy=false;workflow_adapter.review(data.request);return end
+  if text:match("^NEED_SWAM|") then busy=false;begin_swam_interpretation();return end
   local awhy=text:match("^NEED_ANALYSIS|(.*)$"); if awhy then local full=selected_items(true); if #full==0 and #data.tracks>0 then full=track_context_items(data.tracks) end; if #full==0 then add("KI","Für die Analyse ist kein MIDI-Material ausgewählt."); busy=false; return end; data.full=full; data.music_tracks=data.tracks; launch("analysis",analysis_prompt(data.request,full,data.tracks),key,data); return end
   local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or selected_items(true); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil); diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; local ext=why and continuation_bars(data.request) or nil
   if ext then
-   if #full==0 then add("KI","Für die Fortsetzung muss das vorhandene MIDI-Stück ausgewählt sein."); busy=false; return end
-   local endpoint=0; for _,it in ipairs(full) do endpoint=math.max(endpoint,it.end_qn or 0) end
-   if endpoint<=0 then add("KI","Kein gültiges Ende der vorhandenen Komposition gefunden."); busy=false; return end
-   local tail=workflow_adapter.transition_bars
-   local ok,start=pcall(workflow_adapter.transition,full,endpoint,tail)
-   if not ok then add("KI",tostring(start)); busy=false; return end
-   data.extension_start=start; data.extension_bars=ext+tail; data.transition_bars=tail
-   diag_set("continuation_start_qn",tostring(endpoint)); diag_set("continuation_bars",tostring(ext))
-   local lp=workflow_core.prompt("continue").."\n"..continuation_prompt(data.request,full,tracks,ext+tail,start).."\nZuerst "..tail.." Übergangstakte, dann "..ext.." neue Takte."
-   diag_set("composition_prompt",lp)
-   launch("lily_continuation",lp,key,data)
+   local tail,tail_error=request_transition(data.request)
+   if tail==nil then add("KI",tail_error);busy=false;return end
+   begin_continuation(data.request,ext,tail)
   elseif newwhy then
     launch_new_json(data.request,key,data)
    else launch(newwhy and "composition_music" or "composition",cp,key,data) end; return end
@@ -1765,7 +1811,7 @@ end
 local function info_text()
  return "Composition Studio "..VERSION.." · 19.10.2026\nGemeinsamer Workflow-Kern "..workflow_core.version..
  "\n\nAnalyse → Überarbeitung → Vorschlag → Änderungen anwenden. Original und Vorschläge bleiben im Ergebnisverlauf erhalten. Das Modell für Analyse und Überarbeitung ist jeweils frei wählbar."..
- "\n\nFortsetzung: Schluss erhalten oder 2/3/4 Schlusstakte als Übergang neu gestalten. Diese Takte zählen zusätzlich zur verlangten Verlängerung."..
+ "\n\nAufträge direkt eingeben: Verlängere um 16 Takte; ergänze eine weitere Stimme; analysiere die Auswahl; überarbeite anhand der letzten Analyse. Für einen Übergang zum Beispiel: Verlängere um 16 Takte und gestalte die letzten 2 Takte neu. Ohne Freigabe bleibt der Schluss erhalten."..
  "\n\nModelllisten werden direkt beim Anbieter abgefragt. Ausdruck wird als Notendauer, Velocity, Tempo und MIDI-Controller übernommen; die Wirkung hängt vom Instrument ab."..
  "\n\nTechnische Tests verwenden simulierte REAPER-Schnittstellen. Der praktische Test dieser Version steht aus."
 end
@@ -1783,7 +1829,6 @@ local function draw_workflow_status()
   reaper.ImGui_TextWrapped(ctx,"Vorschlag: "..(workflow_adapter.labels[workflow_adapter.pending.stage] or "Musik").." · "..(workflow_adapter.states[workflow_adapter.pending.state] or ""))
   if reaper.ImGui_Button(ctx,"Änderungen anwenden",width) then workflow_adapter.apply() end
  end
- if workflow_adapter.analysis and reaper.ImGui_Button(ctx,"Überarbeiten##review",width) then workflow_adapter.review() end
  if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end
 end
 local function draw_history()
@@ -1809,14 +1854,9 @@ reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(composition_mode=="concept" and " ✓" or "")) then composition_mode="concept"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Konzeption + Komposition (2 KI-Aufrufe)." end
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
-reaper.ImGui_Separator(ctx)
-for _,count in ipairs({0,2,3,4}) do
- local label=count==0 and "Fortsetzung: Schluss erhalten" or "Fortsetzung: "..count.." Schlusstakte neu gestalten"
- if reaper.ImGui_MenuItem(ctx,label,nil,workflow_adapter.transition_bars==count,not busy) then workflow_adapter.transition_bars=count end
-end
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
-if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"SWAM interpretieren") then begin_swam_interpretation() end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
 if reaper.ImGui_Button(ctx,"Denken: "..REASONING_LABELS[reasoning_mode].." v##reasoning",model_width) and not busy then reaper.ImGui_OpenPopup(ctx,"##reasoning_menu") end
 if reaper.ImGui_BeginPopup(ctx,"##reasoning_menu") then
  for _,choice in ipairs({"low","medium","high","auto"}) do
