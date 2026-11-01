@@ -1,5 +1,18 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – Windows-Pausenvergleich: scheinbare 10-vs-12-Differenz durch Taktverschiebung aufgeklaert
+
+**Realtest (Nutzerkonsole, REAPER 7.83/x64):**
+- Take: `Valse_des_Ombres_Dorees_korrigiert.mid`, Spur `Valse_des_Ombres_Dorees_korrigiert`; im Take insgesamt **76** MIDI-Noten, alle betrachteten im Register >= C4.
+- MIDI-Item in der REAPER-Projekttimeline bei **QN 4.000**, erste beruecksichtigte Violinennote bei **QN 10.000**. Zwischen Item-Start und erster Note liegen 6 Viertelnoten = zwei 3/4-Takte.
+- Die Projekttakte 3–6 decken QN 7–19 ab: **T3: QN 7–10, 0 Noten; T4: QN 10–13, 4 Noten; T5: QN 13–16, 2 Noten; T6: QN 16–19, 4 Noten**. Summe 10. T3 ist tatsaechlich leer, daher exakt eine Ganztaktpause von 3.000 QN bei allen 4 Anzeigevarianten. Die naechsten zwei Violinnoten aus dem vierten musikalischen Takt nach dem ersten Einsatz liegen erwartungsgemaess in **Projekttakt 7** (nicht Teil des Tests). Somit war der Vergleich mit den urspruenglichen musikalischen Takten 3–6 falsch ausgerichtet. Kein Indiz fuer eine falsche Pausenberechnung.
+- `MIDI-Hash unveraendert: true`, `Originalnoten im Analyse-Array erhalten: true`. Die GPL-v2.55-Pausenberechnung ist im realen REAPER-Windows-Lauf fuer diesen Fall funktionsfaehig; **kein** Nachweis eines fertigen verbesserten Notenbilds.
+- Ungeklaert bleibt **76 REAPER-Take-Noten gegenueber 77 MIDI-Noten in der hochgeladenen Violin-Spur**. Eine einzelne Abweichung kann nur mit vollstaendigem REAPER-Take-Export bzw. Note-fuer-Note-Vergleich lokalisiert werden; nicht vorschnell einen Importverlust behaupten.
+- Die urspruenglich problematische Passage (macOS-Track `Revolt Patchable Synth`, 238 MIDI-Noten, in ersten 4 Takten 24 kurze Oberregisterluecken) ist **nicht** diese Valse-Aufnahme. Fuer die Beurteilung von zu vielen angezeigten Sechzehntelpausen bleibt ein echter Vergleich mit jener Passage offen.
+
+**Stand und naechster Schritt:** Keine neue Quantisierung und keine weiteren pauschalen Korrekturversuche bei der nahezu lueckenlosen Valse-Melodie. Der getestete GPL-Engraver bleibt auf Draft-PR #3 getrennt von der produktiven Anwendung. Fuer die eigentliche Aufgabe die frueher problematische MIDI-Passage im REAPER-Notator-Adapter pruefen oder als MIDI exportieren. `main` und `Notation Studio.lua` sind unveraendert.
+
+
 ## 01.11.2026 – Originaldatei Valse_des_Ombres_Dorees_korrigiert.mid gegen REAPER-Bericht verifiziert
 
 **Datei direkt analysiert (Nutzerupload im Chat, nicht ins Repository kopiert):**
