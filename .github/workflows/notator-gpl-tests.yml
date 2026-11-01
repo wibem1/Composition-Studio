@@ -1,0 +1,36 @@
+name: Notation GPL Lua smoke tests
+on:
+  push:
+    branches: [feat/notator-gpl-rhythm-audit-20261101]
+    paths:
+      - 'tests/test_notator_gpl_*.lua'
+      - 'tools/notator_gpl_*.lua'
+      - 'vendor/REAPER-Notator-2.55/**'
+      - '.github/workflows/notator-gpl-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lua-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.4
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y lua5.4
+      - name: Check Lua syntax without REAPER
+        run: |
+          for file in tests/test_notator_gpl_*.lua tools/notator_gpl_*.lua \
+            vendor/REAPER-Notator-2.55/modules/rendering/engraver.lua \
+            vendor/REAPER-Notator-2.55/modules/services/filter_notes_service.lua; do
+            luac5.4 -p "$file" || exit 1
+          done
+      - name: Run GPL module tests
+        run: |
+          lua5.4 tests/test_notator_gpl_filter.lua
+          lua5.4 tests/test_notator_gpl_engraver.lua
+          lua5.4 tests/test_notator_gpl_rests.lua
+          lua5.4 tests/test_notator_gpl_rest_adapter.lua
+          lua5.4 tests/test_notator_gpl_overlap_gap.lua
