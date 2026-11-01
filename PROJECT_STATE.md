@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## REAPER-Screenshot Notenbild Takte 1–4 (01.11.2026)
+
+- Im Nutzer-Screenshot nach dem Aktionslauf ist die zweisystemige, mehrzeilige Klaviernotation gegenueber frueheren Versionen wesentlich lesbarer. In der rechten Hand gibt es dennoch sehr viele kurze Pausen und wiederholte getrennte Balkengruppen, deren musikalische Notwendigkeit am Bild alleine nicht erkennbar ist. Die linke Hand wirkt lesbarer, ihr MIDI-Timing ist aber nicht bekannt.
+- **Korrektur einer vorigen Schlussfolgerung:** Auf dem unmittelbar vorherigen Screenshot des nativen Quantisierungsdialogs waren nach Ausfuehrung des Skripts im Track `Revolt Patchable Synth` die Zahlen **1/8 und 1/32** sichtbar, nicht 1/16 und 1/64. Falls dieser Screenshot den Zustand unmittelbar nach der Ausfuehrung zeigt, haben die beiden Aktionen den aktuellen Track-Override offenbar **nicht** auf die gewuenschten Werte gesetzt. Die Ursache (Projektvorgabe vs. Track-Override vs. Aktionskontext) ist offen. Ein gesendeter Befehl ist kein Erfolgstest.
+- Die REAPER-Dokumentation bestaetigt, dass Anzeigequantisierung und Mindestnotenlaenge die zugrundeliegenden MIDI-Events nicht veraendern. Komplexe notierte Pausen koennen trotzdem aus kurzen echten MIDI-Notenlaengen oder voneinander abweichenden Note-On/Off-Zeiten kommen.
+- **Separater naechster Diagnoseschritt:** `tools/notation_midi_readonly_diagnose.lua` ermittelt fuer die ersten vier Takte des aktiven MIDI-Takes kurze Noten, Start-/End-Abweichungen vom Sechzehntelraster und Luecken im oberen/unteren Register. Nur lesend; keine Track-/Projekt-/Notation-/MIDI-Aenderung. Lokale Lua-5.4-Syntaxpruefung und simulierter Lauf mit MIDI-Noten bestanden; realer REAPER-Lauf noch offen.
+- **Keine Freigabe:** Noch keine Automatik fuer das Entfernen vermeintlich ueberfluessiger Pausen, keine Aenderung an Notenlaengen/Notenschluesseln, `main` unveraendert.
+
 ## REAPER-Praxistest – Folgebeobachtung nach deaktivierten Projekt-Defaults (01.11.2026)
 
 - Nutzer zeigte einen zweiten Screenshot des nativen `Notation Display Quantization`-Dialogs nach dem isolierten Skriptlauf. Beim ausgewaehlten Track `Revolt Patchable Synth` sind jetzt **beide `Use project default`-Checkboxen deaktiviert**; die Regler sind aktiv. Dadurch liegt ein Track-Override vor, anders als beim ersten Screenshot.
