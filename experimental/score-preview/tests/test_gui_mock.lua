@@ -6,7 +6,16 @@ local r={
  ImGui_CreateContext=function() return {} end,
  ImGui_Begin=function() return true,true end,
  ImGui_End=function() end,
- ImGui_BeginChild=function() return true end,
+ -- Mock the actual ReaImGui 0.9+ ABI: fifth argument is an integer
+ -- child flags bitmask, never a legacy boolean "border" argument.
+ ImGui_BeginChild=function(ctx,id,w,h,child_flags,window_flags)
+  assert(type(id)=='string')
+  assert(type(w)=='number' and type(h)=='number')
+  assert(type(child_flags)=='number','BeginChild child_flags must be integer, got '..type(child_flags))
+  assert(child_flags==1,'Expected numeric Borders bit')
+  assert(type(window_flags)=='number','BeginChild window_flags must be numeric')
+  return true
+ end,
  ImGui_EndChild=function() end,
  ImGui_Text=function() end,
  ImGui_SameLine=function() end,
