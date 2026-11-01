@@ -46,18 +46,21 @@ end
 -- without guessing from a project QN position. TimeMap_QNToMeasures' optional
 -- start/end return values are not reliable to REQUIRE across REAPER setups.
 -- Preserve the actual project meter for every bar, including meter changes.
-local m={num_m=last,bpi=4,m_start_qn={},m_end_qn={},m_bpi={}}
+local m={num_m=last,bpi=4,m_start_qn={},m_end_qn={},m_bpi={},m_meter={}}
 if type(r.TimeMap_GetMeasureInfo)~="function" then
  report("REAPER bietet TimeMap_GetMeasureInfo nicht an. Keine Aenderung.") return
 end
 for bar=0,last do
- local ok_measure,_,s,e=pcall(r.TimeMap_GetMeasureInfo,0,bar)
+ local ok_measure,_,s,e,ts_num,ts_den=pcall(r.TimeMap_GetMeasureInfo,0,bar)
  if not ok_measure or type(s)~="number" or type(e)~="number"
     or e<=s or s~=s or e~=e then
   report("Taktgrenzen konnten fuer Takt "..tostring(bar+1).." nicht gelesen werden. Keine Aenderung.")
   return
  end
  m.m_start_qn[bar],m.m_end_qn[bar],m.m_bpi[bar]=s,e,e-s
+ if type(ts_num)=="number" and type(ts_den)=="number" and ts_num>0 and ts_den>0 then
+  m.m_meter[bar]={num=ts_num,den=ts_den}
+ end
 end
 m.bpi=m.m_bpi[first] or 4
 
@@ -137,8 +140,17 @@ local lines={
 
 local original_note_count=#groups.all
 for bar=first,last do
- lines[#lines+1]=string.format("  Takt %d: QN %.3f - %.3f; MIDI-Notenanfaenge=%d",
-   bar+1,m.m_start_qn[bar],m.m_end_qn[bar],onset_counts[bar])
+ local meter=m.m_meter[bar]
+ local meter_label=meter and (string.format("%d/%d",meter.num,meter.den)) or "unbekannt"
+ lines[#lines+1]=string.format("  Takt %d: QN %.3f - %.3f; Taktart laut REAPER-API=%s; MIDI-Notenanfaenge=%d",
+   bar+1,m.m_start_qn[bar],m.m_end_qn[bar],meter_label,onset_counts[bar])
+ if meter then
+  local expected_qn=meter.num*4/meter.den
+  if math.abs(m.m_bpi[bar]-expected_qn)>0.001 then
+   lines[#lines+1]=string.format("  WARNUNG: Takt %d: QN-Laenge %.3f widerspricht angegebener Taktart %s (erwartet %.3f QN)",
+     bar+1,m.m_bpi[bar],meter_label,expected_qn)
+  end
+ end
 end
 lines[#lines+1]=""
 for _,key in ipairs({"all","upper","lower"}) do
