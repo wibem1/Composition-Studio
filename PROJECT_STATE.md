@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – Windows-Folgeversuch: Original-Engraver nicht gefunden (Installationspfad)
+
+**Beleg:** Nutzer-Screenshot aus REAPER 7.83/Windows beim neuen Lauf des read-only-Adapters: `Original-Engraver nicht gefunden: C:\\Users\\wibem\\Downloads/../vendor/REAPER-Notator-2.55/modules/rendering/engraver.lua`.
+
+**Eingrenzung:** Das Skript wurde direkt im `Downloads`-Stammordner gespeichert/geladen und sucht relativ zum **vermeintlichen** `tools`-Verzeichnis eine `../vendor`-Struktur. Dadurch kann der Engraver nicht geladen werden. Dies ist **kein Fehler in den MIDI-Noten, der Taktkarte oder der GPL-Engine**. Der Windows-Realtest der korrigierten Taktberechnung und Pausenfunktion steht folglich weiterhin aus.
+
+**Korrektur ohne Codeeingriff:** Ein kompaktes lokales Test-ZIP wurde aus der vom Nutzer bereitgestellten Repository-ZIP erstellt. Es enthaelt den aktuellen `tools/notator_gpl_rest_comparison.lua`-Stand (verifiziert gegen GitHub-Blob `029784cc960b6d499d6e7420f22fb2dbb105ac31`), den unveraenderten GPL-Engraver (Blob `08e3adfd23278f0afaa44534a4bcb715a7b056a6`) und die vollstaendige GPL-3.0-Lizenz. Der relative Pfad `tools/../vendor/.../engraver.lua` existiert im ZIP; ZIP-Integritaetspruefung erfolgreich. Dieses Hilfs-ZIP ist ein Gespraechsartefakt und noch **kein** GitHub-Release. Die regulare GitHub-Quellstruktur bleibt unveraendert.
+
+**Naechster einziger Schritt:** ZIP vollstaendig entpacken, in der REAPER-Aktionsliste eine **neue** Aktion fuer die Datei `REAPER-Pausenvergleich-Test/tools/notator_gpl_rest_comparison.lua` laden (nicht das bisherige alte Skript aus Downloads), dann den Konsolenbericht pruefen. Keine automatische Notenbild-Aenderung.
+
+
 ## 01.11.2026 – Windows: Taktkarte-Fehler im Pausenvergleich korrigiert
 
 **Nutzer-Praxistest:** In REAPER 7.83/Windows zeigte `tools/notator_gpl_rest_comparison.lua` unmittelbar `Taktkarte ungueltig bei Takt 1`. Die Pausenberechnung hatte noch nicht begonnen, die MIDI-/Projekt-Daten blieben unberuehrt.
