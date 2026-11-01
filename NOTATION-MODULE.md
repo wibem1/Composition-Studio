@@ -1,5 +1,21 @@
 # Composition Studio – Notationsmodul
 
+### Vier verbindliche Qualitätsanforderungen – 02.11.2026
+
+Die Zielerreichung wird ab jetzt **an genau diesen vier sichtbaren Eigenschaften des eingebauten REAPER-Notationseditors** beurteilt:
+
+1. **Optimierte horizontale Notenabstände:** Proportionale musikalische Abstände und sinnvoller Zoom müssen dichte Passagen entzerren; eng benachbarte Noten, Vorzeichen, Notenhälse und Balken sollen auch beim Bearbeiten auseinanderzuhalten sein. Nicht einfach so weit zoomen, dass nur wenige Noten sichtbar sind.
+2. **Keine unsinnigen Minipausen:** Kurze rechnerische Pausen, insbesondere durch 1-Tick-Note-Off-Lücken aus MIDI, dürfen das Notenbild nicht dominieren. Echte musikalische Pausen und eigenständige Stimmen bleiben dagegen sichtbar. Zuerst Anzeigequantisierung/Mindestnotenlänge und REAPERs native Bindungs-/Stimmenoptionen prüfen, niemals Note-On/Off-Zeiten stillschweigend verändern oder echte Pausen löschen. Nicht behaupten, reine Displayquantisierung könne jedes Polyphonie-/Pausenproblem lösen.
+3. **Darstellungsquantisierung (getrennt von MIDI-Quantisierung):** Für jede Spur/Instrument passend (zunächst 1/16 mit Mindestnotenlänge 1/32 als **Testkandidat**, nicht als universeller Endwert), bei Bedarf Triolen. REAPER-Handbuch bestätigt die Unabhängigkeit der `Display quantization`- und `Minimum note length`-Werte vom ursprünglichen MIDI-Timing. Echte kürzere Noten dürfen durch zu grobe Darstellung nicht irreführend werden.
+4. **Getrennte Notenzeilen und passende Schlüssel je Instrument:** Jede sichtbare MIDI-Instrumentalspur erhält ihr eigenes System bzw. ihre eigene Notenzeile. REAPER kann mehrere gleichzeitig sichtbare MIDI-Tracks im Notationseditor anzeigen (bei mehreren Tracks in kontinuierlicher Ansicht); Schlüssel sind über das Kontextmenü `Default clef` je Spur wählbar. Für die bekannte Orgelphantasie zuerst Manual I (Violinschlüssel), Manual II (Schlüssel nach tatsächlichem Tonumfang), Pedal (Bassschlüssel) testen. Nicht automatisch alle Systeme in ein einziges System zusammenrechnen.
+
+**Annahmekriterium:** Derselbe kurze musikalische Abschnitt ist nach Konfiguration im **REAPER-eigenen** Noteneditor ohne Minipausenflut, mit gut erkennbaren Stimmen, passenden Schlüsseln und ausreichendem Abstand tatsächlich les- und bearbeitbar; Original-MIDI/Wiedergabe bleiben erhalten. Der praktische A/B-Test entscheidet, nicht ein automatischer Lua-Mocktest. Erst an der verbleibenden konkret sichtbaren Schwachstelle ansetzen.
+
+**Technikstatus:** Dies ist eine verbindliche Anforderung, **noch keine neue Implementierung und noch kein realer Test aller vier Punkte**. Vorhandene Schaltfläche `Lesbarkeit verbessern` (Notation Studio 0.1.24) nicht blind verwenden, da sie auch Track-`SCORE`-Metadaten überschreibt. Keine Eigenentwicklung eines Renderers.
+
+**Quelle:** Offizielles REAPER-Handbuch, Notation View Options und Staff-/Track-Kontextmenüs: https://www.reaper.fm/userguide.php
+
+
 ## Verbindliche Zielkorrektur – 02.11.2026
 
 **Priorität 1: Den bereits vorhandenen REAPER-Noteneditor zu einer im Alltag brauchbaren Arbeitsnotation bringen.** Er muss nicht einen eigenständigen Notensatz wie MuseScore oder Dorico bieten, sondern rhythmisch verständlich, ausreichend übersichtlich und musikalisch sicher sein, sodass Komposition, Korrektur und Orientierung in der Partitur möglich bleiben. KEIN eigener Renderer, KEIN Nachbau von REAPER-Notator und KEIN Ersatz des Noteneditors in dieser Phase.
