@@ -205,6 +205,55 @@ local function find_action_variants(variants)
  return nil,nil
 end
 
+-- IDs and exact action names verified in REAPER 7.83/OSX64 on 2026-11-01.
+-- Do not guess IDs on other REAPER versions: verify the name before executing.
+local NOTATION_ACTIONS={
+ display16={id=41030,name="Notation: Set display quantization to 1/16 (default)"},
+ minimum64={id=41212,name="Notation: Set minimum display quantization note length to 1/64 (default)"},
+ minimum16={id=41214,name="Notation: Set minimum display quantization note length to 1/16"},
+ quantdialog={id=41745,name="Notation: Adjust display quantization..."}
+}
+
+local function verified_notation_command(key)
+ local spec=NOTATION_ACTIONS[key]
+ if not spec then return nil,"Unbekannte Notationsaktion: "..tostring(key) end
+ for _,a in ipairs(all_midi_actions()) do
+  if a.cmd==spec.id then
+   if a.text==spec.name then return spec.id end
+   return nil,"Befehl "..spec.id.." hat einen anderen Namen: "..tostring(a.text)
+  end
+ end
+ return nil,"Befehl "..spec.id.." nicht in der MIDI-Aktionsliste"
+end
+
+local function dispatch_notation_command(ed,key)
+ local cmd,err=verified_notation_command(key)
+ if not cmd then return false,err end
+ if type(reaper.MIDIEditor_OnCommand)~="function" then
+  return false,"MIDIEditor_OnCommand ist nicht verfuegbar."
+ end
+ local ok,problem=pcall(reaper.MIDIEditor_OnCommand,ed,cmd)
+ if not ok then return false,"Aufruf "..cmd.." gescheitert: "..tostring(problem) end
+ -- MIDIEditor_OnCommand liefert keine Aussage ueber den sichtbaren Zustand.
+ return true,"Aktion "..cmd.." gesendet (Anzeige in REAPER kontrollieren)"
+end
+
+local function apply_verified_quantization(ed)
+ -- Both names/IDs must be valid before changing anything.
+ local display,display_err=verified_notation_command("display16")
+ local minimum,minimum_err=verified_notation_command("minimum64")
+ if not display or not minimum then
+  return false,display_err or minimum_err
+ end
+ local ok,err=dispatch_notation_command(ed,"display16")
+ if not ok then return false,err end
+ ok,err=dispatch_notation_command(ed,"minimum64")
+ if not ok then
+  return false,"Anzeige 1/16 wurde gesendet, Mindestlaenge nicht: "..tostring(err)
+ end
+ return true,"Anzeige 1/16 (41030) + Mindestlaenge 1/64 (41212) gesendet; bitte im REAPER-Quantisierungsdialog pruefen"
+end
+
 local function active_editor()
  local cur=type(reaper.MIDIEditor_GetActive)=="function" and reaper.MIDIEditor_GetActive() or nil
  if cur then midi_editor=cur end
@@ -467,15 +516,13 @@ local function cleanup_notation()
    {"proportional","spacing"}
  },true)
 
- execute_found("Anzeigequantisierung 1/16",{
-   {"notation","1/16","quant"},
-   {"notation","1/16"}
- },false)
-
- execute_found("Mindestnotenlänge 1/64",{
-   {"notation","minimum","1/64"},
-   {"notation","mindest","1/64"}
- },false)
+ -- Use exact IDs observed in REAPER 7.83; no ambiguous name fragments.
+ local quant_ok,quant_info=apply_verified_quantization(ed)
+ if quant_ok then
+  done[#done+1]="Anzeigequantisierung: "..quant_info
+ else
+  missing[#missing+1]="Anzeigequantisierung: "..tostring(quant_info)
+ end
 
  execute_found("Triolenerkennung",{
    {"notation","triplet"},
@@ -671,7 +718,35 @@ local function draw()
 
   if reaper.ImGui_CollapsingHeader(ctx,"Darstellung / Quantisierung") then
    if reaper.ImGui_Button(ctx,"Anzeige 1/8",-1,28) then run_action("Notation: Set display quantization to 1/8",1) end
-   if reaper.ImGui_Button(ctx,"Anzeige 1/16",-1,28) then run_action("Notation: Set display quantization to 1/16 (default)",1) end
+   if reaper.ImGui_Button(ctx,"Anzeige 1/16",-1,28) then
+    local ed=active_editor()
+    if ed then
+     local ok,msg=dispatch_notation_command(ed,"display16")
+     status=(ok and "Test: " or "Fehler: ")..tostring(msg)
+    else status="Kein MIDI-Editor aktiv." end
+   end
+   if reaper.ImGui_Button(ctx,"Test: 1/16 + Mindestlänge 1/64",-1,28) then
+    local ed=active_editor()
+    if ed then
+     local ok,msg=apply_verified_quantization(ed)
+     status=(ok and "Test: " or "Fehler: ")..tostring(msg)
+    else status="Kein MIDI-Editor aktiv." end
+   end
+   if reaper.ImGui_Button(ctx,"Mindestlänge 1/16",-1,28) then
+    local ed=active_editor()
+    if ed then
+     local ok,msg=dispatch_notation_command(ed,"minimum16")
+     status=(ok and "Test: " or "Fehler: ")..tostring(msg)
+    else status="Kein MIDI-Editor aktiv." end
+   end
+   if reaper.ImGui_Button(ctx,"REAPER-Quantisierung kontrollieren...",-1,28) then
+    local ed=active_editor()
+    if ed then
+     local ok,msg=dispatch_notation_command(ed,"quantdialog")
+     status=(ok and "Kontrolle: " or "Fehler: ")..tostring(msg)
+    else status="Kein MIDI-Editor aktiv." end
+   end
+   if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
    if reaper.ImGui_Button(ctx,"Anzeige 1/32",-1,28) then run_action("Notation: Set display quantization to 1/32",1) end
   end
 
