@@ -1,13 +1,45 @@
 -- Notation Studio: independent read-only score preview model (2026).
 local M = {}
 local EPS=1e-8
-local pc_step={0,0,1,1,2,3,3,4,4,5,6,6}  -- G minor: Bb / Eb
+-- Pitch class spelling in G minor (2 flats): C C# D Eb E F F# G G# A Bb B.
+local pc_step={0,0,1,2,2,3,3,4,4,5,6,6}
+local pc_alter={0,1,0,-1,0,0,1,0,1,0,-1,0}
 local pc_acc={"","#","","b","","","#","","#","","b",""}
 function M.spell(p)
   local pc=p%12
   local octave=math.floor(p/12)-1
   local step=pc_step[pc+1]
   return (octave*7+step),pc_acc[pc+1]
+end
+-- Return only the accidentals that must be printed. G minor has Bb and Eb
+-- in the key signature; local alterations are tracked within each measure.
+-- The state key includes octave so repeated tones share the same accidental.
+function M.notated_accidental(pitch, measure_state)
+  local step=M.spell(pitch)
+  local letter=step%7
+  local base=(letter==2 or letter==6) and -1 or 0
+  local alter=pc_alter[pitch%12+1]
+  local old=measure_state[step]
+  if old==nil then old=base end
+  if old==alter then return nil end
+  measure_state[step]=alter
+  if alter==1 then return "#" end
+  if alter==-1 then return "b" end
+  return "n"
+end
+
+-- Display-only chord grouping by the quantized rhythmic onset. Different
+-- original lengths stay attached to their note records; no MIDI is modified.
+function M.group_onsets(notes)
+  local groups,previous={},nil
+  for _,n in ipairs(notes) do
+    if previous==nil or math.abs(previous-n.start)>EPS then
+      groups[#groups+1]={start=n.start,notes={}}
+      previous=n.start
+    end
+    groups[#groups].notes[#groups[#groups].notes+1]=n
+  end
+  return groups
 end
 function M.round(value, grid)
   if not grid or grid<=0 then return value end
