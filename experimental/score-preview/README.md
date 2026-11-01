@@ -1,4 +1,16 @@
-# Notation Studio – Notenbild-Test 0.2.2 (experimentell)
+# Notation Studio – Notenbild-Test 0.2.3 (experimentell)
+
+## Sichtbarer Echtlauf und Korrektur 0.2.3 (02.11.2026)
+
+REAPER 7.83 Windows hat 0.2.2 **real gerendert**, jedoch nur mit einem selektierten Item (Church Organ, 759 Noten). Noch keine Aussage zur Darstellung aller drei Orgelspuren.
+
+0.2.3 verbessert gezielt die Tonhoehen- und Akkorddarstellung: Eb-Schreibweise korrigiert, g-Moll-Vorzeichnung (Bb/Eb) statt permanent wiederholter Vorzeichen, gleichzeitige Toene mit einem vereinfachten gemeinsamen Notenhals, Spurbezeichnung oberhalb der Linien, Anzeigehinweis bei nur einem ausgewaehlten Item.
+
+**Test:** [GitHub Actions 41361239737](https://github.com/wibem1/Composition-Studio/actions/runs/41361239737) erfolgreich (Core/G-Moll/Chord-Tests und REAPER-ImGui-Mock). Die 0.2.3 selbst ist **noch nicht** unter echtem Windows-ReaImGui grafisch bestaetigt. Im neuen ZIP die beiden Lua-Dateien im selben Ordner halten und das neue Skript als neue REAPER-Aktion laden; im Fenstertitel `0.2.3 TEST` kontrollieren.
+
+**Keine Vollpartitur:** Clefs sind weiterhin G/F-Platzhalter, keine polyphonen Stimmen, Balken, Pausen/Bindungen oder automatische Tonart/Taktart; feste Testtonart g-Moll. Die Daten werden unveraendert gelesen. Hauptprogramm unberuehrt.
+
+
 
 ## ReaImGui Windows-Korrektur 0.2.2 (01.11.2026)
 
