@@ -27,9 +27,10 @@ jobs:
             vendor/REAPER-Notator-2.55/modules/services/filter_notes_service.lua; do
             luac5.4 -p "$file" || exit 1
           done
-      - name: Run true GPL module unit tests
+      - name: Run GPL module tests
         run: |
           lua5.4 tests/test_notator_gpl_filter.lua
           lua5.4 tests/test_notator_gpl_engraver.lua
           lua5.4 tests/test_notator_gpl_rests.lua
           lua5.4 tests/test_notator_gpl_rest_adapter.lua
+          lua5.4 tests/test_notator_gpl_overlap_gap.lua
