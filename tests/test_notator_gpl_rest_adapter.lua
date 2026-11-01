@@ -57,6 +57,24 @@ local function run_case(case)
  assert(msg:find("Pausen=",1,true),case.name..": rest engine did not run")
  assert(msg:find("FEHLER:",1,true)==nil,case.name..": rest engine error: "..msg)
  assert(msg:find(case.expected_bars,1,true),case.name..": measure span incorrect: "..msg)
+ if case.expected_meters then
+  for _,row in ipairs(case.expected_meters) do
+   local found=false
+   for line in msg:gmatch("[^\r\n]+") do
+    if line:find("Takt "..row[1]..":",1,true)
+       and line:find("Taktart laut REAPER-API="..row[2],1,true) then
+     found=true
+     break
+    end
+   end
+   assert(found,case.name..": missing REAPER meter for measure "..row[1])
+  end
+ end
+ if case.expect_meter_warning then
+  assert(msg:find("WARNUNG: Takt",1,true),case.name..": meter mismatch was not reported")
+ else
+  assert(not msg:find("WARNUNG: Takt",1,true),case.name..": unexpected meter warning")
+ end
  if case.expected_onsets then
   for _,row in ipairs(case.expected_onsets) do
    local text="Takt "..row[1]..": QN "
@@ -78,14 +96,16 @@ run_case({
  measures={{0,4,4,4},{4,8,4,4},{8,12,4,4},{12,16,4,4}},
  item_position=0,
  notes={{0,0.24,0,81},{0.375,0.615,0,79},{4.125,4.365,0,76},{9.0,9.24,0,72}},
- expected_bars="Bereich: Takte 1 bis 4"
+ expected_bars="Bereich: Takte 1 bis 4",
+ expected_meters={{1,"4/4"},{2,"4/4"}}
 })
 run_case({
  name="MIDI item in measure 2 with a meter change",
  measures={{0,4,4,4},{4,7,3,4},{7,9.5,5,8},{9.5,12.5,3,4},{12.5,16.5,4,4}},
  item_position=4,
  notes={{4.0,4.24,0,81},{4.5,5.2,0,79},{7.125,7.365,0,77},{9.5,11.0,0,72},{12.75,13.3,0,60}},
- expected_bars="Bereich: Takte 2 bis 5"
+ expected_bars="Bereich: Takte 2 bis 5",
+ expected_meters={{2,"3/4"},{3,"5/8"},{4,"3/4"}}
 })
 -- Reference-style passage: twelve melody onsets in bars 3-6, no empty bar.
 -- These are synthetic events; the uploaded MIDI file is not committed.
@@ -99,6 +119,18 @@ run_case({
         {12,13.5,0,74},{13.5,14,0,76},{14,14.5,0,74},{14.5,15.002,0,72},
         {15,17.5,0,71},{17.5,18,0,76}},
  expected_bars="Bereich: Takte 3 bis 6",
+ expected_meters={{3,"3/4"},{4,"3/4"},{5,"3/4"},{6,"3/4"}},
  expected_onsets={{3,4},{4,2},{5,4},{6,2}}
 })
-print("OK: real GPL rest adapter, measure-index API, optional outputs and meter change")
+-- Deliberately inconsistent mocked project metadata: the report must warn
+-- rather than interpret a three-QN interval as verified 3/4.
+run_case({
+ name="4/4 metadata paired with 3 QN boundaries",
+ measures={{0,4,4,4},{4,7,4,4},{7,10,4,4},{10,13,4,4},{13,16,4,4}},
+ item_position=4,
+ notes={{4,5.5,0,67},{5.5,7,0,72},{7,8.5,0,69},{8.5,10,0,71}},
+ expected_bars="Bereich: Takte 2 bis 5",
+ expected_meters={{2,"4/4"},{3,"4/4"}},
+ expect_meter_warning=true
+})
+print("OK: GPL adapter reports actual meter metadata and warns on inconsistent QN spans")
