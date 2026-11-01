@@ -98,6 +98,10 @@ local lines={
  "REAPER: "..tostring(r.GetAppVersion()),
  "Bereich: Takte "..(first+1).." bis "..(last+1),
  "Noten: alle="..#groups.all..", ab C4="..#groups.upper..", unter C4="..#groups.lower,
+ "Geoeffneter Take: "..take_name.." | Spur: "..track_name,
+ "MIDI-Noten insgesamt im Take: "..tostring(note_count),
+ "Item-Start QN: "..string.format("%.3f",item_qn).." | Erste beruecksichtigte Note QN: "..(earliest and string.format("%.3f",earliest) or "keine"),
+ "Takt-Anfaenge und Note-On-Anzahlen im REAPER-Take:",
  "Keine Aenderung an MIDI, Track, Notensatz oder Projekt",
  "",
  "HINWEIS: Dies ist die isolierte Pausenfunktion, KEIN fertiges Notenbild.",
@@ -105,7 +109,38 @@ local lines={
  ""
 }
 
+-- Read-only source alignment trace: verify exactly which take/timeline bars
+-- are being compared before drawing conclusions from the rest counts.
+local take_name=""
+if type(r.GetSetMediaItemTakeInfo_String)=="function" then
+ local success,nm=r.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false)
+ if success and nm then take_name=nm end
+end
+local track_name=""
+if type(r.GetMediaItem_Track)=="function" and type(r.GetTrackName)=="function" then
+ local tr=r.GetMediaItem_Track(item)
+ if tr then local _,nm=r.GetTrackName(tr); track_name=nm or "" end
+end
+local onset_counts={}
+for bar=first,last do onset_counts[bar]=0 end
+local earliest=nil
+for _,n in ipairs(groups.all) do
+ if not earliest or n.start_qn<earliest then earliest=n.start_qn end
+ for bar=first,last do
+  local bs,be=m.m_start_qn[bar],m.m_end_qn[bar]
+  if n.start_qn>=bs and n.start_qn<be then
+   onset_counts[bar]=onset_counts[bar]+1
+   break
+  end
+ end
+end
+
 local original_note_count=#groups.all
+for bar=first,last do
+ lines[#lines+1]=string.format("  Takt %d: QN %.3f - %.3f; MIDI-Notenanfaenge=%d",
+   bar+1,m.m_start_qn[bar],m.m_end_qn[bar],onset_counts[bar])
+end
+lines[#lines+1]=""
 for _,key in ipairs({"all","upper","lower"}) do
  local notes=groups[key]
  if #notes>0 then
