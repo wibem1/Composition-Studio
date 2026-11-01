@@ -1,5 +1,12 @@
 # Projektstand – Composition-Studio
 
+## REAPER-Praxistest: native Aktionen gesendet, Track erbt Projektvorgaben (01.11.2026)
+
+- Nutzer hat `tools/notation_quantization_test.lua` in REAPER **7.83/OSX64** ausgefuehrt. Konsolenausgabe bestaetigt, dass MIDIEditor_OnCommand mit **41030** (Anzeige 1/16) und **41212** (Minimum 1/64) ohne Skriptfehler aufgerufen und danach der native Quantisierungsdialog geoeffnet wurde.
+- Screenshot des Dialogs: Beide Kontrollkaestchen **Use project default** sind aktiviert. Die individuellen Eingabefelder sind deshalb deaktiviert. Der Screenshot belegt **nicht**, dass fuer die ausgewaehlte Spur individuelle Quantisierungswerte 1/16 und 1/64 gespeichert wurden; er beweist aber auch nicht, dass die wirksamen Projekt-Defaults falsch sind (REAPER-Handbuch nennt 1/16 und 1/64 als Standards).
+- **Status:** Aktionsaufrufe in echtem REAPER bestaetigt; wirksame Werte bzw. Override-Verhalten **noch nicht bestaetigt**. Keine Freigabe/kein Merge.
+- **Naechster einzelner Test:** In einer Projektkopie beide `Use project default`-Haekchen bewusst deaktivieren und abweichende Werte einstellen, die beiden Aktionsaufrufe erneut ausfuehren und im Dialog kontrollieren, ob sie auf 1/16 bzw. 1/64 zurueckgesetzt werden. Kein MIDI-Noten-Editing; Ergebnis festhalten, dann den gezielten Fix auswaehlen.
+
 ## Notation Studio – Quantisierungsaufrufe auf Basis REAPER 7.83 (01.11.2026)
 
 **Durch den Nutzer in realem REAPER 7.83/OSX64 bestaetigt:** MIDI-Editor-Bereich 32060 enthaelt 1840 Aktionen. Gesuchte Befehle: Anzeige 1/16 = **41030**, Minimum 1/64 = **41212**, Minimum 1/16 = **41214**, proportionale Abstaende = **41131**. Der native Einstellungsdialog `Notation: Adjust display quantization...` hat **41745**. Diese Ergebnisse sind ein echter Nachweis der Verfuegbarkeit, **noch kein Nachweis einer erfolgreichen automatischen Einstellungsuebernahme**.
