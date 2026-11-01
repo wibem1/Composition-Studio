@@ -32,3 +32,4 @@ jobs:
           lua5.4 tests/test_notator_gpl_filter.lua
           lua5.4 tests/test_notator_gpl_engraver.lua
           lua5.4 tests/test_notator_gpl_rests.lua
+          lua5.4 tests/test_notator_gpl_rest_adapter.lua
