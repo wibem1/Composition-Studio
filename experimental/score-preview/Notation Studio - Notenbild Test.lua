@@ -1,5 +1,5 @@
 -- @description Notation Studio - Notenbild Test (READ ONLY)
--- @version 0.2.0-test
+-- @version 0.2.1-test
 -- @author Composition Studio
 -- @about Preview only: selected REAPER MIDI items, no edits and no API costs.
 -- This isolated test does not replace the released Notation Studio.
@@ -162,7 +162,7 @@ refresh()
 local function loop()
   if not open then return end
   local visible
-  visible,open=r.ImGui_Begin(ctx,'Notation Studio · Notenbild 0.2 TEST###score_preview',open)
+  visible,open=r.ImGui_Begin(ctx,'Notation Studio · Notenbild 0.2.1 TEST###score_preview',open)
   if visible then
     r.ImGui_Text(ctx,'NOTENBILD-VORSCHAU · Nur Anzeige, keine MIDI-Aenderungen')
     if r.ImGui_Button(ctx,'MIDI-Auswahl neu einlesen') then refresh() end
@@ -186,7 +186,7 @@ local function loop()
     if model then
       local w=math.max(880,970*zoom)
       local height=(#model.tracks*145+70)*zoom
-      r.ImGui_BeginChild(ctx,'score_canvas',0,math.min(height+30,610),true)
+      r.ImGui_BeginChild(ctx,'score_canvas',0,math.min(height+30,610),1,0)
       local sx,sy=r.ImGui_GetCursorScreenPos(ctx)
       local dl=r.ImGui_GetWindowDrawList(ctx)
       r.ImGui_DrawList_AddRectFilled(dl,sx,sy,sx+w,sy+height,WHITE,3)
