@@ -1,5 +1,12 @@
 # Projektstand – Composition-Studio
 
+## REAPER-Praxistest – Folgebeobachtung nach deaktivierten Projekt-Defaults (01.11.2026)
+
+- Nutzer zeigte einen zweiten Screenshot des nativen `Notation Display Quantization`-Dialogs nach dem isolierten Skriptlauf. Beim ausgewaehlten Track `Revolt Patchable Synth` sind jetzt **beide `Use project default`-Checkboxen deaktiviert**; die Regler sind aktiv. Dadurch liegt ein Track-Override vor, anders als beim ersten Screenshot.
+- Die beiden numerischen Anzeigefelder neben den Reglern erscheinen im Screenshot **leer**. Die exakten Werte (1/16 und 1/64 oder vorherige Alternativen) koennen **nicht sicher abgelesen** werden. Auch die Richtung/Endposition der Regler ist ohne Kalibrierung kein belastbarer Nachweis einer konkreten Notenlaenge.
+- **Belegstand:** Der Aufruf der IDs 41030, 41212 ist in echtem REAPER bestaetigt, beide Track-Overrides sind deaktiviert von den Projektvorgaben, tatsaechliche Werte nach Aktion **noch nicht verifiziert**. Keine Freigabe und kein Merge.
+- **Naechster Schritt:** Eine kontrollierte Vorher-/Nachher-Pruefung mit sichtbaren Werten oder ein rein lesender Vergleich des gespeicherten Projekt-/Track-Zustands; keine weiteren unkontrollierten Schreibversuche am `SCORE`-Eintrag.
+
 ## REAPER-Praxistest: native Aktionen gesendet, Track erbt Projektvorgaben (01.11.2026)
 
 - Nutzer hat `tools/notation_quantization_test.lua` in REAPER **7.83/OSX64** ausgefuehrt. Konsolenausgabe bestaetigt, dass MIDIEditor_OnCommand mit **41030** (Anzeige 1/16) und **41212** (Minimum 1/64) ohne Skriptfehler aufgerufen und danach der native Quantisierungsdialog geoeffnet wurde.
