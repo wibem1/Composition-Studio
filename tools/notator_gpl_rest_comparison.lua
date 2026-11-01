@@ -42,16 +42,22 @@ if first<0 or first>2000 then
  report("Taktposition ausserhalb des begrenzten Testbereichs.") return
 end
 
--- REAPER's actual measure starts/ends (including meter changes).
+-- Direct measure-index API: TimeMap_GetMeasureInfo returns the QN start/end
+-- without guessing from a project QN position. TimeMap_QNToMeasures' optional
+-- start/end return values are not reliable to REQUIRE across REAPER setups.
+-- Preserve the actual project meter for every bar, including meter changes.
 local m={num_m=last,bpi=4,m_start_qn={},m_end_qn={},m_bpi={}}
-local q=0
+if type(r.TimeMap_GetMeasureInfo)~="function" then
+ report("REAPER bietet TimeMap_GetMeasureInfo nicht an. Keine Aenderung.") return
+end
 for bar=0,last do
- local measured,s,e=r.TimeMap_QNToMeasures(0,q+0.000001)
- if measured~=bar or type(s)~="number" or type(e)~="number" or e<=s then
-  report("Taktkarte ungueltig bei Takt "..tostring(bar+1)) return
+ local ok_measure,_,s,e=pcall(r.TimeMap_GetMeasureInfo,0,bar)
+ if not ok_measure or type(s)~="number" or type(e)~="number"
+    or e<=s or s~=s or e~=e then
+  report("Taktgrenzen konnten fuer Takt "..tostring(bar+1).." nicht gelesen werden. Keine Aenderung.")
+  return
  end
  m.m_start_qn[bar],m.m_end_qn[bar],m.m_bpi[bar]=s,e,e-s
- q=e
 end
 m.bpi=m.m_bpi[first] or 4
 
