@@ -57,6 +57,19 @@ local function run_case(case)
  assert(msg:find("Pausen=",1,true),case.name..": rest engine did not run")
  assert(msg:find("FEHLER:",1,true)==nil,case.name..": rest engine error: "..msg)
  assert(msg:find(case.expected_bars,1,true),case.name..": measure span incorrect: "..msg)
+ if case.expected_onsets then
+  for _,row in ipairs(case.expected_onsets) do
+   local text="Takt "..row[1]..": QN "
+   local found=false
+   for line in msg:gmatch("[^\\n]+") do
+    if line:find(text,1,true) and line:find("MIDI-Notenanfaenge="..row[2],1,true) then
+     found=true
+     break
+    end
+   end
+   assert(found,case.name..": incorrect per-bar onset count for bar "..row[1]..": "..msg)
+  end
+ end
  return msg
 end
 
@@ -73,5 +86,19 @@ run_case({
  item_position=4,
  notes={{4.0,4.24,0,81},{4.5,5.2,0,79},{7.125,7.365,0,77},{9.5,11.0,0,72},{12.75,13.3,0,60}},
  expected_bars="Bereich: Takte 2 bis 5"
+})
+-- Reference-style passage: twelve melody onsets in bars 3-6, no empty bar.
+-- These are synthetic events; the uploaded MIDI file is not committed.
+run_case({
+ name="3/4 violin bars 3-6 reference alignment",
+ measures={{0,3,3,4},{3,6,3,4},{6,9,3,4},{9,12,3,4},
+           {12,15,3,4},{15,18,3,4}},
+ item_position=6,
+ notes={{6,7.498,0,76},{7.5,8,0,77},{8,8.5,0,76},{8.5,9,0,74},
+        {9,11,0,72},{11,12,0,69},
+        {12,13.5,0,74},{13.5,14,0,76},{14,14.5,0,74},{14.5,15.002,0,72},
+        {15,17.5,0,71},{17.5,18,0,76}},
+ expected_bars="Bereich: Takte 3 bis 6",
+ expected_onsets={{3,4},{4,2},{5,4},{6,2}}
 })
 print("OK: real GPL rest adapter, measure-index API, optional outputs and meter change")
