@@ -1,4 +1,12 @@
-# Notation Studio – Notenbild-Test 0.2.1 (experimentell)
+# Notation Studio – Notenbild-Test 0.2.2 (experimentell)
+
+## ReaImGui Windows-Korrektur 0.2.2 (01.11.2026)
+
+Die reale REAPER-Windows-Version 0.2.1 schlug mit `ImGui_EndChild: Assertion failed: child_window->Flags & ImGuiWindowFlags_ChildWindow` fehl. Die urspruengliche Fenster-Verschachtelung wurde entfernt; die Partitur wird **direkt im Hauptfenster** gezeichnet, `ImGui_Dummy` reserviert die Zeichenflaeche. Neue Tests verbieten Child-Window-Aufrufe und validieren zwei aufeinanderfolgende balancierte GUI-Frames. [CI erfolgreich](https://github.com/wibem1/Composition-Studio/actions/runs/41360686013). **Echter Windows-Praxistest dieser Korrektur steht noch aus.**
+
+Das vollstaendige Testpaket `Notation_Studio_Notenbild_Test_0.2.2_Windows.zip` enthaelt Hauptscript, unveraenderten Core und eine Startanleitung. Beide Lua-Dateien in einen Ordner entpacken und **das Skript aus diesem Ordner** als neue REAPER-Aktion laden. Im Fenstertitel muss `Notenbild 0.2.2 TEST` stehen.
+
+
 
 ## Windows-ReaImGui-Startkorrektur (0.2.1-test, 01.11.2026)
 
