@@ -1,5 +1,18 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – Windows: Taktkarte-Fehler im Pausenvergleich korrigiert
+
+**Nutzer-Praxistest:** In REAPER 7.83/Windows zeigte `tools/notator_gpl_rest_comparison.lua` unmittelbar `Taktkarte ungueltig bei Takt 1`. Die Pausenberechnung hatte noch nicht begonnen, die MIDI-/Projekt-Daten blieben unberuehrt.
+
+**Codeursache / Fix:** Der alte Adapter erwartete von `TimeMap_QNToMeasures` neben dem Taktindex auch die laut API **optionalen** Anfangs- und End-QN. Die genaue Rueckgabe von REAPER auf dem Nutzergeraet wurde nicht protokolliert; das ist die begruendete Fehlerhypothese, noch keine am Geraet verifizierte Ursache. Die Taktkarte wird jetzt direkt ueber `TimeMap_GetMeasureInfo(0,bar)` anhand der Taktnummer gelesen. Taktartwechsel sind dadurch explizit abgebildet. Die Original-GPL-Engine bleibt unveraendert; keine MIDI-Schreibzugriffe.
+
+**Automatisierter Test:** `tests/test_notator_gpl_rest_adapter.lua` simuliert die ganze Adapter-Ausfuehrung mit echtem GPL-Engraver. Faelle: 4/4 mit absichtlich fehlenden optionalen `QNToMeasures`-Rueckgaben und MIDI-Item ab Takt 2 mit 3/4, 5/8, 4/4. Kein Skriptabbruch, komplette Reststatistik, MIDI-Hash unveraendert.
+
+**Erfolgreicher CI-Nachweis:** https://github.com/wibem1/Composition-Studio/actions/runs/41352928538 – Status `success` inkl. aller vier Lua-Testskripte; Ausgabe `OK: real GPL rest adapter, measure-index API, optional outputs and meter change`.
+
+**Offen:** Das korrigierte Skript wurde noch **nicht** in der echten REAPER-Windows-Installation getestet. Keine neue Version/kein Release/kein Merge. **Naechster Schritt:** Lokale Kopie von `tools/notator_gpl_rest_comparison.lua` aus dem Arbeitszweig aktualisieren und nur diese Aktion erneut in REAPER ausfuehren; Konsolenausgabe sichern.
+
+
 ## REAPER-Notator GPL 2.55 – Pausen-Engine isoliert getestet (01.11.2026)
 
 **Neue, nachweisbare Funktionalitaet (Arbeitsbranch `feat/notator-gpl-rhythm-audit-20261101`, PR #3):**
