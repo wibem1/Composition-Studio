@@ -1,5 +1,20 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – REAPER-Notenbild-Test 0.2.2: Child-Window-Stack entfernt
+
+**Zweiter echter Windows-Abbruch in Folge:** Nach 0.2.1 meldete REAPER 7.83/x64/Windows:
+`Notation Studio - Notenbild Test.lua:199: ImGui_EndChild: Assertion failed: child_window->Flags & ImGuiWindowFlags_ChildWindow`.
+Die Version 0.2.1 konnte also trotz gruenem GUI-Mock-Test nicht als funktionsfaehig gelten.
+
+**Ursacheneingrenzung / Richtungswechsel:** Der Fehler deutet auf eine ungueltige/nicht balancierte ReaImGui-Child-Window-Verschachtelung hin; warum der Child-Status im echten Windows-Kontext verloren ging, ist nicht abschliessend nachgewiesen. Nach zwei missglueckten punktuellen API-Fixes wurde der problematische Weg **vollstaendig eliminiert**, statt erneut isolierte Parameter zu aendern: `experimental/score-preview/Notation Studio - Notenbild Test.lua` zeichnet ab `0.2.2-test` direkt in die DrawList des **Hauptfensters** und reserviert Zeichenflaeche mit `ImGui_Dummy`. Keine Aufrufe von `ImGui_BeginChild` oder `ImGui_EndChild` mehr. Die Hauptfenster-Scrollbar uebernimmt die vertikale Navigation. Siehe offizielle Dokumentation https://cfillion.ca/reaper_imgui_doc.html.
+
+**Regressionstests:** `experimental/score-preview/tests/test_gui_mock.lua` laesst beide Child-APIs jetzt bewusst mit Assertion scheitern, fordert zwei aufeinanderfolgende Frames mit balanciertem `ImGui_Begin/End` und zwei gueltigen `ImGui_Dummy`-Canvas-Reservierungen sowie weiterhin **null MIDI-Schreibzugriffe**. CI https://github.com/wibem1/Composition-Studio/actions/runs/41360686013 **success** inkl. Syntax und Score-Modelltests. Das ist ein **Simulationsnachweis**, kein echter REAPER-Grafiktest.
+
+**Auslieferung:** Gespraechsartefakt `Notation_Studio_Notenbild_Test_0.2.2_Windows.zip` mit dem Versionsstand aus GitHub, Startanleitung und unveraendertem Core. ZIP-Integritaet und Git-Blob-Hash der zwei Lua-Dateien geprueft: Hauptscript `0cc0f50d21b30c971c0e73caed87e9e79c37b2db`, Core `3e3d35f872d02c1f483510ee6144e90a0259a4b6`. Das Paket ist **kein** Release des gesamten Composition Studio.
+
+**Naechster Schritt:** Nutzer-Praxistest der 0.2.2 unter REAPER 7.83 Windows, sichtbare Notendarstellung beurteilen. Keine eigenmaechtigen MIDI-Aenderungen, kein Merge, Hauptprogramm/main unveraendert, Draft PR #4.
+
+
 ## 01.11.2026 – REAPER Windows: Notenbild 0.2 Startfehler korrigiert, Testkandidat 0.2.1
 
 **Nutzerbefund:** Screenshot in REAPER 7.83/x64 (Windows), nach Start der Aktion `Notation Studio - Notenbild Test.lua`: `ReaScript Error ... lua:189: bad argument #5 to 'ImGui_BeginChild' (number expected, got boolean)`. Der urspruengliche Testkandidat war damit **im echten REAPER nachgewiesen nicht startfaehig**. Das sichtbare Notenbild im Hintergrund gehoert zum nativen REAPER-Noteneditor, nicht zu unserem ReaImGui-Fenster.
