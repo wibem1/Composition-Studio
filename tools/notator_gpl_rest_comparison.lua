@@ -93,22 +93,6 @@ local settings={
  {label="Anzeige 1/16",grid=0.25},
  {label="Anzeige 1/32",grid=0.125}
 }
-local lines={
- "REAPER-Notator GPL v2.55 / Pausenvergleich (nur lesen)",
- "REAPER: "..tostring(r.GetAppVersion()),
- "Bereich: Takte "..(first+1).." bis "..(last+1),
- "Noten: alle="..#groups.all..", ab C4="..#groups.upper..", unter C4="..#groups.lower,
- "Geoeffneter Take: "..take_name.." | Spur: "..track_name,
- "MIDI-Noten insgesamt im Take: "..tostring(note_count),
- "Item-Start QN: "..string.format("%.3f",item_qn).." | Erste beruecksichtigte Note QN: "..(earliest and string.format("%.3f",earliest) or "keine"),
- "Takt-Anfaenge und Note-On-Anzahlen im REAPER-Take:",
- "Keine Aenderung an MIDI, Track, Notensatz oder Projekt",
- "",
- "HINWEIS: Dies ist die isolierte Pausenfunktion, KEIN fertiges Notenbild.",
- "Die Registergrenze C4 ist keine echte Stimmenzuordnung.",
- ""
-}
-
 -- Read-only source alignment trace: verify exactly which take/timeline bars
 -- are being compared before drawing conclusions from the rest counts.
 local take_name=""
@@ -134,6 +118,22 @@ for _,n in ipairs(groups.all) do
   end
  end
 end
+
+local lines={
+ "REAPER-Notator GPL v2.55 / Pausenvergleich (nur lesen)",
+ "REAPER: "..tostring(r.GetAppVersion()),
+ "Bereich: Takte "..(first+1).." bis "..(last+1),
+ "Noten: alle="..#groups.all..", ab C4="..#groups.upper..", unter C4="..#groups.lower,
+ "Geoeffneter Take: "..take_name.." | Spur: "..track_name,
+ "MIDI-Noten insgesamt im Take: "..tostring(note_count),
+ "Item-Start QN: "..string.format("%.3f",item_qn).." | Erste beruecksichtigte Note QN: "..(earliest and string.format("%.3f",earliest) or "keine"),
+ "Takt-Anfaenge und Note-On-Anzahlen im REAPER-Take:",
+ "Keine Aenderung an MIDI, Track, Notensatz oder Projekt",
+ "",
+ "HINWEIS: Dies ist die isolierte Pausenfunktion, KEIN fertiges Notenbild.",
+ "Die Registergrenze C4 ist keine echte Stimmenzuordnung.",
+ ""
+}
 
 local original_note_count=#groups.all
 for bar=first,last do
