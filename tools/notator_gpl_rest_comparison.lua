@@ -126,7 +126,7 @@ local lines={
  "Noten: alle="..#groups.all..", ab C4="..#groups.upper..", unter C4="..#groups.lower,
  "Geoeffneter Take: "..take_name.." | Spur: "..track_name,
  "MIDI-Noten insgesamt im Take: "..tostring(note_count),
- "Item-Start QN: "..string.format("%.3f",item_qn).." | Erste beruecksichtigte Note QN: "..(earliest and string.format("%.3f",earliest) or "keine"),
+ "Item-Start QN: "..string.format("%.3f",qn_start).." | Erste beruecksichtigte Note QN: "..(earliest and string.format("%.3f",earliest) or "keine"),
  "Takt-Anfaenge und Note-On-Anzahlen im REAPER-Take:",
  "Keine Aenderung an MIDI, Track, Notensatz oder Projekt",
  "",
