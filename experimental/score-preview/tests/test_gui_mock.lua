@@ -1,22 +1,22 @@
 -- Execute native ReaImGui preview script under a read-only REAPER simulation.
 local deferred,draw_count={},0
+local begins,ends,dummies=0,0,0
 local edits={MIDI_SetNote=0,MIDI_InsertNote=0,MIDI_DeleteNote=0,MIDI_SetAllEvts=0}
 local take,item={},{}
 local r={
  ImGui_CreateContext=function() return {} end,
- ImGui_Begin=function() return true,true end,
- ImGui_End=function() end,
- -- Mock the actual ReaImGui 0.9+ ABI: fifth argument is an integer
- -- child flags bitmask, never a legacy boolean "border" argument.
- ImGui_BeginChild=function(ctx,id,w,h,child_flags,window_flags)
-  assert(type(id)=='string')
-  assert(type(w)=='number' and type(h)=='number')
-  assert(type(child_flags)=='number','BeginChild child_flags must be integer, got '..type(child_flags))
-  assert(child_flags==1,'Expected numeric Borders bit')
-  assert(type(window_flags)=='number','BeginChild window_flags must be numeric')
-  return true
+ ImGui_Begin=function()
+  begins=begins+1
+  return true,true
  end,
- ImGui_EndChild=function() end,
+ ImGui_End=function()
+  ends=ends+1
+  assert(ends<=begins,'ImGui_End without a matching main window')
+ end,
+ -- ReaImGui's nested child window path caused two different real Windows
+ -- assertion failures. Keep this test strict: no child API may be invoked.
+ ImGui_BeginChild=function() error('Unexpected ImGui_BeginChild: score must use main-window canvas') end,
+ ImGui_EndChild=function() error('Unexpected ImGui_EndChild: score must use main-window canvas') end,
  ImGui_Text=function() end,
  ImGui_SameLine=function() end,
  ImGui_Button=function() return false end,
@@ -27,7 +27,11 @@ local r={
  ImGui_DrawList_AddEllipseFilled=function() draw_count=draw_count+1 end,
  ImGui_DrawList_AddCircleFilled=function() draw_count=draw_count+1 end,
  ImGui_DrawList_AddRectFilled=function() draw_count=draw_count+1 end,
- ImGui_Dummy=function() end,
+ ImGui_Dummy=function(_,w,h)
+  assert(type(w)=='number' and type(h)=='number')
+  assert(w>=800 and h>=100,'Score canvas reservation is invalid')
+  dummies=dummies+1
+ end,
  CountSelectedMediaItems=function() return 1 end,
  GetSelectedMediaItem=function() return item end,
  GetActiveTake=function() return take end,
@@ -55,5 +59,11 @@ assert(#deferred==1,'initial window must defer one GUI frame')
 local okframe,errframe=pcall(deferred[1])
 assert(okframe,tostring(errframe))
 assert(draw_count>18,'No real staff drawing occurred ('..draw_count..')')
+assert(begins==1 and ends==1,'Mismatched main window stack')
+assert(dummies==1,'Main-window score canvas was not reserved')
+assert(#deferred==2,'One follow-up frame should be scheduled')
+local next_ok,next_err=pcall(deferred[2])
+assert(next_ok,'Second frame failed: '..tostring(next_err))
+assert(begins==2 and ends==2 and dummies==2,'Second frame stack mismatch')
 for name,count in pairs(edits) do assert(count==0,name..' modified MIDI') end
-print('OK: REAPER-ReaImGui score-preview smoke simulation; '..draw_count..' drawing calls; zero MIDI edits')
+print('OK: ReaImGui main-window canvas, 2 frames, no child windows; '..draw_count..' drawing calls; zero MIDI edits')
