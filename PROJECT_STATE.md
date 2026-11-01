@@ -1,5 +1,22 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – Original-MIDI der Orgelphantasie direkt ausgewertet (reale Nutzerdatei)
+
+**Quelle:** Upload `phantasie-in-g-moll-orgel(1).mid`, lokal mit mido direkt gelesen, **Originaldatei nicht ins GitHub-Repo uebernommen**. Standard-MIDI Typ 1, 480 Ticks/Viertel, drei getrennte Spuren, Ende bei QN ~256:
+- Spur 0 `Church Organ`, MIDI-Kanal 0, **759 Note-On-Ereignisse**, Register MIDI-Pitch 62–87, 649 verschiedene Einsatzzeitpunkte, darunter Akkorde bis zu vier gleichzeitig gestarteten Noten.
+- Spur 1 `Church Organ`, MIDI-Kanal 1, **400 Noten**, Register 51–70, 316 Einsatzzeitpunkte, Akkorde bis drei Toene.
+- Spur 2 `Pedal`, MIDI-Kanal 2, **206 Noten**, Register 31–51, monophone Starts.
+- **Insgesamt 1.365 Noten**, alle Note-Offs gepaart; die 759 Noten des ersten Manuals passen **exakt** zum realen REAPER-Report (Take `Church Organ`: 759).
+
+**Unabhaengiger Abgleich der REAPER-Projekttakte 2–5:** Projekt-Zeitfenster QN [4,7), [7,10), [10,13), [13,16). Exakte Anzahlen Note-Ons in MIDI-Spur 0: **8, 9, 9, 12 = 38**, also 100% identisch zum Nutzerbericht. Bei tatsaechlicher zeitlicher Intervall-Vereinigung dieses ersten Manuals ist in jedem dieser vier Projekt-Takte die groesste tonfreie Luecke **genau ein MIDI-Tick (1/480 Viertelnote = 0,002083 QN)**, keine Pause musikalisch relevanter Laenge. Daher sind die von der GPL-Pausen-Engine gemeldeten **0 Pausen** in diesem Abschnitt auch unabhaengig von der intern bekannten Summen-Schwachstelle **plausibel und korrekt fuer die vereinigte Klangabdeckung des ersten Manuals**. **Nicht** bewiesen ist damit die korrekte Pause jeder einzelnen polyphonen Stimme.
+
+**Gesamtes Stueck, echte zusammenhaengende Stille je einzelner Spur (ohne die zahlreichen 1-Tick-Trennungen; Schwellwert >= 0,125 QN):** 1. Manual **8**, 2. Manual **8**, Pedal **23** Abschnitte. Die 2. Manualspur ist im Zeitfenster QN 13–16 vollstaendig stumm, waehrend das Pedal eine laengere Note haelt: Ein klarer Nachweis, warum spurspezifische Pausen nicht mit Pausen des Gesamtensembles verwechselt werden duerfen. Ueber alle drei Spuren vereinigt gibt es nur drei Abschnitte von >= 0,125 QN gemeinsamer Stille. Der erste Manualtrack hat 640 Mikroluecken <0,02 QN, groesstenteils genau 1 MIDI-Tick, die fuer das Notenbild nicht als Rest notiert werden sollten.
+
+**Hervorstechender weiterer Befund:** Das rohe MIDI enthaelt ausschliesslich eine `time_signature`-Metaangabe **4/4 bei Tick 0** (keine weiteren Taktartwechsel). Dagegen weist REAPER `TimeMap_GetMeasureInfo` im Nutzer-Projekt fuer Takte 2–5 jeweils **3 QN/Takt** aus. Die MIDI-Datei und die REAPER-Projekttaktkarte sind damit nicht gleich. Das kann optisch unpassende Balken-, Bindungs- und Taktaufteilungen erzeugen. Vor einer Anzeige-/Notationskorrektur muss die beabsichtigte musikalische Taktart anhand der Partitur/Kompositionsanweisung geklaert werden; nicht einfach das Projekt oder MIDI automatisch umstellen. MIDI-Tonart-Tag `Bb` ist mit g-Moll (Paralleltonart) vereinbar.
+
+**Fazit und naechster Schritt:** Der 0-Pausen-Befund in den ersten 4 untersuchten Projekttakten war **kein** Fehler des Original-Engravers. Die zuvor nachgewiesene GPL-Engine-Schwaeche bei ueberlappenden Noten bleibt technisch real, wurde hier aber **nicht** im untersuchten Bereich ausgeloest. Bei weiterer Notation-Studio-Entwicklung prioritär Taktart-Konsistenz, 3 getrennte Orgel-Systeme (Manual I/II + Pedal), innerhalb eines Systems musikalische Stimmenzuordnung und 1-Tick-Note-Offs rein fuer die **Anzeige** tolerieren. Keine MIDI-Performance-Aenderung, keine neue Version/kein Release und kein Merge. Ergebnis stammt aus direkter Dateianalyse, nicht aus einem neuen REAPER-Echtlauf der gesamten Orgelpartitur.
+
+
 ## 01.11.2026 – Windows: Church Organ, 38 Noten im Bereich, 0 berechnete Pausen; bekannte Engine-Grenze nachgewiesen
 
 **Neuer REALER REAPER-Test (Nutzer-Konsolenausgabe):**
