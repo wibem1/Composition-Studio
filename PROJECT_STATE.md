@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## REAPER-Vergleich: 1/32 + Minimum 1/64 ist schlechter lesbar (01.11.2026)
+
+- **Vom Nutzer in REAPER 7.83/OSX64 manuell eingestellt und per Screenshot bestaetigt:** `Quantize notes/rests = 1/32`, `Minimum note length = 1/64`; beide Checkboxen `Use project default` sind ausgeschaltet, Spur `Revolt Patchable Synth`.
+- Das Notenbild der Takte 1–4 zeigt bei diesen Werten deutlich mehr sehr kurze Noten/Pausen, zersplitterte Balkengruppen sowie komplexere Bindungen als die vorherige groebere Darstellung. **Dieser Praxistest ist fuer das Ziel Lesbarkeit negativ.** Die MIDI-Daten wurden fuer diesen Vergleich nicht absichtlich veraendert.
+- **Wichtig:** Die manuelle Kontrolle belegt die Werte 1/32 und 1/64 im Dialog, nicht dass die vorherigen Skriptbefehle 41030/41212 individuelle Track-Overrides gesetzt haben. Im frueheren Dialog waren trotz gesendeter Befehle 1/8 und 1/32 sichtbar. Diese technische Frage bleibt offen.
+- **Konsequenz:** Keine feinere Quantisierung allein als Loesung, nicht blind MIDI-Noten verschieben/verlaengern. Fuer diesen Titel zuerst zur zuvor besser lesbaren Anzeige 1/8 und Minimum 1/32 zurueckkehren. Danach musikalisch begruendete, nur fuer den Notensatz gueltige Notenlaengen/Voice-Zuordnung separat erproben (moegliche REAPER-Notationsevents `disp_len`), mit Original-Performance und Undo-Absicherung; erst nach selektivem Test automatisieren.
+- **Naechster einzelner Schritt:** Zunaechst eine klar abgegrenzte Passage der rechten Hand darauf pruefen, welche der kurzen MIDI-Luecken in der Notation besser als laengere Note/Staccato oder echte Pause dargestellt werden sollen. Keine Aenderung an `main`, keine Release-Freigabe.
+
 ## REAPER-Praxistest: MIDI-Rhythmusdiagnose bestaetigt (01.11.2026)
 
 **Realer REAPER-Test (Nutzer, 7.83/OSX64):** `tools/notation_midi_readonly_diagnose.lua` lief auf Track `Revolt Patchable Synth`, MIDI-Take mit 238 Noten. Ausgewertet wurden die ersten vier Takte, 61 MIDI-Noten: 31 Anfaenge und 30 Enden mehr als 0,04 Viertel von einem 1/16-Raster entfernt; 14 Noten kuerzer als 1/16. Register ab MIDI 60: 24 tatsaechliche Abdeckungsluecken bis zu einer Viertelnote, Summe 4,75 Viertel; Beispiele wiederholt 0,135 Viertel. Unter MIDI 60: keine solchen Luecken. In der Einzelnote-Liste wiederkehrend Startabweichung 0,125 Viertel sowie Notenlaengen 0,240, 0,365 und 0,677 Viertel.
