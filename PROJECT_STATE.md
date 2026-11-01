@@ -1,5 +1,21 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Erster sichtbarer REAPER-Notenbild-Echtlauf; grafische Korrektur 0.2.3
+
+**Beleg:** Nutzer-Screenshot unter REAPER 7.83/x64 Windows: eigenstaendiges Fenster `Notation Studio · Notenbild 0.2.2 TEST` sichtbar, zeichnet die Church-Organ-Noten. Status: **1 MIDI-Item, 759 Noten, 65 angezeigte 4/4-Takte**. Damit ist der GUI-Start ab 0.2.2 erstmalig **real nutzerbestaetigt**, aber nur fuer eine einzelne Spur.
+
+**Beurteilung aus dem Bild:** Noch kein verwendbarer Notensatz. Akkordtoene wurden mit einzelnen Haelsen gezeichnet; Schluessel waren nur G/F-Platzhalter, an jeder B♭/E♭-Note erschien ein wiederholtes ♭, und tonale Zuordnung war in mindestens einem Fall fehlerhaft. Balkengruppierung, polyphone Stimmen und Pausen, Bindungen, automatische Tonart und Layout bleiben ausstehend. Die Zahl 759 zeigt, dass die beiden anderen Orgelspuren (400 und 206 Noten) im REAPER-Arrangement noch **nicht zusammen mit der ersten** fuer die Anzeige ausgewaehlt waren. Hieraus ist keine dreisystemige REAPER-Grafikpruefung ableitbar.
+
+**Einzelner Korrekturschritt auf Draft PR #4, Version 0.2.3-test:**
+- `score_preview_core.lua`: Korrektur der chromatischen Tonhoehenabbildung (Eb statt irrtuemlichem Db fuer Pitch-Class 3); Vorzeichenlogik in **festem g-Moll-Testprofil** (Bb/Eb in Vorzeichnung, nur abweichende Vorzeichen pro Oktave/Takt). Vorherige fehlerhafte Darstellung nicht mehr mit musikalisch korrekter Notation verwechseln.
+- `Notation Studio - Notenbild Test.lua`: Anzeige einer schlichten g-Moll-Vorzeichnung; simultane Noten einer Einsatzzeit werden zu einem **vereinfachten Akkord** mit gemeinsamem Hals zusammengefasst. Spurnamen oberhalb der Systeme statt mitten in den Linien, grosszuegiger linker Rand, ausdruecklicher Hinweis bei nur einem selektierten MIDI-Item. Weiterhin nur ReaImGui-Hauptfenster, keine Child-Window-Aufrufe. **Keine MIDI-Schreibfunktionen**.
+- `tests/test_core.lua`: regressionstestet Eb4-Position, B♭/E♭ ohne wiederholtes Vorzeichen, Wiederherstellung nach B♮, F♯ und Gruppierung mehrerer gleichzeitiger Noten.
+- GitHub Actions `https://github.com/wibem1/Composition-Studio/actions/runs/41361239737`: Lua-Syntax, Modell- und GUI-Mock-Tests **success**. Das ist ein automatisierter Test, kein zweiter echter Grafikpraxistest.
+- Neues Gespraechsartefakt `Notation_Studio_Notenbild_Test_0.2.3_Windows.zip`, das Hauptskript `c6b85c5098b90584a7ef1cf91e20a6eddfa4a250` und den Core `e66ffaad85b597e4eb9e936f6958b586e2c8ddf3` enthaelt, **identisch mit GitHub-Git-Blobs**. ZIP-Integritaet verifiziert. Kein produktives Release.
+
+**Offen/naechster Schritt:** Nutzer-Praxistest v0.2.3 mit **allen drei ausgewaehlten Orgel-MIDI-Items** und grafische Rueckmeldung. Dieser Prototyp ist trotz der Korrektur **kein auffuehrungsreifer Partiturrenderer**; speziell G/F sind nach wie vor Platzhalter, musikalische Stimmtrennung/Balken/Pausen/Bindungen fehlen. Keine Versionsfreigabe, kein Merge, `main` und bisherige App unveraendert.
+
+
 ## 01.11.2026 – REAPER-Notenbild-Test 0.2.2: Child-Window-Stack entfernt
 
 **Zweiter echter Windows-Abbruch in Folge:** Nach 0.2.1 meldete REAPER 7.83/x64/Windows:
