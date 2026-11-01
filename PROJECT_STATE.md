@@ -1,5 +1,21 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – Originaldatei Valse_des_Ombres_Dorees_korrigiert.mid gegen REAPER-Bericht verifiziert
+
+**Datei direkt analysiert (Nutzerupload im Chat, nicht ins Repository kopiert):**
+- Standard-MIDI-Datei Typ 1, 480 Ticks/Viertel, **3/4** bei konstant 108 BPM, ca. 43,335 Sekunden, 26 Takte; separate MIDI-Spuren Violine (Programm 40, 77 Noten) und Klavier (Programm 0, 208 Noten), insgesamt 285 Noten.
+- Violin-Notenanfaenge bei 3/4: erste zwei Takte ohne Violine; Takt 3 **4** Noten, Takt 4 **2**, Takt 5 **4**, Takt 6 **2** = **12** Noten in Takt 3–6. Dort **kein** vollstaendig leerer Takt. In diesem Bereich liegt genau eine minimale echte Violinluecke von einem MIDI-Tick (1/480 Viertelnote ≈ 0,002083 QN), ansonsten durchgehende Notenabdeckung.
+- Saemtliche 77 Violin-Notenanfaenge liegen exakt auf dem 1/16-Taktraster; keine Violin- oder Klaviernoten kuerzer als 1/16. Viele Note-off-Zeitpunkte differieren nur um einen MIDI-Tick von nominalen Notenlaengen.
+- Im realen Windows-Konsolenbericht zuvor dagegen: `Bereich: Takte 3 bis 6`, `Noten: alle=10`, `Pausen=1, Summe=3.000 QN, Ganztaktpausen=1` bei allen Rastern. Dies passt **nicht** zu den 12 Violin-Notenanfaengen und vier belegten Takten der hochgeladenen Originaldatei. Moegliche Gruende: anders zugeschnittener Take, Item-/Take-Versatz oder Projektposition. Noch **nicht** identifiziert; nicht als generelle Unzulaenglichkeit der GPL-Engine oder als MIDI-Fehler bewerten.
+- Der zuvor auf macOS analysierte Track `Revolt Patchable Synth` mit 238 MIDI-Noten ist **ein anderer Testgegenstand**, nicht mit diesem Valse-MIDI austauschbar.
+
+**Gezielte Diagnostik verbessert:** `tools/notator_gpl_rest_comparison.lua` gibt nun Take-/Spurnamen, Gesamtzahl der Take-Noten, Item-Startprojekt-QN, erste beruecksichtigte Note und die Notenanfaenge pro Takt mit exakten Projekt-QN-Grenzen aus. Keine Schreibfunktionen. `tests/test_notator_gpl_rest_adapter.lua` hat eine zusaetzliche synthetische 3/4-Regression mit Taktzaehlungen 4/2/4/2. Die Original-MIDI-Datei ist **nicht** im Repository gespeichert.
+
+**CI-Nachweis:** Nach Korrektur zweier durch die neuen Diagnosefelder entstandenen Referenzfehler laufen alle vier GPL-/Adapter-Testdateien unter Lua 5.4 erfolgreich: https://github.com/wibem1/Composition-Studio/actions/runs/41354359742 (Status `success`). Davor fehlgeschlagene Zwischenlaeufe sind nicht als erfolgreiche Nachweise zu interpretieren.
+
+**Naechster einzelner Schritt:** Korrigiertes read-only Skript an dem aktuellen Windows-REAPER-Take erneut ausfuehren; anhand der neu ausgegebenen Projekt-QN-Grenzen und Takt-Notenanzahlen abgleichen, ob die Datei korrekt positioniert bzw. zugeschnitten ist. Keine neuen Quantisierungs-Experimente, keine musikalische Bearbeitung, kein Merge/Release.
+
+
 ## 01.11.2026 – Erster erfolgreicher REALER REAPER-Windows-Lauf des GPL-Pausenvergleichs
 
 **Nutzerbeleg (REAPER 7.83/x64, Windows):**
