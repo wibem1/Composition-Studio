@@ -1,5 +1,5 @@
 -- @description Notation Studio - Notenbild Test (READ ONLY)
--- @version 0.2.1-test
+-- @version 0.2.2-test
 -- @author Composition Studio
 -- @about Preview only: selected REAPER MIDI items, no edits and no API costs.
 -- This isolated test does not replace the released Notation Studio.
@@ -162,7 +162,7 @@ refresh()
 local function loop()
   if not open then return end
   local visible
-  visible,open=r.ImGui_Begin(ctx,'Notation Studio · Notenbild 0.2.1 TEST###score_preview',open)
+  visible,open=r.ImGui_Begin(ctx,'Notation Studio · Notenbild 0.2.2 TEST###score_preview',open)
   if visible then
     r.ImGui_Text(ctx,'NOTENBILD-VORSCHAU · Nur Anzeige, keine MIDI-Aenderungen')
     if r.ImGui_Button(ctx,'MIDI-Auswahl neu einlesen') then refresh() end
@@ -186,7 +186,10 @@ local function loop()
     if model then
       local w=math.max(880,970*zoom)
       local height=(#model.tracks*145+70)*zoom
-      r.ImGui_BeginChild(ctx,'score_canvas',0,math.min(height+30,610),1,0)
+      -- Use the main window's draw list as the canvas. Avoid BeginChild/
+      -- EndChild entirely: the ReaImGui child stack failed in the real
+      -- REAPER Windows test. ImGui_Dummy reserves space and the main
+      -- window provides scrollbars for taller scores.
       local sx,sy=r.ImGui_GetCursorScreenPos(ctx)
       local dl=r.ImGui_GetWindowDrawList(ctx)
       r.ImGui_DrawList_AddRectFilled(dl,sx,sy,sx+w,sy+height,WHITE,3)
@@ -196,7 +199,6 @@ local function loop()
         draw_staff(dl,sx+20,sy+72*zoom+(i-1)*145*zoom,w-40,track,model,first_bar,actual,zoom)
       end
       r.ImGui_Dummy(ctx,w,height)
-      r.ImGui_EndChild(ctx)
     else
       r.ImGui_Text(ctx,status)
     end
