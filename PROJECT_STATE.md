@@ -1,5 +1,18 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – Erster erfolgreicher REALER REAPER-Windows-Lauf des GPL-Pausenvergleichs
+
+**Nutzerbeleg (REAPER 7.83/x64, Windows):**
+- Read-only-Adapter `tools/notator_gpl_rest_comparison.lua` mit unveraendertem GPL-Original-Engraver v2.55 erfolgreich durchgelaufen, **keine** Taktkarten- oder Modul-Pfadfehlermeldung.
+- Bericht: Bereich **Takte 3–6**; **10** nicht stummgeschaltete, in den Bereich ragende MIDI-Noten; alle liegen `pitch >= 60` (Statistik oberes Register), unter C4 0.
+- Sowohl ohne Anzeigequantisierung als auch bei 1/8, 1/16 und 1/32 erzeugt der Algorithmus: **1 Pause, nicht kurz, Gesamtwert 3,000 Viertelnoten, als Ganztaktpause markiert**; `upper` und `all` sind daher identisch. Die eine Ganztaktpause entspricht im Datenmodell einem leeren 3/4-Takt. Die Zuordnung, welcher Takt leer ist, wurde **nicht** ausgegeben.
+- `MIDI-Hash unveraendert: true`; `Originalnoten im Analyse-Array erhalten: true`. Dies belegt Datenstabilitaet dieses realen Laufs, NICHT eine visuelle Verbesserung der Partitur.
+
+**Relevante Einschraenkung:** Vorherige Screenshots dieses Realtests zeigten `Valse_des_Ombres_Dorees_korrigiert.mid` im MIDI-Editor; das urspruengliche Problembeispiel enthielt dagegen **61 Noten in ersten 4 Takten**, 24 kurze Luecken im oberen Register, Track `Revolt Patchable Synth`, REAPER 7.83/OSX64. Aktueller Windows-Lauf testet daher offensichtlich **nicht dasselbe aktive Take/den gleichen Bereich**. Bei nur 10 Noten und lediglich einer Ganztaktpause ist aus dieser Ausgabe keine Aussage zur Ursache der vielen urspruenglichen kurzen Notationspausen ableitbar.
+
+**Naechster einzelner Schritt:** Vergleich mit der konkreten problematischen Passage (frueherer Track `Revolt Patchable Synth`), falls sie in REAPER verfuegbar ist, oder alternativ ein vom Nutzer bereitgestellter Ausschnitt der urspruenglichen MIDI-Datei. Vor weiterem Parameter- oder Algorithmus-Tuning erst sicherstellen, dass dieselben Eingabedaten verglichen werden. Noch keine automatische Notationskorrektur, kein Merge/Release, `main` unveraendert.
+
+
 ## 01.11.2026 – Windows-Folgeversuch: Original-Engraver nicht gefunden (Installationspfad)
 
 **Beleg:** Nutzer-Screenshot aus REAPER 7.83/Windows beim neuen Lauf des read-only-Adapters: `Original-Engraver nicht gefunden: C:\\Users\\wibem\\Downloads/../vendor/REAPER-Notator-2.55/modules/rendering/engraver.lua`.
