@@ -61,7 +61,7 @@ local function run_case(case)
   for _,row in ipairs(case.expected_onsets) do
    local text="Takt "..row[1]..": QN "
    local found=false
-   for line in msg:gmatch("[^\\n]+") do
+   for line in msg:gmatch("[^\r\n]+") do
     if line:find(text,1,true) and line:find("MIDI-Notenanfaenge="..row[2],1,true) then
      found=true
      break
