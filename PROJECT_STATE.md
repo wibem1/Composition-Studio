@@ -1,5 +1,18 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – KORREKTUR: 4/4 in REAPER vom Nutzer bestaetigt; 3-QN-Taktgrenzen erlauben keine Taktart-Feststellung
+
+**Unmittelbare Nutzerkorrektur:** Im REAPER-Projekt steht **4/4**, ebenso enthaelt die analysierte Datei `phantasie-in-g-moll-orgel(1).mid` 4/4 als einziges Taktart-Metaereignis. Die vorige Interpretation in diesem Dokument, REAPER verwende wegen 3-QN-Abstaenden der ausgegebenen Taktgrenzen **3/4**, ist **nicht nachgewiesen und in dieser Form zurueckgenommen**. An den REAPER-Einstellungen ist nichts zu veraendern.
+
+**Offene technische Diskrepanz:** Die reale Konsolenausgabe zeigte QN-Grenzen T2 4–7, T3 7–10, T4 10–13, T5 13–16 (jeweils 3 QN). Laut offizieller REAPER-API liefert `TimeMap_GetMeasureInfo` explizit QN-Beginn, QN-Ende UND den Taktart-Zaehler/Nenner je Takt (https://www.cockos.com/reaper/sdk/reascript/reascripthelp.html). Der alte Adapter las `qn_start`/`qn_end`, aber **nicht** `timesig_num`/`timesig_denom`; 3 QN wurden daher faelschlicherweise als sicherer 3/4-Takt gewertet. Die UI-Anzeige 4/4 und die QN-Spanne koennen nicht ohne weiteren Blick auf lokale Taktart-/Tempopunkte aufgeloest werden. Ein moeglicher anderer Taktartbereich ist eine unbestaetigte Hypothese, kein Befund.
+
+**Kleiner, nur lesender Codefix:** `tools/notator_gpl_rest_comparison.lua` zeigt ab jetzt fuer jeden gemessenen Takt **`Taktart laut REAPER-API=<Zaehler>/<Nenner>`**. Falls der QN-Grenzen-Abstand nicht zu `timesig_num * 4 / timesig_denom` passt, erscheint eine ausdrueckliche WARNUNG anstatt einer geratenen Taktart. Reaper-MIDI-Daten und Original-GPL-Modul werden nicht geaendert.
+
+**Automatisierte Regression:** `tests/test_notator_gpl_rest_adapter.lua` prueft nun angezeigte Taktartfelder fuer 4/4, gemischte 3/4–5/8 und einen konstruierten widerspruechlichen Fall (4/4-Metadaten bei 3-QN-Taktgrenzen). GitHub Actions https://github.com/wibem1/Composition-Studio/actions/runs/41357774942: **success**, alle fuenf Lua-Testskripte bestanden. Das ist ein **Mock-/CI-Test**, kein neuer Realtest der Taktartausgabe unter Windows REAPER.
+
+**Weitere Folgerung:** Die unabhaengige MIDI-Auswertung der 759 Organ-Noten und die geringe echte Stille im Testfenster bleiben korrekt. Die konkrete Benennung als `REAPER-Takte 2–5 in 3/4` und alle daraus abgeleiteten Taktart-Abweichungsbehauptungen weiter unten sind durch diese aktuelle Korrektur ueberholt. Keine neue Version/kein Merge; PR #3 bleibt draft.
+
+
 ## 01.11.2026 – Original-MIDI der Orgelphantasie direkt ausgewertet (reale Nutzerdatei)
 
 **Quelle:** Upload `phantasie-in-g-moll-orgel(1).mid`, lokal mit mido direkt gelesen, **Originaldatei nicht ins GitHub-Repo uebernommen**. Standard-MIDI Typ 1, 480 Ticks/Viertel, drei getrennte Spuren, Ende bei QN ~256:
