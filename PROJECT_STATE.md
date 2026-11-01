@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## REAPER-Praxistest: MIDI-Rhythmusdiagnose bestaetigt (01.11.2026)
+
+**Realer REAPER-Test (Nutzer, 7.83/OSX64):** `tools/notation_midi_readonly_diagnose.lua` lief auf Track `Revolt Patchable Synth`, MIDI-Take mit 238 Noten. Ausgewertet wurden die ersten vier Takte, 61 MIDI-Noten: 31 Anfaenge und 30 Enden mehr als 0,04 Viertel von einem 1/16-Raster entfernt; 14 Noten kuerzer als 1/16. Register ab MIDI 60: 24 tatsaechliche Abdeckungsluecken bis zu einer Viertelnote, Summe 4,75 Viertel; Beispiele wiederholt 0,135 Viertel. Unter MIDI 60: keine solchen Luecken. In der Einzelnote-Liste wiederkehrend Startabweichung 0,125 Viertel sowie Notenlaengen 0,240, 0,365 und 0,677 Viertel.
+
+**Interpretation:** 0,125 Viertel ist ein 1/32-Raster-Schritt; wiederkehrende 0,135-Viertel-Luecken liegen nahe einem 1/32-Wert und sind mit echten MIDI Note-Off/On-Abstaenden vereinbar. 1/16-Displayquantisierung kann daher rhythmische Details zu grob abbilden; 1/32-Displayquantisierung ist ein naheliegender **zu testender** Vergleich, aber noch kein garantierter musikalischer Fix. Die Lueckenstatistik ab MIDI 60 ist keine saubere Stimmtrennung und beweist nicht, dass jede notierte Pause falsch ist; ggf. absichtliche Artikulation.
+
+**Weiterer offener Punkt:** Voriger Quantisierungs-Dialog zeigte mit deaktivierten Track-Projekt-Defaults 1/8 und 1/32, obwohl Skript 1/16 und 1/64 aufrief. Somit darf eine Erfolgsmeldung ueber gesendete Aktionen nicht als wirksame Uebernahme gewertet werden.
+
+**Naechster isolierter Schritt:** Zunaechst in einer Projektkopie im nativen Dialog des richtigen Tracks die Displayquantisierung **manuell auf 1/32**, Mindestnotenlaenge **1/64** setzen und dieselben vier Takte visuell gegenueber 1/16 vergleichen. Die echte MIDI-Performance bleibt unangetastet. Erst anhand des Vergleichs entscheiden, ob pro Note ausschliesslich die angezeigte Laenge (`disp_len`) korrigiert werden soll. Keine automatische Ausdehnung kurzer Noten / Entfernung von Pausen und kein Merge vor Test.
+
+
 ## REAPER-Screenshot Notenbild Takte 1–4 (01.11.2026)
 
 - Im Nutzer-Screenshot nach dem Aktionslauf ist die zweisystemige, mehrzeilige Klaviernotation gegenueber frueheren Versionen wesentlich lesbarer. In der rechten Hand gibt es dennoch sehr viele kurze Pausen und wiederholte getrennte Balkengruppen, deren musikalische Notwendigkeit am Bild alleine nicht erkennbar ist. Die linke Hand wirkt lesbarer, ihr MIDI-Timing ist aber nicht bekannt.
