@@ -1,5 +1,18 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – REAPER Windows: Notenbild 0.2 Startfehler korrigiert, Testkandidat 0.2.1
+
+**Nutzerbefund:** Screenshot in REAPER 7.83/x64 (Windows), nach Start der Aktion `Notation Studio - Notenbild Test.lua`: `ReaScript Error ... lua:189: bad argument #5 to 'ImGui_BeginChild' (number expected, got boolean)`. Der urspruengliche Testkandidat war damit **im echten REAPER nachgewiesen nicht startfaehig**. Das sichtbare Notenbild im Hintergrund gehoert zum nativen REAPER-Noteneditor, nicht zu unserem ReaImGui-Fenster.
+
+**Ursache:** In `experimental/score-preview/Notation Studio - Notenbild Test.lua` uebergab 0.2.0-test als 5. Argument von `r.ImGui_BeginChild` den booleschen Wert `true`. Die ReaImGui-API ab 0.9 erwartet dort numerische `child_flags`, an Stelle sechs numerische `window_flags` (https://cfillion.ca/reaper_imgui_doc.html). **Fix 0.2.1-test:** Aufruf mit expliziten Zahlen `1,0` (ChildFlags_Borders, WindowFlags_None). Der Fenstertitel und die Lua-Versionsangabe nennen `0.2.1`, um die neue Aktion von 0.2 unterscheiden zu koennen.
+
+**Automatisierte Regression:** `experimental/score-preview/tests/test_gui_mock.lua` prueft die ReaImGui-Argumenttypen streng (5. und 6. Stelle Zahlen, ChildFlags 1). Die fehlerhafte Version wuerde an dieser Assertion scheitern. Syntaxpruefung, Core-Score-Modell und reales Lua-Hauptskript gegen den ReaImGui/REAPER-Mock laufen nach dem Fix erfolgreich: https://github.com/wibem1/Composition-Studio/actions/runs/41359544245 (**success**). Dies ist kein echter Windows-Grafiktest.
+
+**Auslieferung nur als separater Test:** Neues lokal erzeugtes ZIP `Notation_Studio_Notenbild_Test_0.2.1_Windows_Fix.zip`, vollstaendig und Integritaet erfolgreich geprueft. Das enthaltene Lua-Hauptskript stimmt mit GitHub-Blob `3859baeac6c78b01beb2e45924efddbc2809523a` ueberein; Core-Lua stimmt mit `3e3d35f872d02c1f483510ee6144e90a0259a4b6` ueberein. Das ZIP liegt im Chat, nicht als GitHub-Release. Zwei Lua-Dateien muessen **nebeneinander** entpackt und die Aktion neu geladen werden, sonst startet die alte Dateiversion.
+
+**Offen und naechster Schritt:** Version 0.2.1 einmal real in REAPER 7.83/Windows starten und Screenshot/Fehler bei der Grafikdarstellung pruefen. Keine parallele Entwicklung weiterer Notensatzfunktionen vor diesem Beleg. Bestehende produktive Anwendung/Update/main bleiben unveraendert, Draft PR #4.
+
+
 ## 01.11.2026 – Sichtbarer Notenbild-Testkandidat 0.2 fuer REAPER, separates Feature-Branch
 
 **Auftrag:** Nach den bisherigen GPL-Pausendiagnosen moechte der Nutzer endlich einen sichtbar bedienbaren Notenbild-Prototyp. Dieser Schritt implementiert erstmals eine native (ReaImGui) Score-Vorschau, ohne das bestehende Notation Studio zu ersetzen.
