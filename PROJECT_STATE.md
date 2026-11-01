@@ -1,5 +1,19 @@
 # Projektstand – Composition-Studio
 
+## Notation Studio – Quantisierungsaufrufe auf Basis REAPER 7.83 (01.11.2026)
+
+**Durch den Nutzer in realem REAPER 7.83/OSX64 bestaetigt:** MIDI-Editor-Bereich 32060 enthaelt 1840 Aktionen. Gesuchte Befehle: Anzeige 1/16 = **41030**, Minimum 1/64 = **41212**, Minimum 1/16 = **41214**, proportionale Abstaende = **41131**. Der native Einstellungsdialog `Notation: Adjust display quantization...` hat **41745**. Diese Ergebnisse sind ein echter Nachweis der Verfuegbarkeit, **noch kein Nachweis einer erfolgreichen automatischen Einstellungsuebernahme**.
+
+**Auf Branch `fix/notation-quant-actions-20261101` implementiert:**
+- In `Notation Studio.lua` werden fuer Anzeige 1/16 und Minimum 1/64 die konkreten IDs verwendet, die vor Ausfuehrung jeweils gegen den vollen Befehlsnamen verifiziert werden; keine unscharfe Namenssuche mehr fuer diese zwei Optionen.
+- Vor den beiden Aufrufen werden beide IDs validiert; wenn eine fehlt, erfolgt kein Aufruf. REAPERs `MIDIEditor_OnCommand` wird im gesicherten Aufruf verwendet. Rueckmeldung nennt deshalb bewusst nur **gesendet**, nicht **sichtbar uebernommen**.
+- Separater Knopf `Test: 1/16 + Mindestlaenge 1/64` im Bereich Darstellung/Quantisierung, dazu `REAPER-Quantisierung kontrollieren...` fuer den nativen Dialog, ebenfalls explizit ueber verifizierte ID 41745. Der vorhandene `Lesbarkeit verbessern`-Ablauf verwendet jetzt dieselben verifizierten beiden Aktionen, andere Schritte bleiben unberuehrt.
+- Eigenstaendiges `tools/notation_quantization_test.lua` kann die beiden Notationsaktionen unabhaengig vom Hauptfenster ausloesen und danach den nativen REAPER-Kontrolldialog oeffnen. Dieser Test aendert **keine MIDI-Notenpositionen oder Notenlaengen**, wohl aber die gewollten Notations-Anzeigeeinstellungen.
+
+**Pruefung:** Standalone-Testskript mit liblua 5.4 syntaktisch geladen; Simulationen: Erfolgspfad (41030, 41212, 41745 in Reihenfolge), kein MIDI-Editor, geaenderte Aktionskennung und Ausfuehrungsfehler bestanden. Strukturchecks fuer den aktualisierten App-Code bestanden (gesicherte IDs, UI, unveraenderte Notenschluesselzuordnung und App-Versionsbezeichnung). **Vollstaendige App-Syntax und Realtest des geaenderten Notation Studio stehen noch aus.** Keine Freigabe oder Versionsanhebung, `main` unveraendert.
+
+**Naechster einzelner Schritt:** Standalone-Quantisierungstest in REAPER auf einer Projektkopie ausfuehren. Im unmittelbar geoeffneten Dialog 1/16 und 1/64 **fuer den richtigen Track** ablesen. Bei Erfolg anschliessend die angepasste App aus dem Arbeitszweig in REAPER pruefen; erst dann Version/Freigabe entscheiden.
+
 ## Notation Studio – Aktionsdiagnose (01.11.2026, Arbeitszweig)
 
 - Die Hauptdatei `Notation Studio.lua` auf `main` traegt v0.1.24. In `cleanup_notation()` werden nativen MIDI-Editor-Aktionen zur Darstellungsquantisierung, Mindestnotenlaenge und proportionalen Abstaenden per Namenssuche angesteuert. Der reale Effekt der Quantisierungsbefehle ist aktuell **nicht verifiziert**.
