@@ -1,4 +1,15 @@
-# Notation Studio – Notenbild-Test 0.2 (experimentell)
+# Notation Studio – Notenbild-Test 0.2.1 (experimentell)
+
+## Windows-ReaImGui-Startkorrektur (0.2.1-test, 01.11.2026)
+
+**Echter Nutzer-Praxistest:** Unter REAPER 7.83/x64/Windows bricht der Score-Preview bei `Notation Studio - Notenbild Test.lua:189` ab: `bad argument #5 to 'ImGui_BeginChild' (number expected, got boolean)`. Das native REAPER-Notenbild im Hintergrund ist **nicht** unsere Score-Vorschau.
+
+**Ursache und Fix:** Version 0.2.0-test rief `r.ImGui_BeginChild(ctx,'score_canvas',0,height,true)` auf und uebergab ein altes `bool border` als 5. Parameter. Laut offizieller ReaImGui API Version 0.9+ hat `BeginChild` die Signatur `(ctx,id,size_w,size_h,child_flags:int,window_flags:int)`; die neue `0.2.1-test` verwendet numerische Flags `1,0` (Borders, keine WindowFlags). Fenster- und Versionsbeschriftung tragen `0.2.1 TEST`, damit alte REAPER-Aktionen erkennbar bleiben.
+
+**Testfaehigkeit verbessert:** Der Simulations-Mock prueft jetzt Argumenttypen und den Zahlenwert der ChildFlags, sodass der vorherige Fehler reproduzierbar als fehlgeschlagener Test erfasst wird. Syntax/Core/GUI-Simulation liefen unter Lua 5.4 in GitHub Actions [41359544245](https://github.com/wibem1/Composition-Studio/actions/runs/41359544245) mit Status **success**. Die beiden Lua-Dateien der aktualisierten ZIP `Notation_Studio_Notenbild_Test_0.2.1_Windows_Fix.zip` wurden ueber Git-Blob-SHA mit den aktuellen GitHub-Quelldateien abgeglichen.
+
+**Noch offen:** Echtlauf der gefixten 0.2.1 unter Windows REAPER, Bildqualitaet/Notationsvaliditaet. Noch keine neue Produktversion/kein Release, keine MIDI-Aenderung.
+
 
 **Status:** Sichtbarer, eigenständiger REAPER-ReaImGui-Testkandidat; keine veröffentlichte Hauptprogrammversion. `main`, `Notation Studio.lua` v0.1.24 und die vorhandene Updatefunktion bleiben unverändert. Keine Integration in den GPL-Notator-Branch oder Nutzung seines Quellcodes.
 
