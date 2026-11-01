@@ -1,5 +1,22 @@
 # Composition Studio – Notationsmodul
 
+## Verbindliche Zielkorrektur – 02.11.2026
+
+**Priorität 1: Den bereits vorhandenen REAPER-Noteneditor zu einer im Alltag brauchbaren Arbeitsnotation bringen.** Er muss nicht einen eigenständigen Notensatz wie MuseScore oder Dorico bieten, sondern rhythmisch verständlich, ausreichend übersichtlich und musikalisch sicher sein, sodass Komposition, Korrektur und Orientierung in der Partitur möglich bleiben. KEIN eigener Renderer, KEIN Nachbau von REAPER-Notator und KEIN Ersatz des Noteneditors in dieser Phase.
+
+**Geprüfte Ausgangslage:** `Notation Studio.lua` v0.1.24 auf `main` besitzt bereits Steuerelemente für proportionale musikalische Abstände, horizontale/vertikale Skalierung, Darstellungsquantisierung 1/8, 1/16 und 1/32 sowie eine Funktion zur Lesbarkeitsverbesserung, welche REAPER-MIDI-Editor-Aktionen aufruft. Diese Funktionen sind zunächst an der echten REAPER-Notation zu erproben, nicht durch eigene Zeichenfunktionen zu ersetzen. Eine frühere Implementierung ist kein Nachweis einer aktuellen brauchbaren Darstellung.
+
+**Kompakter Machbarkeitstest statt großer Entwicklung:**
+- Auf höchstens zwei repräsentativen Abschnitten: eine weitgehend einstimmige Passage und eine polyphone Passage, bevorzugt aus den bereits bekannten Test-MIDI-Dateien. Vorher-/Nachher-Bild desselben Bereichs des **REAPER-eigenen Notationseditors**.
+- Vorhandene Anzeigenoptionen einzeln und nachvollziehbar prüfen: proportionale Notenabstände, Anzeigequantisierung und Mindestnotenlänge (ohne MIDI-Quantisierung), Schlüssel/Systemzuordnung, automatische oder manuelle Stimmenzuordnung, Anzeige von Bindungen und Balken, sinnvolle Zoomeinstellung. Kein universelles Preset für jeden Instrumententyp erzwingen.
+- Prüfkriterien: keine dominierenden künstlichen Kleinstpausen, Takt- und Tonhöhenwerte nachvollziehbar, Stimmen/Einzelsysteme unterscheidbar, genug Abstand zum Bearbeiten und **MIDI/Wiedergabe unverändert**. Korrektheit hat Vorrang vor Schönheit.
+- Einmaliger, begrenzter A/B-Test; danach **Go/No-Go**, ob REAPERs bestehender Editor mit Konfiguration und ggf. wenigen gezielten REAPER-Aktionen als Arbeitsnotation taugt. Eine grundsätzlich unsteuerbare Notensatzschwäche ist offen zu benennen, nicht durch monatelangen Eigenbau zu kaschieren.
+
+**Beendeter Abzweig:** Das experimentelle eigene ReaImGui-Notenfenster aus Draft-PR #4 (`feat/notation-score-preview-20261101`, 0.2.0–0.2.3-test) wird nicht weiterentwickelt und nicht in `main` übernommen. Die isolierten GPL-Notator-Analysen aus Draft-PR #3 bleiben nur Forschung; keine automatische Übernahme in die produktive Software. Frühere Abschnitte „Architekturwechsel – 2026-10-04“ und „Renderer-Basis – ScoreFlow + reaper_webview“ dokumentieren historische Entscheidungen und sind für die aktuelle Priorität **überholt**.
+
+**Grenzen:** REAPERs interner Notensatz kann mit ReaScript nicht beliebig ersetzt werden. Nur belegte, vorhandene Anzeige-/Notationseinstellungen verwenden; MIDI-Performance nur mit ausdrücklicher Zustimmung verändern.
+
+
 ## Zielsetzung
 
 Der REAPER-Notationseditor soll zu einem echten Kompositionsarbeitsplatz erweitert werden. Die vorhandene REAPER-Notation wird nicht ersetzt, sondern durch Composition Studio komfortabler, musikalisch intelligenter und mit der KI-, Playback- und Exportebene verbunden.
