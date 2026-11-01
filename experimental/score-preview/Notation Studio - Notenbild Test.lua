@@ -1,5 +1,5 @@
 -- @description Notation Studio - Notenbild Test (READ ONLY)
--- @version 0.2.2-test
+-- @version 0.2.3-test
 -- @author Composition Studio
 -- @about Preview only: selected REAPER MIDI items, no edits and no API costs.
 -- This isolated test does not replace the released Notation Studio.
@@ -96,11 +96,19 @@ local function draw_staff(dl,x,y,width,track,model,bar_start,bars,scale)
   local clef=track.clef
   local reference=(clef=='treble') and 30 or 18  -- E4 or G2 bottom line
   local bottom=y+linegap*4
-  local score_left=x+80*scale
-  local total_width=width-(92*scale)
+  local score_left=x+148*scale
+  local total_width=width-(160*scale)
   local bar_width=total_width/bars
-  text(dl,x+9*scale,y+5*scale,track.name,INK)
-  text(dl,score_left-30*scale,y+20*scale,clef=='treble' and 'G' or 'F',CYAN)
+  text(dl,x+9*scale,y-23*scale,track.name,INK)
+  -- Stable G-minor key signature (Bb, Eb). Do not repeat the two flats
+  -- before every occurrence of B or E.
+  text(dl,score_left-77*scale,y+12*scale,clef=='treble' and 'G' or 'F',CYAN)
+  local key_steps=clef=='treble' and {34,37} or {20,23}
+  for i,diatonic in ipairs(key_steps) do
+    local kx=score_left-(57-(i-1)*19)*scale
+    local ky=bottom-(diatonic-reference)*step
+    text(dl,kx,ky-11*scale,'b',INK)
+  end
   for k=0,4 do
     local sy=y+linegap*k
     line(dl,score_left,sy,score_left+total_width,sy,BLACK,1.1)
@@ -118,43 +126,60 @@ local function draw_staff(dl,x,y,width,track,model,bar_start,bars,scale)
     if #onset==0 then
       text(dl,score_left+b*bar_width+bar_width/2-7,y+linegap*1.4,'R',SLATE)
     end
-    for _,n in ipairs(onset) do
-      local t=(n.start-bs)/model.bar
-      local nx=score_left+b*bar_width+math.max(14,math.min(bar_width-12,t*bar_width))
-      local pstep,acc=core.spell(n.pitch)
-      local ny=bottom-(pstep-reference)*step
-      if ny<y-57*scale then ny=y-57*scale elseif ny>bottom+65*scale then ny=bottom+65*scale end
-      -- Ledger lines outside the stave.
-      local steps_out=pstep-reference
-      if steps_out<0 then
-        for st=-2,steps_out,-2 do
-          line(dl,nx-12*scale,bottom-st*step,nx+12*scale,bottom-st*step,BLACK,1.1)
+    local state={} -- accidentals last only inside the measure
+    for _,chord in ipairs(core.group_onsets(onset)) do
+      local t=(chord.start-bs)/model.bar
+      local base_x=score_left+b*bar_width+math.max(14,math.min(bar_width-12,t*bar_width))
+      local low_step,high_step=nil,nil
+      local lowest_y,highest_y=nil,nil
+      local shortest=math.huge
+      local previous_step=nil
+      for ni,n in ipairs(chord.notes) do
+        local pstep=core.spell(n.pitch)
+        local ny=bottom-(pstep-reference)*step
+        ny=math.max(y-57*scale,math.min(bottom+65*scale,ny))
+        -- Adjacent staff steps in chords require displaced noteheads.
+        local shift=(previous_step and math.abs(pstep-previous_step)==1) and 10*scale or 0
+        previous_step=pstep
+        local nx=base_x+shift
+        if pstep<reference then
+          for st=-2,pstep-reference,-2 do
+            line(dl,nx-12*scale,bottom-st*step,nx+12*scale,bottom-st*step,BLACK,1.1)
+          end
+        elseif pstep>reference+8 then
+          for st=10,pstep-reference,2 do
+            line(dl,nx-12*scale,bottom-st*step,nx+12*scale,bottom-st*step,BLACK,1.1)
+          end
         end
-      elseif steps_out>8 then
-        for st=10,steps_out,2 do
-          line(dl,nx-12*scale,bottom-st*step,nx+12*scale,bottom-st*step,BLACK,1.1)
+        local accidental=core.notated_accidental(n.pitch,state)
+        if accidental then
+          text(dl,nx-(23+ni*7)*scale,ny-11*scale,accidental,CYAN)
+        end
+        notehead(dl,nx,ny,n.duration<2)
+        if n.duration==0.375 or n.duration==0.75 or n.duration==1.5 or n.duration==3 then
+          r.ImGui_DrawList_AddCircleFilled(dl,nx+13*scale,ny,1.8*scale,INK,8)
+        end
+        low_step=math.min(low_step or pstep,pstep)
+        high_step=math.max(high_step or pstep,pstep)
+        lowest_y=math.max(lowest_y or ny,ny)
+        highest_y=math.min(highest_y or ny,ny)
+        shortest=math.min(shortest,n.duration)
+      end
+      -- Shared stem for simultaneous pitches, instead of one stem per head.
+      -- Different chord durations and independent voices are not resolved yet.
+      if shortest<4 and #chord.notes>0 then
+        local midpoint=(low_step+high_step)/2
+        local up=midpoint-reference<4
+        local stemx=base_x+(up and 7 or -7)*scale
+        local anchory=up and highest_y or lowest_y
+        local tip=anchory+(up and -31 or 31)*scale
+        line(dl,stemx,anchory,stemx,tip,INK,1.55)
+        if shortest<=0.5 then
+          line(dl,stemx,tip,stemx+(up and 9 or -9)*scale,
+            tip+(up and 11 or -11)*scale,INK,1.9)
         end
       end
-      -- Pitch spelling only (no full accidental memory in this prototype).
-      if acc~='' then text(dl,nx-24*scale,ny-11*scale,acc,CYAN) end
-      local d=n.duration
-      local filled=d<2
-      notehead(dl,nx,ny,filled)
-      if d<4 then
-        local up=(pstep-reference)<4
-        local stemx=nx+(up and 7 or -7)*scale
-        local tip=ny+(up and -31 or 31)*scale
-        line(dl,stemx,ny,stemx,tip,INK,1.55)
-        if d<=0.5 then
-          line(dl,stemx,tip,stemx+(up and 9 or -9)*scale,tip+((up and 11 or -11)*scale),INK,1.9)
-        end
-      end
-      if d==0.375 or d==0.75 or d==1.5 or d==3 then
-        r.ImGui_DrawList_AddCircleFilled(dl,nx+13*scale,ny,1.8*scale,INK,8)
-      end
-      -- Subtle grey line indicates actual held duration, not a formal tie.
-      local ex=math.min(max_x,nx+((n.original_duration/model.bar)*bar_width))
-      if ex>nx+14 then line(dl,nx+10*scale,ny+8*scale,ex,ny+8*scale,SOFT,2) end
+
     end
   end
 end
@@ -162,7 +187,7 @@ refresh()
 local function loop()
   if not open then return end
   local visible
-  visible,open=r.ImGui_Begin(ctx,'Notation Studio · Notenbild 0.2.2 TEST###score_preview',open)
+  visible,open=r.ImGui_Begin(ctx,'Notation Studio · Notenbild 0.2.3 TEST###score_preview',open)
   if visible then
     r.ImGui_Text(ctx,'NOTENBILD-VORSCHAU · Nur Anzeige, keine MIDI-Aenderungen')
     if r.ImGui_Button(ctx,'MIDI-Auswahl neu einlesen') then refresh() end
@@ -182,7 +207,10 @@ local function loop()
     r.ImGui_SameLine(ctx)
     if r.ImGui_Button(ctx,'Raster 1/32') then grid=0.125;refresh() end
     r.ImGui_Text(ctx,'Anzeige: '..numerator..'/'..denominator..' · Raster '..(grid==0.25 and '1/16' or '1/32')..' · '..status)
-    r.ImGui_Text(ctx,'Hinweis: Noten/Notenlaengen sind grafisch vereinfacht. Keine korrekte Stimmen-, Balken-, Pausen- oder Bindebogen-Engraving.')
+    r.ImGui_Text(ctx,'Tonart der Testanzeige: g-Moll (2 b). Akkorde vereinfacht, noch keine getrennte Stimmenfuehrung/Balken/Bindungen.')
+    if model and #model.tracks==1 then
+      r.ImGui_Text(ctx,'Nur 1 MIDI-Item: fuer die ganze Orgelpartitur bitte Manual I, Manual II und Pedal im Arrangement markieren.')
+    end
     if model then
       local w=math.max(880,970*zoom)
       local height=(#model.tracks*145+70)*zoom
