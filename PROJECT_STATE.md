@@ -1,5 +1,23 @@
 # Projektstand – Composition-Studio
 
+## REAPER-Notator GPL 2.55 – Pausen-Engine isoliert getestet (01.11.2026)
+
+**Neue, nachweisbare Funktionalitaet (Arbeitsbranch `feat/notator-gpl-rhythm-audit-20261101`, PR #3):**
+- `tests/test_notator_gpl_rests.lua`: echte Originalfunktion `Engraver.generate_voice_rests` mit lueckenloser einstimmiger Passage, leerem Takt, echtem Taktende-Gap, zwei voneinander getrennten Stimmen, zwei ueberlappenden Stimmen sowie kuenstlich humanisierter Viertakt-Teilpassage getestet. Die Tests pruefen auch Taktgrenzen, nicht-negative Pausendauern und den Erhalt der Originalnotendaten.
+- `tools/notator_gpl_rest_comparison.lua`: **rein lesender** REAPER-Adapter. Liest aktive MIDI-Noten in vier Takten, verwendet reale Taktgrenzen (inkl. Taktartwechsel) und vergleicht die Original-Pausenberechnung bei keiner Quantisierung, 1/8, 1/16 und 1/32. Analysiert Gesamtstimme und zwei nur statistisch getrennte Register ab/unter MIDI 60. Original `engraver.lua` bleibt unveraendert; MIDI-Hash wird vor/nach der Analyse verglichen; das Skript enthaelt keine Schreibfunktionen. Die reine Pausenberechnung ist **nicht** der vollstaendige visuelle Renderprozess.
+- Kleiner GitHub-Workflow `.github/workflows/notator-gpl-tests.yml` prueft Lua-Syntax und fuehrt die drei echten Modul-Testskripte gegen die GPL-Originaldateien aus (nur ein Ubuntu-Runner, ohne kostenpflichtige KI-API).
+
+**CI-Nachweis:** GitHub Actions Lauf `41340612283` (`https://github.com/wibem1/Composition-Studio/actions/runs/41340612283`), `success`. Das Log enthaelt:
+- `OK: 7 GPL FilterNotesService tests (no REAPER data modified)`
+- `OK: GPL v2.55 Engraver pure timing smoke tests; originals unchanged`
+- `OK: Engraver rest invariants; humanized example rests: 1/16=4 (3.000 QN), 1/32=6 (3.000 QN)`.
+Die Detailstatistik bezieht sich ausschliesslich auf synthetische Testnoten, NICHT auf das MIDI-Item des Nutzers.
+
+**Weiterhin nicht verifiziert:** Realer REAPER-Lauf des neuen Pausenvergleichs, grafischer Notensatz, Verschmelzung mit `Notation Studio.lua`. Der `main`-Zweig und v0.1.24 bleiben unveraendert. Keine automatische Beseitigung oder Verlaengerung von Pausen oder MIDI-Noten.
+
+**Naechster einzelner Schritt:** `tools/notator_gpl_rest_comparison.lua` in REAPER 7.83 mit der bekannten problematischen MIDI-Passage testen; die echten Restzahlen je Raster vergleichen. Auf Basis der Daten entscheiden, welche semantische Pausen-/Stimmeninformation in den nativen REAPER-Noteneditor uebernommen werden kann, ohne die MIDI-Performance zu veraendern.
+
+
 ## REAPER-Notator 2.55 – Engraver isoliert gesichert (01.11.2026)
 
 **Neuer technischer Schritt** auf `feat/notator-gpl-rhythm-audit-20261101`, weiterhin ohne Versionsfreigabe:
