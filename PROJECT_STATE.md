@@ -1,5 +1,22 @@
 # Projektstand – Composition-Studio
 
+## 01.11.2026 – Windows: Church Organ, 38 Noten im Bereich, 0 berechnete Pausen; bekannte Engine-Grenze nachgewiesen
+
+**Neuer REALER REAPER-Test (Nutzer-Konsolenausgabe):**
+- REAPER 7.83/x64, Take und Spur **`Church Organ`**, gesamte Take-Notenzahl **759**.
+- Untersuchte Projekttakte 2–5 im 3/4: T2 QN 4–7 **8** Note-Ons, T3 QN 7–10 **9**, T4 QN 10–13 **9**, T5 QN 13–16 **12**, insgesamt **38**, alle >= C4.
+- Original GPL v2.55 `generate_voice_rests` liefert sowohl ohne Quantisierung als auch 1/8, 1/16 und 1/32 jeweils **0 Pausen**, auch in der ab-C4-Untergruppe 0. `MIDI-Hash unveraendert: true`; Originalnoten im Analyse-Array ebenfalls unveraendert.
+- Keine Ableitung, dass jede **musikalische Stimme** lueckenlos ist: Die Originalfunktion gruppiert Stimmen vorrangig nach `n.chan`, und bei nur einem MIDI-Kanal wird `generate_track_rests` genutzt. Dort werden nominale Dauern verschiedener rhythmischer Einsaetze **summiert**, bevor tatsaechliche Zeitintervallabdeckung geprueft wird. Gerade bei ueberlappenden Chord-/Organnoten koennen Pausen dadurch unentdeckt bleiben.
+
+**Engraver-Fehlermodus erstmals durch echten Lua-Test bewiesen:**
+- `tests/test_notator_gpl_overlap_gap.lua` verwendet unveraenderten Original-Engraver und einen einzelnen 3/4-Takt mit drei Noten auf demselben MIDI-Kanal: QN 0–1,5; 0,5–2,0; 2,5–3,0.
+- Die nominalen Notenlaengen addieren sich zu **3,5 Vierteln**, aber die echte Vereinigungsmenge der Tonintervalle ueberdeckt nur **2,5 Viertel**; die echte Luecke zwischen QN 2,0 und 2,5 betraegt **0,5 Viertel**.
+- Unveraenderte Originalfunktion gibt **0 Pausen** zurueck. CI-Lauf https://github.com/wibem1/Composition-Studio/actions/runs/41356490167 **success**, Log: `KNOWN LIMITATION CONFIRMED: source GPL v2.55 reports 0 rests despite genuine 0.5 QN gap in overlapping same-channel notes`.
+- Test ist eine **Charakterisierung eines bestehenden Algorithmusfehlers**, nicht die Bestaetigung korrekten Notensatzes. Das Original-GPL-Modul wurde NICHT veraendert.
+
+**Konsequenz und naechster einzelner Schritt:** Vor Uebernahme der Pausenlogik in das produktive Notation Studio echte zeitliche Intervallabdeckung getrennt von der Summe nominaler Dauern analysieren und musikalische Stimmenzuordnung ermitteln. Fuer `Church Organ` kann aus dem Konsolenbericht allein nicht erkannt werden, ob der gezeigte Fehlermodus vorliegt, weil die Einzelnote-Positionen/-Dauern fehlen. Idealer Input ist die MIDI-Datei dieses Takes (oder die urspruenglich problematische `Revolt Patchable Synth`-Passage); damit lokal objektiv pruefen, ohne weitere rasterbasierte Testschleifen. Keine neue App-Version, kein Merge, `main` unveraendert.
+
+
 ## 01.11.2026 – Windows-Pausenvergleich: scheinbare 10-vs-12-Differenz durch Taktverschiebung aufgeklaert
 
 **Realtest (Nutzerkonsole, REAPER 7.83/x64):**
