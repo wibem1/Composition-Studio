@@ -146,13 +146,10 @@ local function zoom_four_bars(editor)
   local startTime,endTime,problem = four_bar_window()
   if not startTime then return false,problem end
   -- Preserve both selections even when REAPER is configured to link them.
-  local _,timeStart,timeEnd = reaper.GetSet_LoopTimeRange2(PROJECT,false,false,0,0,false)
-  local _,loopStart,loopEnd = reaper.GetSet_LoopTimeRange2(PROJECT,false,true,0,0,false)
-  -- Some REAPER Lua builds return start,end rather than retval,start,end.
-  if loopEnd==nil then
-    timeStart,timeEnd = _,timeStart
-    -- Read separately: avoid changing user settings on uncertain API return values.
-    return false,"Unerwartete GetSet_LoopTimeRange2-Rückgabe"
+  local timeStart,timeEnd = reaper.GetSet_LoopTimeRange2(PROJECT,false,false,0,0,false)
+  local loopStart,loopEnd = reaper.GetSet_LoopTimeRange2(PROJECT,false,true,0,0,false)
+  if not (timeStart and timeEnd and loopStart and loopEnd) then
+    return false,"Vorhandene Zeit-/Loop-Auswahl nicht lesbar"
   end
   local ok,done = pcall(function()
     reaper.GetSet_LoopTimeRange2(PROJECT,true,true,startTime,endTime,false)
