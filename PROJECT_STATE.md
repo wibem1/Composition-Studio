@@ -1,5 +1,17 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Reale Rückmeldung und Korrektur der Einmal-Notation
+
+**Realer Anwenderbericht:** Das Einmal-Skript aus PR #7 zoomt nach Ausführung **erfolgreich auf vier Takte**. Die Schlüsselwahl ist **falsch**. Bestätigte Funktion (Zoom) unverändert lassen; Schlüsselwahl nicht als erfolgreich abnehmen.
+
+**Ursache mit früherem realen Beleg:** Ein Nutzervergleich am 01.11. hatte gezeigt, dass `SCORE 0 4 0 0` im REAPER-Notation-Editor **Alt-C-Schlüssel** statt Treble erzeugt. Im neuen Skript wurde `4` dennoch irrtümlich wieder als Treble gesetzt und `2` als Bass, `3` als Alto. Das ist eine konkrete falsche Mapping-Tabelle, obwohl die Mocktests zuvor grün waren; diese testeten nur dieselbe falsche Annahme.
+
+**Korrektur auf Entwicklungsbranch `feat/reaper-notation-one-shot-20261102`:** `grand=1`, `treble=2`, `bass=3`, `alto=4` (Reihenfolge der REAPER-Default-Clef-Auswahl; Alto=4 mit Nutzertest gestützt; Bass=3 und Treble=2 in der aktuellen Kombination noch **nicht** nachträglich grafisch bestätigt). Weiterhin ein einziger Shortcut ohne GUI/Rückfrage, keine Quantisierung, kein MIDI-Schreiben. Nach `SetTrackStateChunk` wird der Wert nun nochmals aus REAPER ausgelesen; Spur/Schlüssel/Wert und Fehler werden in der Konsole protokolliert. `MIDI_RefreshEditors` wurde bereits vorher auf sichtbare Takes angewendet; Zoom-Algorithmus unverändert.
+
+**Prüfungen:** [GitHub Actions Run 41496467842](https://github.com/wibem1/Composition-Studio/actions/runs/41496467842) `success`: Lua-Syntax und 10/10 Mocktests erfolgreich (neue Tabelle, Zoom, Loop-Restore, Undo, Refresh, Idempotenz). **Keine** aktuelle reale REAPER-Kontrolle der korrigierten drei Schlüssel. `Notation Studio.lua` auf `main` unverändert; PR #7 bleibt Draft.
+
+**Ein einziger weiterer sinnvoller Test:** In einer Projektkopie korrigierten Shortcut einmal ausführen, danach die tatsächlichen Schlüssel der drei Spuren betrachten. Wenn trotz im Chunk nachgewiesener Werte das Notenbild unverändert bleibt, liegt ein zusätzlicher REAPER-Refresh-/Chunk-Problem vor: echte RPP/SCORE-Information auslesen und spezifisch korrigieren, keine weitere numerische Blindsuche.
+
 ## 02.11.2026 – Einmal-Script statt Notation-Studio-Palette (neue Nutzerentscheidung)
 
 **Neue verbindliche Anforderung:** Die bisherige ReaImGui-Bedienpalette ist für die Notations-Grundeinstellung unnötig kompliziert. Stattdessen EIN einfaches ReaScript, das nach einmaliger Shortcut-Zuordnung im MIDI-Editor **ohne Nachfrage** ausgeführt wird: aktuell sichtbare Instrumentensysteme erhalten passende Default-Clefs; die Notenansicht wird auf **vier vollständige Takte** ab Bearbeitungscursor gezoomt. **Keine** automatische Anzeigequantisierung, KI, Fenster, Buttons oder aufwendige Anwenderaktionen. Die alte Palette bleibt für andere Zwecke separat und unverändert, wird aber für diesen Workflow nicht mehr benötigt.
