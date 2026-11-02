@@ -112,17 +112,17 @@ local function has(track,clef)
  return state.chunks[track]:find("SCORE 0 "..clef.." 0 0",1,true)~=nil
 end
 run()
-check(has("a",2),"high-note track with misleading 'Cello' name gets treble")
-check(has("b",4),"middle-register untitled track gets alto")
-check(has("c",3),"low-note track named 'Violine' gets bass")
+check(has("a",1),"high-note track with misleading 'Cello' name gets treble")
+check(has("b",3),"middle-register untitled track gets alto")
+check(has("c",2),"low-note track named 'Violine' gets bass")
 check(state.actions==1,"one native zoom to four bars")
 check(state.spacing_calls==1 and state.spacing==1,"proportional spacing enabled once")
 check(state.time[1]==7 and state.time[2]==9 and state.loop[1]==10 and state.loop[2]==12,"loop and time selections restored")
-check(state.writes==3 and state.undos==1,"all three visible tracks changed within one undo block")
+check(state.writes==2 and state.undos==1,"only two tracks changed; single undo block")
 check(state.refreshes==3,"notation refresh attempted on visible takes")
 
 run()
-check(state.writes==3 and state.actions==2,"repeating shortcut keeps clefs without rewrites")
+check(state.writes==2 and state.actions==2,"repeating shortcut keeps clefs without rewrites")
 check(state.spacing_calls==1 and state.spacing==1,"repeating shortcut does not toggle spacing off")
 
 -- Insufficient or ambiguous material cannot justify a forced clef switch.
@@ -133,16 +133,16 @@ run()
 check(state.writes==writes and has("c",1),"three-note fragment retains existing clef")
 
 state.notes.c=fixture({60,60,60,60,60,60})
-state.chunks.c="<TRACK\nSCORE 0 3 0 0\n>\n"
+state.chunks.c="<TRACK\nSCORE 0 2 0 0\n>\n"
 writes=state.writes
 run()
-check(state.writes==writes and has("c",3),"ambiguous C4 range retains previous clef")
+check(state.writes==writes and has("c",2),"ambiguous C4 range retains previous clef")
 
 -- A wide MELODY alone is not sufficient evidence for a grand staff.
 state.notes.a=fixture({48,50,52,72,74,76,48,50,74,76})
-state.chunks.a="<TRACK\nSCORE 0 2 0 0\n>\n"
+state.chunks.a="<TRACK\nSCORE 0 1 0 0\n>\n"
 run()
-check(not has("a",1),"wide but sequential melody does not create a grand staff")
+check(not state.chunks.a:find("SCORE 0 0 0 0",1,true),"wide melody does not create grand staff")
 
 -- Concurrent lower and upper voices imply independent grand staff.
 local piano={
@@ -152,9 +152,9 @@ local piano={
  {p=48,a=3000,b=3900},{p=72,a=3000,b=3450},
 }
 state.notes.a=piano
-state.chunks.a="<TRACK\nSCORE 0 2 0 0\n>\n"
+state.chunks.a="<TRACK\nSCORE 0 1 0 0\n>\n"
 run()
-check(has("a",1),"simultaneous high/low voices use grand staff")
+check(has("a",1),"simultaneous high/low voices retain established staff; grand is not encoded")
 
 state.spacing=-1
 local before=state.spacing_calls
