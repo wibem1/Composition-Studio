@@ -6,15 +6,17 @@
 local PROJECT = 0
 local BARS = 4
 
--- REAPER track SCORE state codes from the project's prior experiments.
--- Treble=4 is the user's requested known value; the remaining values
--- are candidates requiring a visual confirmation in the installed REAPER version.
--- Unknown instruments are intentionally left untouched.
+-- In the earlier REAL notation test, SCORE ... 4 produced an alto clef,
+-- not a treble clef. The previous script copied the incorrect mapping.
+-- This table follows the native "Default clef" menu order (1=grand,
+-- 2=treble, 3=bass, 4=alto). The result is still subject to a visual
+-- check in the installed REAPER version; do not treat a mock as proof.
+-- Unknown instruments are deliberately left untouched.
 local SCORE_CLEF = {
-  grand = 1,    -- treble + bass (piano)
-  treble = 4,   -- violin, flute
-  bass = 2,     -- cello, bassoon
-  alto = 3,     -- viola
+  grand = 1,    -- Treble + bass (piano)
+  treble = 2,   -- Violin, flute
+  bass = 3,     -- Cello, bassoon
+  alto = 4,     -- Viola
 }
 
 local function note(msg)
@@ -105,6 +107,16 @@ local function edit_clef(track, code)
   if not reaper.SetTrackStateChunk(track,changed,false) then
     return false,"REAPER hat Track-Chunk abgewiesen"
   end
+  -- A successful setter does not prove that REAPER accepted the SCORE value.
+  -- Read back the exact canonical line and report the result in the console.
+  local read_ok,now = reaper.GetTrackStateChunk(track,"",false)
+  local seen = false
+  if read_ok and type(now)=="string" then
+    for line in now:gmatch("[^\r\n]+") do
+      if line==target then seen=true; break end
+    end
+  end
+  if not seen then return false,"SCORE-Wert nach SetTrackStateChunk nicht gespeichert" end
   return true,nil
 end
 
@@ -185,7 +197,10 @@ local function main()
     reaper.Undo_BeginBlock2(PROJECT)
     for _,plan in ipairs(plans) do
       local success,problem = edit_clef(plan.track,SCORE_CLEF[plan.clef])
-      if success then changed=changed+1 end
+      if success then
+        changed=changed+1
+        note(plan.name..": "..plan.clef.." → SCORE 0 "..SCORE_CLEF[plan.clef].." 0 0 gespeichert")
+      end
       if problem then note(plan.name..": "..problem) end
     end
     reaper.Undo_EndBlock2(PROJECT,"REAPER-Notation: sichtbare Instrumentenschlüssel",-1)
