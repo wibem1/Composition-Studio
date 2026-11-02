@@ -17,16 +17,16 @@ Shortcut einmal im geöffneten MIDI-Noteneditor drücken. Das Skript betrachtet 
 
 | Trackname | Ziel-SCORE |
 | --- | --- |
-| Violine/Violin/Geige, Flöte | `SCORE 0 4 0 0` (aus ausdrücklichem Nutzerhinweis) |
-| Bratsche/Viola | `SCORE 0 3 0 0` (noch nicht mit REAPER-Ansicht bestätigt) |
-| Cello/Violoncello/Kontrabass | `SCORE 0 2 0 0` (noch nicht mit REAPER-Ansicht bestätigt) |
-| Klavier/Piano | `SCORE 0 1 0 0` (Klaviersystem) |
+| Violine/Violin/Geige, Flöte | `SCORE 0 2 0 0` (korrigierter Kandidat: G-Schlüssel) |
+| Bratsche/Viola | `SCORE 0 4 0 0` (Alt-C; zuvor bei Violine tatsächlich als Alt-Schlüssel beobachtet) |
+| Cello/Violoncello/Kontrabass | `SCORE 0 3 0 0` (Bass; aus nativer Menü-Reihenfolge abgeleitet, noch kein visueller Einzelbeleg) |
+| Klavier/Piano | `SCORE 0 1 0 0` (Doppelsystem; zuvor dokumentiert) |
 
-**Wichtige Einschränkung:** REAPER dokumentiert das SCORE-Chunk-Feld nicht als stabile API. Frühere Versuche zur Nummernzuordnung widersprechen sich teilweise. Darum ist das gesamte Skript bis zur Verifikation der tatsächlichen Notation in REAPER **nicht für unbeaufsichtigte Produktivprojekte freigegeben**. Ziel ist trotzdem eine einzige Shortcutauslösung ohne Rückfragen.
+**Fehlerbehebung nach realem REAPER-Test:** Der Vier-Takte-Zoom funktionierte, die Schlüsselwahl nicht. Ein früherer echter REAPER-Test hatte bereits gezeigt, dass `SCORE 0 4 0 0` den **Alt-C-Schlüssel** erzeugt, nicht den Violinschlüssel. Die vorige Code-Tabelle verwendete diesen Wert trotzdem für Violine. Die korrigierte Tabelle folgt der Menü-Reihenfolge Treble+Bass=1, Treble=2, Bass=3, Alto=4 und protokolliert zusätzlich, ob die neue SCORE-Zeile nach einem Schreibvorgang tatsächlich noch im Track-Chunk steht. **Nicht bewiesen** ist damit, dass der offene Noteneditor den Wert grafisch übernimmt. Bis zum erneuten echten Kurztest ausschließlich in einer Projektkopie verwenden.
 
 ## Offline-Test
 
-[GitHub Actions – Run 41488463631](https://github.com/wibem1/Composition-Studio/actions/runs/41488463631): Lua-5.4-Syntaxprüfung und 10 simulierte Testfälle bestanden. Testet mehrere Tracks, den vom Nutzer vorgegebenen Treble-SCORE-Eintrag, Loop-Wiederherstellung, Zoom-Aktion, Undo-Gruppierung, wiederholte Ausführung und unbekannte Instrumente. **Nicht** damit nachgewiesen: die tatsächliche REAPER-Score-Anzeige, die Instrumentmapping-Nummern für alle Schlüssel oder die exakte optische Darstellung von vier Takten.
+[GitHub Actions – Korrekturtest 41496467842](https://github.com/wibem1/Composition-Studio/actions/runs/41496467842): Lua-5.4-Syntaxprüfung und 10 simulierte Testfälle bestanden. Testet mehrere Tracks, die korrigierte numerische Schlüsselzuordnung, Loop-Wiederherstellung, Zoom-Aktion, Undo-Gruppierung, wiederholte Ausführung und unbekannte Instrumente. **Nicht** damit nachgewiesen: die tatsächliche REAPER-Score-Anzeige, die Instrumentmapping-Nummern für alle Schlüssel oder die exakte optische Darstellung von vier Takten.
 
 ## Nächster Schritt
 
