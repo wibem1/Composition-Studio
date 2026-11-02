@@ -24,6 +24,8 @@ local state={
   },
   actions=0,spacing_calls=0,spacing=0,spacing_present=true,spacing_responds=true,
   writes=0,undos=0,refreshes=0,console={},editCursor=0,
+  itemLength=32,vertical_present=true,content_present=true,vertical=50,
+  verticalResets=0,verticalIns=0,commands={},
   time={7,9},loop={10,12},
 }
 local reaper={}
@@ -38,6 +40,12 @@ function reaper.TakeIsMIDI(take) return state.notes[take]~=nil end
 function reaper.ValidatePtr2() return true end
 function reaper.GetMediaItemTake_Item(take) return take end
 function reaper.GetMediaItem_Track(item) return item end
+function reaper.GetMediaItemInfo_Value(item,key)
+ assert(state.notes[item]~=nil)
+ if key=="D_POSITION" then return 0 end
+ if key=="D_LENGTH" then return state.itemLength end
+ error("unrecognized item property "..tostring(key))
+end
 function reaper.GetTrackName() error("TRACK NAMES MUST NOT BE READ FOR CLEF INFERENCE") end
 function reaper.MIDI_CountEvts(take)
  return true,#state.notes[take],0,0
@@ -69,11 +77,18 @@ function reaper.GetSet_LoopTimeRange2(_,isSet,isLoop,startTime,endTime)
 end
 function reaper.SectionFromUniqueID(id) assert(id==32060);return id end
 function reaper.kbd_enumerateActions(_,idx)
- if idx==0 then return 410,"View: Zoom to project loop selection" end
- if idx==1 and state.spacing_present then
-  return 411,"Notation: Proportional (musical) note spacing"
+ local actions={{410,"View: Zoom to project loop selection"}}
+ if state.spacing_present then
+  actions[#actions+1]={411,"Notation: Proportional (musical) note spacing"}
  end
- return 0,""
+ if state.content_present then
+  actions[#actions+1]={412,"View: Zoom to content"}
+ end
+ if state.vertical_present then
+  actions[#actions+1]={413,"View: Zoom in vertically"}
+ end
+ if not actions[idx+1] then return 0,"" end
+ return table.unpack(actions[idx+1])
 end
 function reaper.GetToggleCommandStateEx(section,id)
  assert(section==32060 and id==411)
@@ -81,12 +96,19 @@ function reaper.GetToggleCommandStateEx(section,id)
 end
 function reaper.MIDIEditor_OnCommand(editor,id)
  assert(editor==100)
+ state.commands[#state.commands+1]=id
  if id==410 then
   state.actions=state.actions+1
   assert(state.loop[1]==0 and state.loop[2]==16,"must zoom four bars")
  elseif id==411 then
   state.spacing_calls=state.spacing_calls+1
   if state.spacing_responds then state.spacing=1-state.spacing end
+ elseif id==412 then
+  state.verticalResets=state.verticalResets+1
+  state.vertical=0
+ elseif id==413 then
+  state.verticalIns=state.verticalIns+1
+  state.vertical=state.vertical+1
  else error("unexpected action; quantization must never run") end
  return true
 end
@@ -116,6 +138,10 @@ check(has("a",1),"high-note track with misleading 'Cello' name gets treble")
 check(has("b",3),"middle-register untitled track gets alto")
 check(has("c",2),"low-note track named 'Violine' gets bass")
 check(state.actions==1,"one native zoom to four bars")
+check(state.vertical==4 and state.verticalResets==1 and state.verticalIns==4,
+ "eight bars over three tracks gets four vertical zoom steps from reset baseline")
+check(state.commands[#state.commands]==410,"horizontal four-bar zoom always runs AFTER vertical reset")
+
 check(state.spacing_calls==1 and state.spacing==1,"proportional spacing enabled once")
 check(state.time[1]==7 and state.time[2]==9 and state.loop[1]==10 and state.loop[2]==12,"loop and time selections restored")
 check(state.writes==2 and state.undos==1,"only two tracks changed; single undo block")
@@ -124,6 +150,7 @@ check(state.refreshes==3,"notation refresh attempted on visible takes")
 run()
 check(state.writes==2 and state.actions==2,"repeating shortcut keeps clefs without rewrites")
 check(state.spacing_calls==1 and state.spacing==1,"repeating shortcut does not toggle spacing off")
+check(state.vertical==4 and state.verticalResets==2,"repeated shortcut restores same vertical zoom, no cumulative growth")
 
 -- Insufficient or ambiguous material cannot justify a forced clef switch.
 state.notes.c=fixture({72,74,76})
@@ -182,4 +209,23 @@ check(has("c",2),"missing SCORE line receives bass with original v0.1.24 inserti
 check(state.chunks.c:find("VU 2\nSCORE 0 2 0 0",1,true)~=nil,
       "new SCORE line inserted directly after VU, like Notation Studio v0.1.24")
 
-print("OK: "..checks.." real-script mock checks; REAPER GUI and SCORE field semantics still require an actual test")
+-- Longer composition: choose smaller vertical scale. Always reset first.
+state.itemLength=128 -- 32 measures -> 8 four-bar systems
+run()
+check(state.vertical==2,"longer piece uses a more conservative vertical scale")
+check(state.commands[#state.commands]==410,"longer piece still ends on four-bar horizontal zoom")
+-- No reset action: do not blindly enlarge vertically.
+state.content_present=false
+local resetsBefore,insBefore=state.verticalResets,state.verticalIns
+run()
+check(state.verticalResets==resetsBefore and state.verticalIns==insBefore,
+ "missing native reset leaves vertical scale unchanged")
+check(state.commands[#state.commands]==410,"missing vertical reset never blocks horizontal zoom")
+-- Missing zoom-in action: similarly skip instead of distorting view.
+state.content_present=true
+state.vertical_present=false
+resetsBefore,insBefore=state.verticalResets,state.verticalIns
+run()
+check(state.verticalResets==resetsBefore and state.verticalIns==insBefore,
+ "missing vertical zoom-in action does not reset the editor")
+print("OK: "..checks.." real-script mock checks; REAPER GUI vertical reset behavior remains unverified")
