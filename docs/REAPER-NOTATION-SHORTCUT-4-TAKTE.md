@@ -1,6 +1,6 @@
-# REAPER Notation – ein Shortcut, vier Takte, Instrumentenschlüssel
+# REAPER Notation – ein Shortcut, vier Takte, Instrumentenschlüssel und proportionale Abstände
 
-**Status:** Eigenständiger Testkandidat auf Branch `feat/reaper-notation-one-shot-20261102`, zusätzlich zu und unabhängig von `Notation Studio.lua`. Keine grafische Palette, keine Bestätigung, keine KI-API, kein ReaImGui, kein SWS, keine Anzeigequantisierung. Ausgangsdatei auf `main` bleibt erhalten.
+**Status:** Eigenständiger Testkandidat auf Branch `feat/reaper-notation-one-shot-20261102`, zusätzlich zu und unabhängig von `Notation Studio.lua`. Keine grafische Palette, keine Bestätigung, keine KI-API, kein ReaImGui, kein SWS, keine Anzeigequantisierung. Proportionale musikalische Abstände werden bei eindeutigem REAPER-Status nur eingeschaltet, niemals unabsichtlich ausgeschaltet. Ausgangsdatei auf `main` bleibt erhalten.
 
 ## Einmalige Einrichtung
 
@@ -11,7 +11,7 @@
 
 ## Ausführung
 
-Shortcut einmal im geöffneten MIDI-Noteneditor drücken. Das Skript betrachtet die derzeit im MIDI-Editor enthaltenen MIDI-Takes (einschließlich nicht editierbarer), fasst sie nach Track zusammen und setzt automatisch bekannte Default-Clef-Trackwerte gemäß Instrumentnamen. Es zoomt mit der vorhandenen MIDI-Aktion `View: Zoom to project loop selection` auf vier komplette Takte ab dem aktuellen Projekt-Bearbeitungscursor. Die ursprüngliche Loop- und Zeitauswahl wird danach wiederhergestellt; es werden keine MIDI-Noten, keine CC und keine Anzeigequantisierung verändert. Bei unbekannten Instrumentnamen oder komplexen SCORE-Zeilen werden die Spuren ausgelassen. Alle Änderungen an Tracks gehören zu einem REAPER-Undo-Schritt. Keine störenden Dialoge; Fehler/Überspringungen erscheinen nur in der REAPER-Konsole.
+Shortcut einmal im geöffneten MIDI-Noteneditor drücken. Das Skript betrachtet die derzeit im MIDI-Editor enthaltenen MIDI-Takes (einschließlich nicht editierbarer), fasst sie nach Track zusammen und setzt automatisch bekannte Default-Clef-Trackwerte gemäß Instrumentnamen. Der Shortcut aktiviert außerdem **proportionale musikalische Notenabstände**, sofern sie noch deaktiviert sind. Bei bereits aktiver Option führt er keinen erneuten Toggle aus. Wenn REAPER die Aktion oder ihren Status nicht bereitstellt, verändert er diese Einstellung nicht und führt die anderen Funktionen trotzdem aus. Es zoomt mit der vorhandenen MIDI-Aktion `View: Zoom to project loop selection` auf vier komplette Takte ab dem aktuellen Projekt-Bearbeitungscursor. Die ursprüngliche Loop- und Zeitauswahl wird danach wiederhergestellt; es werden keine MIDI-Noten, keine CC und keine Anzeigequantisierung verändert. Bei unbekannten Instrumentnamen oder komplexen SCORE-Zeilen werden die Spuren ausgelassen. Alle Änderungen an Tracks gehören zu einem REAPER-Undo-Schritt. Keine störenden Dialoge; Fehler/Überspringungen erscheinen nur in der REAPER-Konsole.
 
 ## Zuordnung der Schlüssel (Testkandidat)
 
@@ -26,7 +26,7 @@ Shortcut einmal im geöffneten MIDI-Noteneditor drücken. Das Skript betrachtet 
 
 ## Offline-Test
 
-[GitHub Actions – Korrekturtest 41496467842](https://github.com/wibem1/Composition-Studio/actions/runs/41496467842): Lua-5.4-Syntaxprüfung und 10 simulierte Testfälle bestanden. Testet mehrere Tracks, die korrigierte numerische Schlüsselzuordnung, Loop-Wiederherstellung, Zoom-Aktion, Undo-Gruppierung, wiederholte Ausführung und unbekannte Instrumente. **Nicht** damit nachgewiesen: die tatsächliche REAPER-Score-Anzeige, die Instrumentmapping-Nummern für alle Schlüssel oder die exakte optische Darstellung von vier Takten.
+Die Ein-Schalter-Logik für proportionale Abstände wird zusätzlich in Regressionstests abgesichert (bereits aktiv, deaktiviert, unbekannter Zustand und fehlende Aktion); der Vier-Takte-Zoom bleibt dabei separat geprüft. Die nachfolgende Laufzeit-GitHub-Action dokumentiert den aktuellen Teststatus. Testet mehrere Tracks, die korrigierte numerische Schlüsselzuordnung, Loop-Wiederherstellung, Zoom-Aktion, Undo-Gruppierung, wiederholte Ausführung und unbekannte Instrumente. **Nicht** damit nachgewiesen: die tatsächliche REAPER-Score-Anzeige, die Instrumentmapping-Nummern für alle Schlüssel oder die exakte optische Darstellung von vier Takten.
 
 ## Nächster Schritt
 
