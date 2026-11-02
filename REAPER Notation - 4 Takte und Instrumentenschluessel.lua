@@ -281,10 +281,12 @@ local function main()
   local plans = {}
   for index,track in ipairs(tracks) do
     local result,reason=note_analysis(byTrack[tostring(track)])
-    if result and SCORE_CLEF[result.clef] then
+    if result and SCORE_CLEF[result.clef] and (result.polyphony or result.margin>=0.20) then
       plans[#plans+1]={track=track,clef=result.clef,name="System "..index}
       note(string.format("System %d: %d MIDI-Noten → %s (Hilfslinienanalyse)",
         index,result.notes,result.clef))
+    elseif result then
+      note("System "..index..": uneindeutiger Tonumfang; bisherigen Schlüssel beibehalten")
     else
       note("System "..index..": keine automatische Schlüsselwahl – "..tostring(reason or "unbestimmt"))
     end
