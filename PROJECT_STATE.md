@@ -1,5 +1,19 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Einmal-Script statt Notation-Studio-Palette (neue Nutzerentscheidung)
+
+**Neue verbindliche Anforderung:** Die bisherige ReaImGui-Bedienpalette ist für die Notations-Grundeinstellung unnötig kompliziert. Stattdessen EIN einfaches ReaScript, das nach einmaliger Shortcut-Zuordnung im MIDI-Editor **ohne Nachfrage** ausgeführt wird: aktuell sichtbare Instrumentensysteme erhalten passende Default-Clefs; die Notenansicht wird auf **vier vollständige Takte** ab Bearbeitungscursor gezoomt. **Keine** automatische Anzeigequantisierung, KI, Fenster, Buttons oder aufwendige Anwenderaktionen. Die alte Palette bleibt für andere Zwecke separat und unverändert, wird aber für diesen Workflow nicht mehr benötigt.
+
+**Implementierung:** Branch `feat/reaper-notation-one-shot-20261102`, Draft PR #7 gegen `main`. Neues eigenständiges `REAPER Notation - 4 Takte und Instrumentenschluessel.lua`. REAPER-MIDI-Editor-`EnumTakes(...,false)` und deduplizierte Tracknamen, Instrument-Schlüssel-Tabelle, gezielter `SCORE`-Track-State-Eingriff nur auf einfache Zeilen, Einfügen der Zeile nur in sicheren TRACK-Header, Undo-Block, Aktualisierung von MIDI-Editoren; ein MIDI-Editor-Zoom auf vorübergehend gesetzte vier Takte umfassende Projekt-Loop-Auswahl (REAPER-Aktion `View: Zoom to project loop selection`), danach Wiederherstellung von Loop- und Zeitauswahl. Der Shortcut enthält keinen REAPER-Bestätigungsdialog, kein ReaImGui/SWS, keine MIDI-Note-on/off-Schreiboperationen und keine Quantisierung. Nicht erkannte Tracknamen werden übersprungen.
+
+**Clef-Zuordnung:** Auf explizite Nutzerangabe `SCORE 0 4 0 0` für Violine/Treble; initiale Basistabelle `grand=1, bass=2, alto=3, treble=4`. **Achtung:** Zu `SCORE` gab es widersprüchliche ältere Praxisaussagen und keine vollständig dokumentierte REAPER-API. Bass/Alt-C-Mapping im realen REAPER noch ungeprüft. Diese Werte nicht als endgültig bewiesen kennzeichnen.
+
+**Automatisierter Nachweis:** [GitHub Actions Run 41488463631](https://github.com/wibem1/Composition-Studio/actions/runs/41488463631) `success`: vollständige Lua-Syntaxprüfung; **10/10** Mock-Integrationstests bestanden (drei sichtbare Tracks, SCORE-Wert-Schreibvorgänge, ein Zoom-Command auf vier Takte, Rücksetzung von Loop-/Zeitauswahl, einmaliger Undo-Block, wiederholter Shortcut idempotent, unbekanntes Instrument bleibt unberührt). Keine kostenpflichtigen API-Aufrufe. [Kurzanleitung](docs/REAPER-NOTATION-SHORTCUT-4-TAKTE.md).
+
+**Evidenzgrenze:** Kein echter Test dieses neuen Einmal-Skripts in REAPER 7.83 auf Mac/Windows; die visuelle Zuordnung der Notenschlüssel und die richtige Darstellung von vier Takten ist noch nicht bestätigt. **Keine Produktfreigabe/kein Merge**, nur isolierter Kandidat. Das Originalskript `Notation Studio.lua` v0.1.24 auf `main` bleibt unverändert.
+
+**Nächster einziger Schritt:** Ein praktischer Kurztest auf gesicherter Kopie der bestehenden REAPER-Notation-8-Takt-MIDI; nach exakt einem Shortcut: G, Alt-C, F und Vier-Takte-Zoom kontrollieren. Bei Abweichung echte Werte ermitteln und einmal gezielt korrigieren, nicht weitere Blindexperimente.
+
 ## 02.11.2026 – Vollständige statische Bestandsaufnahme Notation Studio v0.1.24
 
 **Nutzerentscheidung:** Das vorhandene Native-REAPER-Notation-/Notation-Studio-Skript wird **weiterentwickelt, nicht ersetzt**. Das Grundkonzept der direkt mit dem REAPER-MIDI-Noteneditor verbundenen ReaImGui-Palette inklusive KI-Anbindung bleibt erhalten. Der Nutzer berichtet, dass `Lesbarkeit verbessern` die Lesbarkeit verschlechtert.
