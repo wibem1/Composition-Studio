@@ -150,6 +150,9 @@ local function edit_clef(track, code)
     end
   end
   if count>1 then return false,"Mehrdeutige SCORE-Zeilen; unverändert" end
+  if seen and not seen:match("^SCORE%s+%d+%s+%d+%s+%d+%s+%d+%s*$") then
+    return false,"Unbekanntes SCORE-Format; unverändert"
+  end
   if seen==desired then return false,nil end
   local updated,changed
   if count==1 then
