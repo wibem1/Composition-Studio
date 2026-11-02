@@ -1,30 +1,52 @@
--- Offline integration mock for the real one-shot ReaScript.
--- Run from repository root: lua5.4 tests/test_reaper_notation_four_bars.lua
+-- Offline regression tests for the actual one-shot REAPER script.
+-- Only tests REAPER API calls, not the real renderer's visual acceptance.
 local source="REAPER Notation - 4 Takte und Instrumentenschluessel.lua"
-local originals={
-  vi="<TRACK\nNAME \"Violine - G-Schluessel\"\nSCORE 0 1 0 0\n>\n",
-  va="<TRACK\nNAME \"Bratsche - Alt-C-Schluessel\"\nSCORE 0 1 0 0\n>\n",
-  vc="<TRACK\nNAME \"Violoncello - F-Schluessel\"\nSCORE 0 1 0 0\n>\n",
-}
+
+local function fixture(pitches)
+  local out={}
+  for i,p in ipairs(pitches) do
+    out[i]={p=p,a=(i-1)*480,b=(i-1)*480+450,muted=false}
+  end
+  return out
+end
+
 local state={
-  chunks={vi=originals.vi,va=originals.va,vc=originals.vc},
-  names={vi="Violine - G-Schluessel",va="Bratsche - Alt-C-Schluessel",vc="Violoncello - F-Schluessel"},
-  actions=0,spacing_calls=0,spacing=0,spacing_present=true,spacing_responds=true,writes=0,undos=0,refreshes=0,console={},editCursor=0,
+  chunks={
+    a="<TRACK\nNAME \"A\"\nSCORE 0 1 0 0\n>\n",
+    b="<TRACK\nNAME \"B\"\nSCORE 0 1 0 0\n>\n",
+    c="<TRACK\nNAME \"C\"\nSCORE 0 1 0 0\n>\n",
+  },
+  names={a="Cello",b="Untitled",c="Violine"}, -- Deliberately misleading.
+  notes={
+    a=fixture({72,74,76,77,79,81,76,74}),
+    b=fixture({57,59,60,62,63,65,62,60}),
+    c=fixture({43,45,47,48,50,52,50,48}),
+  },
+  actions=0,spacing_calls=0,spacing=0,spacing_present=true,spacing_responds=true,
+  writes=0,undos=0,refreshes=0,console={},editCursor=0,
   time={7,9},loop={10,12},
 }
 local reaper={}
 _G.reaper=reaper
 function reaper.MIDIEditor_GetActive() return 100 end
 function reaper.MIDIEditor_EnumTakes(_,i,editable)
- assert(editable==false,"Only visible (including non-editable) takes may be enumerated")
- return ({"vi","va","vc"})[i+1]
+ assert(editable==false)
+ return ({"a","b","c"})[i+1]
 end
-function reaper.MIDIEditor_GetTake() return "vi" end
-function reaper.TakeIsMIDI(take) return state.chunks[take]~=nil end
+function reaper.MIDIEditor_GetTake() return "a" end
+function reaper.TakeIsMIDI(take) return state.notes[take]~=nil end
 function reaper.ValidatePtr2() return true end
 function reaper.GetMediaItemTake_Item(take) return take end
 function reaper.GetMediaItem_Track(item) return item end
-function reaper.GetTrackName(track) return true,state.names[track] end
+function reaper.GetTrackName() error("TRACK NAMES MUST NOT BE READ FOR CLEF INFERENCE") end
+function reaper.MIDI_CountEvts(take)
+ return true,#state.notes[take],0,0
+end
+function reaper.MIDI_GetNote(take,index)
+ local n=state.notes[take][index+1]
+ if not n then return false end
+ return true,false,n.muted,n.a,n.b,0,n.p,88
+end
 function reaper.GetTrackStateChunk(track) return true,state.chunks[track] end
 function reaper.SetTrackStateChunk(track,chunk)
  state.writes=state.writes+1;state.chunks[track]=chunk;return true
@@ -54,58 +76,100 @@ function reaper.kbd_enumerateActions(_,idx)
  return 0,""
 end
 function reaper.GetToggleCommandStateEx(section,id)
- assert(section==32060 and id==411,"unexpected toggle-state query")
+ assert(section==32060 and id==411)
  return state.spacing
 end
 function reaper.MIDIEditor_OnCommand(editor,id)
- assert(editor==100,"wrong MIDI editor")
+ assert(editor==100)
  if id==410 then
   state.actions=state.actions+1
-  assert(state.loop[1]==0 and state.loop[2]==16,"four measures must span QN 0..16")
+  assert(state.loop[1]==0 and state.loop[2]==16,"must zoom four bars")
  elseif id==411 then
   state.spacing_calls=state.spacing_calls+1
   if state.spacing_responds then state.spacing=1-state.spacing end
- else
-  error("unexpected REAPER action, possibly quantization")
- end
+ else error("unexpected action; quantization must never run") end
  return true
 end
 function reaper.ShowConsoleMsg(s) state.console[#state.console+1]=s end
-function reaper.MIDI_SetNote() error("MIDI should never change") end
-function reaper.MIDI_SetAllEvts() error("MIDI should never change") end
-function reaper.MIDI_InsertTextSysexEvt() error("MIDI should never change") end
-function reaper.ImGui_CreateContext() error("no UI allowed") end
-function reaper.ShowMessageBox() error("no prompts allowed") end
+function reaper.MIDI_SetNote() error("MIDI event changed!") end
+function reaper.MIDI_SetAllEvts() error("MIDI event changed!") end
+function reaper.MIDI_InsertTextSysexEvt() error("MIDI metadata changed!") end
+function reaper.ImGui_CreateContext() error("No UI needed") end
+function reaper.ShowMessageBox() error("No prompts allowed") end
 
-local function check(cond,message) assert(cond,message);print("PASS "..message) end
-local function run() local chunk,err=loadfile(source);assert(chunk,err);chunk() end
+local checks=0
+local function check(cond,label)
+ assert(cond,label)
+ checks=checks+1
+ print("PASS "..label)
+end
+local function run()
+ local script,err=loadfile(source)
+ assert(script,err)
+ script()
+end
+local function has(track,clef)
+ return state.chunks[track]:find("SCORE 0 "..clef.." 0 0",1,true)~=nil
+end
+run()
+check(has("a",2),"high-note track with misleading 'Cello' name gets treble")
+check(has("b",4),"middle-register untitled track gets alto")
+check(has("c",3),"low-note track named 'Violine' gets bass")
+check(state.actions==1,"one native zoom to four bars")
+check(state.spacing_calls==1 and state.spacing==1,"proportional spacing enabled once")
+check(state.time[1]==7 and state.time[2]==9 and state.loop[1]==10 and state.loop[2]==12,"loop and time selections restored")
+check(state.writes==3 and state.undos==1,"all three visible tracks changed within one undo block")
+check(state.refreshes==3,"notation refresh attempted on visible takes")
 
 run()
-check(state.chunks.vi:find("SCORE 0 2 0 0",1,true)~=nil,"violin mapped to corrected SCORE 0 2 0 0")
-check(state.chunks.va:find("SCORE 0 4 0 0",1,true)~=nil,"viola mapped to alto code 4")
-check(state.chunks.vc:find("SCORE 0 3 0 0",1,true)~=nil,"cello mapped to bass code 3")
-check(state.actions==1,"one zoom action is sent")
-check(state.spacing_calls==1 and state.spacing==1,"proportional spacing enabled when off")
-check(state.time[1]==7 and state.time[2]==9 and state.loop[1]==10 and state.loop[2]==12,"time and loop selections restored")
-check(state.writes==3 and state.undos==1,"all visible tracks updated in one undo block")
-check(state.refreshes==3,"notation refreshed for all visible takes")
+check(state.writes==3 and state.actions==2,"repeating shortcut keeps clefs without rewrites")
+check(state.spacing_calls==1 and state.spacing==1,"repeating shortcut does not toggle spacing off")
+
+-- Insufficient or ambiguous material cannot justify a forced clef switch.
+state.notes.c=fixture({72,74,76})
+state.chunks.c="<TRACK\nSCORE 0 1 0 0\n>\n"
+local writes=state.writes
 run()
-check(state.writes==3 and state.actions==2,"repeated shortcut is idempotent for SCORE lines")
-check(state.spacing_calls==1 and state.spacing==1,"repeated shortcut does not turn proportional spacing off")
-state.names.vc="Unbekannt"
-state.chunks.vc=originals.vc
+check(state.writes==writes and has("c",1),"three-note fragment retains existing clef")
+
+state.notes.c=fixture({60,60,60,60,60,60})
+state.chunks.c="<TRACK\nSCORE 0 3 0 0\n>\n"
+writes=state.writes
 run()
-check(state.chunks.vc==originals.vc,"unknown instrument remains untouched")
-check(state.time[1]==7 and state.loop[1]==10,"existing selections not overwritten on repeated runs")
+check(state.writes==writes and has("c",3),"ambiguous C4 range retains previous clef")
+
+-- A wide MELODY alone is not sufficient evidence for a grand staff.
+state.notes.a=fixture({48,50,52,72,74,76,48,50,74,76})
+state.chunks.a="<TRACK\nSCORE 0 2 0 0\n>\n"
+run()
+check(not has("a",1),"wide but sequential melody does not create a grand staff")
+
+-- Concurrent lower and upper voices imply independent grand staff.
+local piano={
+ {p=48,a=0,b=900},{p=72,a=0,b=450},
+ {p=50,a=1000,b=1900},{p=74,a=1000,b=1450},
+ {p=52,a=2000,b=2900},{p=76,a=2000,b=2450},
+ {p=48,a=3000,b=3900},{p=72,a=3000,b=3450},
+}
+state.notes.a=piano
+state.chunks.a="<TRACK\nSCORE 0 2 0 0\n>\n"
+run()
+check(has("a",1),"simultaneous high/low voices use grand staff")
+
 state.spacing=-1
+local before=state.spacing_calls
 run()
-check(state.spacing_calls==1 and state.spacing==-1,"unknown toggle state is left unchanged")
-check(state.actions==4,"four-bar zoom still runs when toggle state is unknown")
-state.spacing=0
-state.spacing_responds=false
-run()
-check(state.spacing_calls==2 and state.spacing==0,"failed activation is reported without guessing")
+check(state.spacing_calls==before and state.spacing==-1,"unknown spacing status does not toggle")
 state.spacing_present=false
 run()
-check(state.spacing_calls==2 and state.actions==6,"missing spacing action does not block four-bar zoom")
-print("OK: 16 offline integration checks, not a real REAPER notation-renderer validation.")
+check(state.spacing_calls==before,"missing proportional-spacing action does not block zoom")
+check(state.actions>=8,"zoom continues independently of clef/spacing inference")
+
+state.notes.c=fixture({41,44,47,48,50,52})
+state.chunks.c="<TRACK\nSCORE 0 1 0 0 77\n>\n"
+writes=state.writes
+run()
+check(state.writes==writes and state.chunks.c:find("SCORE 0 1 0 0 77",1,true)~=nil,
+      "unknown SCORE chunk layout never overwritten")
+
+print("OK: "..checks.." real-script mock checks; REAPER GUI and SCORE field semantics still require an actual test")
