@@ -1,5 +1,21 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Schnittstellenprüfung: Welche Notationsanweisungen kann REAPER wirklich umsetzen?
+
+**Anlass:** Der Nutzer weist zutreffend darauf hin, dass vor einer musikalischen Vorinterpretation zunächst genau geklärt sein muss, welche **Steuerungsmöglichkeiten und -grenzen** REAPERs interne Notationsengine hat.
+
+**Neu erstellt:** [docs/REAPER-NOTATION-STEUERBARKEIT-2026-11-02.md](docs/REAPER-NOTATION-STEUERBARKEIT-2026-11-02.md). Quellgrundlage: REAPER User Guide v7.84 Kap. 14.5–14.9, offizielle ReaScript-API aus REAPER v7.83, ReaTeam/juliansader-Skripte, eigener `Notation Studio.lua` v0.1.24.
+
+**Technisch abgesicherte Erkenntnisse:**
+- **GUI-seitig belegbar:** Displayquantisierung und Mindestnotenlänge pro Track / Projekt, Default- und Wechsel-Schlüssel, High-/Low-Stimmen, Beaming / Tie-Minimierung, auto triplet, proportional spacing, MIDI-Trackliste und mehrspurig continuous layout.
+- **ReaScript-seitig belegt:** Aufruf von MIDI-Editor-Aktionen, Steuerung der Editor-Horizontal-Skalierung (`pixels_per_timebase_unit`), Zugriff auf Takes/Tracks/MIDI-Events und Notationsmetadaten Typ 15, z. B. individuelles `disp_len` (als Offset zur MIDI-Länge), gespeicherte `staff`-/`voice`-Metadaten. **Keine** in `MIDIEditor_SetSetting_int` dokumentierte direkte pro-Track-Quantisierung/Schlüssel-Setter; native Aktionen/Chunk-Hacks sind nicht gleich verifizierte dauerhafte Steuerbarkeit.
+- **Nicht direkt steuerbar:** Erzeugte grafische Pausen einzeln entfernen, horizontalen Engraving-/Kollisionsalgorithmus mit beliebigen X-Werten ersetzen, beliebige Mehrspur-Systemumbrüche durchsetzen; daher kein blindes Versprechen für Ziele 1/2.
+- **Neue wichtige Sicherheitseinschränkung:** Manuell angelegte/edierte Tuplets können laut Handbuch echte MIDI-Note-On-/Note-Off-Positionen verändern! Nur automatische Anzeigeerkennung für unverändertes MIDI zulassen, ohne ausdrückliche Zustimmung zum echten Edit.
+- **Eigene bekannte Problemstellen:** `cleanup_notation()` benutzt unscharfe Action-Textsuche, unterscheidet unbekannte Toggle-Zustände teilweise nicht, schreibt `SCORE` über undokumentierten Track-Chunk und beeinflusst keine internen Glyph-/Abstandsberechnungen.
+
+**Entscheidung:** Die Notations-Vorinterpretation ist **bedingt technisch plausibel**, nicht bewiesen. Vorerst Dokumentation statt neuer Code; bei Umsetzung höchstens ein gebündelter kontrollierter REAPER-Praxistest der acht Takte (plus höchstens eine Nachprüfung); keine Serie manueller Experimente.
+
+
 ## 02.11.2026 – Kontrollierte 8-Takt-Referenz-MIDI erzeugt und offline geprueft
 
 **Ausloeser:** Nutzer schlaegt statt zufaellig gewaehlter Musik eine gezielt aufgebaute Test-MIDI-Datei vor, um die vier Kriterien ohne lange Testserie objektiv zu pruefen.
