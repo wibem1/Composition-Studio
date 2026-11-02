@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Erste echte REAPER-Rückmeldung zu 0.1.24-test.1
+
+**Nutzer-Screenshot der laufenden Testfassung:** Die ReaImGui-Palette zeigt `Notation Studio v0.1.24-test.1` und `Editor gebunden`. Nach Klick auf `Lesbarkeit verbessern` erscheint `Musikalische Abstände sind bereits aktiv. Keine weiteren Änderungen nötig. Zoom, Quantisierung, Notenschlüssel und Stimmen bleiben unverändert.` Die Anzeige nennt 0 markierte Noten.
+
+**Präzise Evidenz:** Start und sichtbare Statusmeldung in realem REAPER nachgewiesen. Die bereits aktive Abstandsoption bedeutet, dass der Button absichtlich **keine Veränderung** ausführt. Damit ist **keine Verbesserung** der Notenlesbarkeit nachgewiesen. Der Screenshot überlagert die Notenansicht; Pausen/Notenlayout sind darauf nicht auswertbar. Eine von REAPER unabhängige MIDI-Vorher-/Nachher-Verifikation erfolgte nicht. Die Offline-Tests aus dem vorigen Abschnitt bleiben die Nachweise für die anderen Guardrails.
+
+**Produktkorrektur:** `Lesbarkeit verbessern` ist in dieser Testfassung ein missverständlicher Name, weil die neue Funktion nur einen Abstandsmodus aktiviert. Für den nächsten produktiven Schritt entweder ehrlich als `Musikalische Abstände aktivieren` ausweisen oder einen wirklich musikalisch begründeten, zunächst rein lesenden Diagnosemodus ergänzen. Keine pauschale Quantisierung und kein optischer Erfolg aus einer No-op-Meldung ableiten.
+
+**Nächster schmaler Prüfpunkt:** Nutzer kann die Testpalette schließen und eine freie REAPER-Notenansicht des vorhandenen 8-Takt-Tests zeigen, insbesondere Takte 3–6 mit künstlichen gegenüber echten Pausen. Erst anhand der konkret sichtbaren Abweichungen eine gezielte, rücknehmbare Anzeigeänderung entwickeln. Keine weitere Wiederholung des unveränderten Buttons.
+
 ## 02.11.2026 – Testkandidat für sichere Lesbarkeit bereit (nur Entwicklungsbranch)
 
 **Status:** `Notation Studio.lua` auf Branch `fix/notation-readability-safe-20261102`, als `0.1.24-test.1` eindeutig gekennzeichnet. Die Produktversion `0.1.24` auf `main` ist **weiter unverändert**. Draft-PR #5 bleibt offen und wird vor dem echten REAPER-Praxistest nicht gemergt. Die interne Updatefunktion ist in dieser Testfassung deaktiviert, damit sie nicht die Installation überschreibt.
