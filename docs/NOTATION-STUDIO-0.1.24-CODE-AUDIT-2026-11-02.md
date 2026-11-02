@@ -5,7 +5,7 @@ Repository: `wibem1/Composition-Studio`, Branch `main`
 Untersuchte Datei: [Notation Studio.lua](../Notation%20Studio.lua), 729 Zeilen, Blob-SHA `48274e5767c8d756543bf7fa3a0b9108b639a272`
 Anlass: Nutzer hält Grundkonzept mit REAPER-nativer Notenansicht und KI-Anbindung für ausbaufähig, meldet jedoch: `Lesbarkeit verbessern` verschlechtert die Darstellung.
 
-**Nachweisstufe:** Vollständiger Quellcode gelesen, alle 37 lokalen Funktionen und die UI-Aktionen inventorisiert, bestehende Projektberichte/Handbuch-/API-Audits abgeglichen. **Keine neue REAPER-Ausführung, kein Lua-Laufzeittest, kein API-KI-Aufruf, keine Implementierung und keine neue Version**. Anwenderbericht über die reale Verschlechterung ist ein konkreter negativer Praxishinweis, aber keine isolierte Ursachenmessung.
+**Nachweisstufe:** Vollständiger Quellcode gelesen, alle 38 lokalen Funktionsdefinitionen und die UI-Aktionen inventorisiert, bestehende Projektberichte/Handbuch-/API-Audits abgeglichen. **Keine neue REAPER-Ausführung, kein Lua-Laufzeittest, kein API-KI-Aufruf, keine Implementierung und keine neue Version**. Anwenderbericht über die reale Verschlechterung ist ein konkreter negativer Praxishinweis, aber keine isolierte Ursachenmessung.
 
 ## Leitentscheidung
 
