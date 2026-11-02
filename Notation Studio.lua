@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.24-test.1
+-- @version 0.1.24-test.2
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.24-test.1"
+local VERSION="0.1.24-test.2"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -442,33 +442,109 @@ local function active_midi_track()
  return item and reaper.GetMediaItem_Track(item) or nil
 end
 
-local function set_default_clef_chunk(profile)
- if profile=="grand" then
-  return false,"Treble+bass ist ein Sonderfall und wird nicht über die numerische SCORE-Reihe gesetzt."
+-- Read the active TRACK, not selected notes: a violin must be recognized even
+-- with zero notes selected. No pitch-only guess and no mixed-track edits.
+local function active_instrument_clef()
+ local track=active_midi_track()
+ if not track then return nil,nil,nil,"Kein aktiver MIDI-Track." end
+ local ok,name=reaper.GetTrackName(track)
+ if ok==false or type(name)~="string" then return nil,nil,nil,"Spurname nicht lesbar." end
+ local n=name:lower()
+ local desired,instrument
+ if n:find("violoncello",1,true) or n:find("cello",1,true) then
+  desired,instrument="bass","Violoncello"
+ elseif n:find("violin",1,true) or n:find("geige",1,true) then
+  desired,instrument="treble","Violine"
+ elseif n:find("bratsche",1,true) or n:find("viola",1,true) then
+  desired,instrument="alto","Bratsche"
+ elseif n:find("kontrabass",1,true) or n:find("double bass",1,true) then
+  desired,instrument="bass","Kontrabass"
+ elseif n:find("piano",1,true) or n:find("klavier",1,true) then
+  return "grand","Klavier",track,nil
+ else
+  return nil,nil,track,"Instrument nicht eindeutig erkannt: "..name..". Keine automatische Schlüsselwahl."
  end
- local value=CLEF_SCORE_VALUE[profile]
- if value==nil then return false,"Unbekannter Notenschlüssel: "..tostring(profile) end
+ return desired,instrument,track,nil
+end
 
- local tr=active_midi_track()
- if not tr then return false,"Aktiver MIDI-Track konnte nicht ermittelt werden." end
-
- local ok,chunk=reaper.GetTrackStateChunk(tr,"",false)
- if not ok or not chunk then return false,"Track-State konnte nicht gelesen werden." end
-
- local newline="SCORE 0 "..tostring(value).." 0 0"
- local changed=0
- chunk,changed=chunk:gsub("SCORE%s+[^\r\n]+",newline,1)
- if changed==0 then
-  local inserted=false
-  chunk,changed=chunk:gsub("(\nVU%s+[^\r\n]+)", "%1\n"..newline,1)
-  inserted=changed>0
-  if not inserted then return false,"Keine geeignete Stelle für die SCORE-Zeile gefunden." end
+local function score_clef_line(track)
+ if type(reaper.GetTrackStateChunk)~="function" then return nil,nil,"Track-Zustand nicht lesbar (API fehlt)." end
+ local ok,chunk=reaper.GetTrackStateChunk(track,"",false)
+ if not ok or type(chunk)~="string" then return nil,nil,"Track-Zustand nicht lesbar." end
+ local match,count=nil,0
+ for line in chunk:gmatch("[^\r\n]+") do
+  if line:match("^%s*SCORE%s+") then
+   count=count+1
+   match=line
+  end
  end
+ if count~=1 then return nil,nil,"Es gibt nicht genau eine SCORE-Einstellungszeile. Bitte REAPER-Kontextmenü verwenden." end
+ return chunk,match,nil
+end
 
- local set_ok=reaper.SetTrackStateChunk(tr,chunk,false)
- if not set_ok then return false,"REAPER hat den Track-State nicht übernommen." end
- reaper.UpdateArrange()
- return true,newline
+-- Only adjust the tested narrow SCORE layout; preserve all other data.
+-- The field mapping is not a public REAPER API and must be confirmed in REAPER.
+-- Unknown layouts are rejected, NOT recreated or overwritten.
+local function safe_clef_preview(track,desired)
+ local chunk,line,err=score_clef_line(track)
+ if not chunk then return nil,err end
+ local prefix,current,suffix=line:match("^(SCORE%s+0%s+)(%d+)(%s+0%s+0%s*)$")
+ if not prefix then return nil,"SCORE-Einstellung hat ein unbekanntes Format. Kein automatischer Eingriff." end
+ local target=CLEF_SCORE_VALUE[desired]
+ if not target or target<1 or target>4 then return nil,"Nicht unterstützter Schlüssel." end
+ local n=tonumber(current)
+ if n==target then return {already=true,track=track,desired=desired,line=line},nil end
+ if n~=0 then return nil,"Vorhandener Schlüssel wurde bewusst gesetzt (SCORE "..current.."). Nicht überschreiben." end
+ local replacement=prefix..tostring(target)..suffix
+ local newChunk,count=chunk:gsub(line:gsub("([^%w])","%%%1"),function() return replacement end,1)
+ if count~=1 then return nil,"SCORE-Zeile nicht eindeutig ersetzbar." end
+ return {track=track,desired=desired,original=chunk,replacement=newChunk,expected=replacement},nil
+end
+
+local function clef_diagnosis()
+ local desired,instrument,track,err=active_instrument_clef()
+ if err then return nil,err end
+ if desired=="grand" then return nil,"Klavier: zweizeiliges System bleibt erhalten." end
+ local plan,reason=safe_clef_preview(track,desired)
+ if plan and plan.already then return nil,instrument..": richtiger Notenschlüssel bereits eingestellt." end
+ if not plan then return nil,instrument..": "..tostring(reason)..
+   " Manuell: Rechtsklick auf Schlüssel → Default clef → "..desired.."."
+ end
+ return plan,instrument..": Klaviersystem erkannt. Empfehlung: ein Notensystem mit "..desired.."-Schlüssel."
+end
+
+local function apply_instrument_clef()
+ local plan,diagnosis=clef_diagnosis()
+ if not plan then status=diagnosis; return false end
+ if type(reaper.SetTrackStateChunk)~="function"
+    or type(reaper.Undo_BeginBlock2)~="function"
+    or type(reaper.Undo_EndBlock2)~="function" then
+  status="Sichere Undo-Schnittstelle fehlt. Kein Eingriff."; return false
+ end
+ local reply=reaper.ShowMessageBox(
+  diagnosis.."\n\nNur den Standard-Notenschlüssel der aktiven Spur ändern? ".. 
+  "REAPERs SCORE-Feld ist undokumentiert. Bitte zuerst Projektkopie sichern. "..
+  "Mit REAPER Undo rückgängig machen.","Schlüsselvorschlag bestätigen",4)
+ if reply~=6 then status="Schlüsseländerung abgebrochen.";return false end
+ -- Re-check the entire source before applying, not only the original line.
+ local now=select(2,reaper.GetTrackStateChunk(plan.track,"",false))
+ if now~=plan.original then status="Track hat sich zwischenzeitlich geändert. Bitte erneut prüfen.";return false end
+ reaper.Undo_BeginBlock2(0)
+ local wrote=reaper.SetTrackStateChunk(plan.track,plan.replacement,true)
+ local changed=type(reaper.GetTrackStateChunk)=="function" and
+   select(2,reaper.GetTrackStateChunk(plan.track,"",false)) or nil
+ local correct=changed and changed:find(plan.expected,1,true)~=nil
+ if not wrote or not correct then
+  reaper.SetTrackStateChunk(plan.track,plan.original,true)
+  reaper.Undo_EndBlock2(0,"Notation Studio: fehlgeschlagenen Schlüsselversuch zurücknehmen",-1)
+  status="REAPER hat die Änderung nicht bestätigt; ursprünglicher Track-Zustand wiederhergestellt."
+  return false
+ end
+ reaper.Undo_EndBlock2(0,"Notation Studio: Instrumentenschlüssel setzen",-1)
+ if type(reaper.UpdateArrange)=="function" then reaper.UpdateArrange() end
+ if type(reaper.MIDI_RefreshEditors)=="function" then reaper.MIDI_RefreshEditors(reaper.MIDIEditor_GetTake(active_editor())) end
+ status="Schlüssel im Track-Zustand auf "..plan.desired.." gesetzt. Bitte sichtbares Notensystem prüfen; REAPER Undo bleibt verfügbar."
+ return true
 end
 
 -- Deliberately conservative: no blanket quantization, voice/clef edits,
@@ -476,25 +552,24 @@ end
 -- REAPER's notation renderer has no accessible collision/measure-width API.
 local function cleanup_notation()
  if not active_editor() then
-  status="Keine Verbindung zum gültigen MIDI-/Notationseditor. Bitte MIDI-Editor öffnen."
+  status="Keine Verbindung zum MIDI-/Notationseditor."
   return
  end
+ local _,message=clef_diagnosis()
  local on,cmd=spacing_state()
+ local spacing_result
  if not cmd then
-  status="REAPER-Aktion für proportionale Notenabstände fehlt. Keine Änderung durchgeführt."
-  return
+  spacing_result="Musikalische Abstandsaktion nicht gefunden."
+ elseif on==nil then
+  spacing_result="Zustand musikalischer Abstände unbekannt; unverändert."
+ elseif on then
+  spacing_result="Musikalische Abstände bereits aktiv."
+ elseif set_musical_spacing(true) then
+  spacing_result="Musikalische Abstände aktiviert."
+ else
+  spacing_result="Musikalische Abstände nicht bestätigt."
  end
- if on==nil then
-  status="REAPER meldet keinen zuverlässigen An/Aus-Zustand. Keine automatische Änderung; bitte musikalische Abstände im MIDI-Editor prüfen."
-  return
- end
- if on then
-  status="Musikalische Abstände sind bereits aktiv. Keine weiteren Änderungen nötig. Zoom, Quantisierung, Notenschlüssel und Stimmen bleiben unverändert."
-  return
- end
- if set_musical_spacing(true) then
-  status="Musikalische Abstände aktiviert. Quantisierung, Stimmen, Notenschlüssel, Systemansicht, Zoom und MIDI-Daten wurden von dieser Funktion nicht verändert."
- end
+ status=message.."\n"..spacing_result.."\nKeine stillschweigende Änderung von Notenschlüssel, Stimmen, Quantisierung oder MIDI."
 end
 
 selected_takes=function()
@@ -604,7 +679,7 @@ local function draw()
    pushed=pcall(reaper.ImGui_PushFont,ctx,ui_font,20)
   end
   local _,nsel=selection_context()
-  reaper.ImGui_Text(ctx,"TESTFASSUNG · nur sichere Lesbarkeitssteuerung")
+  reaper.ImGui_Text(ctx,"TESTFASSUNG · Instrumentenschlüssel prüfen (Projektkopie!)")
   reaper.ImGui_Text(ctx,"Native REAPER-Notation · "..tostring(nsel).." Note(n) markiert · Editor "..(active_editor() and "gebunden" or "NICHT gebunden"))
   reaper.ImGui_SameLine(ctx)
   if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##notationstudio_menu") end
@@ -618,10 +693,11 @@ local function draw()
   reaper.ImGui_Separator(ctx)
 
   if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
-   reaper.ImGui_TextWrapped(ctx,"Sicherer Modus: Nur proportionale musikalische Abstände einschalten, falls eindeutig möglich. Andere Einstellungen und MIDI bleiben unverändert.")
+   reaper.ImGui_TextWrapped(ctx,"Prüft den aktiven Track auch ohne Notenauswahl auf einen passenden Instrumentenschlüssel. Änderungen an Track-Daten nur nach ausdrücklicher Bestätigung; Abstände sicher einschalten.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
+   if reaper.ImGui_Button(ctx,"Instrumentenschlüssel prüfen / übernehmen",-1,30) then apply_instrument_clef() end
    if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
-   reaper.ImGui_TextWrapped(ctx,"Bei Bedarf Zoom oder Anzeigequantisierung unten einzeln wählen. REAPER kann Taktbreiten und Kollisionsabstände nicht über dieses Skript frei optimieren.")
+   reaper.ImGui_TextWrapped(ctx,"Schlüsseländerung nur nach Bestätigung an einer Projektkopie. REAPER-Taktbreiten bleiben unverändert. Zoom und Quantisierung weiter einzeln wählbar.")
    local on=select(1,spacing_state())
    local spacing_label=on==nil and "Musikalische Abstände (Status unbekannt)" or (on and "Musikalische Abstände ✓" or "Musikalische Abstände")
    if reaper.ImGui_Button(ctx,spacing_label.."##spacing",-1,30) then
@@ -667,7 +743,7 @@ local function draw()
   end
 
   if reaper.ImGui_CollapsingHeader(ctx,"Stimmen / Notation") then
-   reaper.ImGui_TextWrapped(ctx,"Default-Clef wird direkt über REAPERs Track-State-Zeile SCORE gesetzt. Solo-Streicher: Violine → Treble, Viola → Alto, Cello/Kontrabass → Bass. Treble+bass bleibt als Sonderfall unverändert.")
+   reaper.ImGui_TextWrapped(ctx,"Instrumentenschlüssel aus aktivem Tracknamen ableiten. Unbekannte SCORE-Layouts werden nicht verändert; nötigenfalls Schlüssel in REAPER manuell setzen.")
    reaper.ImGui_TextWrapped(ctx,"Weitere native Notationsbefehle werden hier gebündelt.")
   end
   if reaper.ImGui_CollapsingHeader(ctx,"Artikulation") then
