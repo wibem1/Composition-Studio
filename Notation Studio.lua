@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.24-test.1
+-- @version 0.1.24-test.2
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.24-test.1"
+local VERSION="0.1.24-test.2"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -542,6 +542,7 @@ local function apply_instrument_clef()
  end
  reaper.Undo_EndBlock2(0,"Notation Studio: Instrumentenschlüssel setzen",-1)
  if type(reaper.UpdateArrange)=="function" then reaper.UpdateArrange() end
+ if type(reaper.MIDI_RefreshEditors)=="function" then reaper.MIDI_RefreshEditors(reaper.MIDIEditor_GetTake(active_editor())) end
  status="Schlüssel im Track-Zustand auf "..plan.desired.." gesetzt. Bitte sichtbares Notensystem prüfen; REAPER Undo bleibt verfügbar."
  return true
 end
@@ -678,7 +679,7 @@ local function draw()
    pushed=pcall(reaper.ImGui_PushFont,ctx,ui_font,20)
   end
   local _,nsel=selection_context()
-  reaper.ImGui_Text(ctx,"TESTFASSUNG · nur sichere Lesbarkeitssteuerung")
+  reaper.ImGui_Text(ctx,"TESTFASSUNG · Instrumentenschlüssel prüfen (Projektkopie!)")
   reaper.ImGui_Text(ctx,"Native REAPER-Notation · "..tostring(nsel).." Note(n) markiert · Editor "..(active_editor() and "gebunden" or "NICHT gebunden"))
   reaper.ImGui_SameLine(ctx)
   if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##notationstudio_menu") end
@@ -696,7 +697,7 @@ local function draw()
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
    if reaper.ImGui_Button(ctx,"Instrumentenschlüssel prüfen / übernehmen",-1,30) then apply_instrument_clef() end
    if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
-   reaper.ImGui_TextWrapped(ctx,"Bei Bedarf Zoom oder Anzeigequantisierung unten einzeln wählen. REAPER kann Taktbreiten und Kollisionsabstände nicht über dieses Skript frei optimieren.")
+   reaper.ImGui_TextWrapped(ctx,"Schlüsseländerung nur nach Bestätigung an einer Projektkopie. REAPER-Taktbreiten bleiben unverändert. Zoom und Quantisierung weiter einzeln wählbar.")
    local on=select(1,spacing_state())
    local spacing_label=on==nil and "Musikalische Abstände (Status unbekannt)" or (on and "Musikalische Abstände ✓" or "Musikalische Abstände")
    if reaper.ImGui_Button(ctx,spacing_label.."##spacing",-1,30) then
