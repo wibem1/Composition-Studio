@@ -20,7 +20,7 @@ local function check_case(name,platform,network_ok)
   local tmp=cmd:match('%-o%s+"([^"]+)"')
   assert(tmp and tmp:find(".part",1,true))
   if not network_ok then return "22\nNETWORK_ERROR" end
-  local package='-- @description Notation Studio\n-- @version 0.1.24-test.1\n-- '..string.rep("x",21000)..'\nreaper.preview_did_run()\n'
+  local package='-- @description Notation Studio\n-- @version 0.1.24-test.2\n-- '..string.rep("x",21000)..'\nreaper.preview_did_run()\n'
   local o=assert(io.open(tmp,"wb"));o:write(package);o:close()
   return "0\n"
  end
@@ -31,7 +31,7 @@ local function check_case(name,platform,network_ok)
   assert(#calls==1 and executed==1 and #alerts==0,"preview launch failed")
   assert(calls[1]:find("curl.exe",1,true) or calls[1]:find("/usr/bin/curl",1,true),"curl missing")
   local sep=platform:find("Win") and "\\" or "/"
-  local dest=root..sep.."Scripts"..sep.."Notation Studio Lesbarkeit Preview a916b226.lua"
+  local dest=root..sep.."Scripts"..sep.."Notation Studio Lesbarkeit Preview 9b55bfd6.lua"
   local p=assert(io.open(dest,"rb"));assert(#p:read("*a")>20000);p:close()
  else
   assert(#calls==1 and executed==0 and #alerts==1,"download error not handled")
