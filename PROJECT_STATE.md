@@ -1,5 +1,23 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Sieben ReaTeam-Notationsskripte vollständig quellengeprueft, Wiederverwendungskonzept
+
+**Benutzerauftrag:** Zunaechst recherchieren und eine belastbare Uebersicht erstellen, **welche Teile welcher bereits existierenden Entwicklungen** unsere vier Ziele im nativen REAPER-Noteneditor unterstuetzen und wo konkrete Modifikationen erforderlich waeren. **Keine neue Testversion und keine Softwareprogrammierung.**
+
+**Neuer Recherchebericht:** [docs/REAPER-NATIVE-NOTATION-REUSE-AUDIT-2026-11-02.md](docs/REAPER-NATIVE-NOTATION-REUSE-AUDIT-2026-11-02.md), anhand der **Quelltexte aller sieben** `js_Notation`-Skripte unter `ReaTeam/ReaScripts/MIDI Editor/` inkl. Git-Blob-SHAs, REAPER-Handbuch 7.84 und `Notation Studio.lua` 0.1.24. Einzelne Skripte gelten nicht als nachweislich an der Nutzer-Orgel getestet.
+
+**Prioritaeten:**
+- **A / zentral:** `Set displayed length ... custom value` (Notationsmetadata `disp_len` als Delta gegen originale MIDI-Laenge, Reset vorhanden); `Select all notes that have customized display lengths or positions` (Audit von `disp_len`, `disp_pos`).
+- **A/B / relevant:** `Set beaming ... custom rhythm` (manuelle rhythmische Balkengruppen, aktuelle Selection zurueckstellen und Takt-/Stimmenkontext beachten).
+- **B / Diagnose:** `Select notes by notation keywords` (vorhandene Staff-/Voice-Metadaten, keine eigene Stimmtrennung).
+- **C / redundant bzw. eingeschraenkt:** `Select notes by user-supplied notation text` (weitgehend alternative Variante, nutzt aeltere Take-Ermittlung); `Set display length ... double + staccato` und `... quadruple + staccatissimo` (fuer musikalisch echte kurze Artikulation, nicht fuer pauschale Orgel-Legato-Mikroluecken; ueberschreiben vorhandene Artikulation).
+- **Keines der sieben** ersetzt REAPERs horizontalen Engravingalgorithmus oder erzeugt automatisch Instrumentenzeilen; hier sind nur native REAPER-Funktionen/Track-Profile relevant.
+- Drei getrennte nutzbare Ansatzgebiete: native Darstellungsprofile, punktuelle `disp_len`-Korrektur mit Audit, optionale Beaming-Gliederung; dazu native Track-/Clef-Zuordnung. Der **fehlende, riskante Baustein** waere musikalische Erkennung unnoetiger Kurzpausen je Stimme.
+- **Lizenzvorsicht:** Der gepruefte Upstream `ReaTeam/ReaScripts`-Root enthaelt keine globale LICENSE-Datei, in den sieben Script-Headern keine explizite Lizenz. Vor Quellcode-Copying/Weiterverteilung Rechte klaeren; unabhängige ReaPack-Installation oder eigene Implementierung nur anhand dokumentierter ReaScript-APIs als Zwischenweg.
+
+**Urteil:** Begrenzte Verbesserung des eingebauten Editors ist plausibel, **nicht bewiesen fuer alle vier Ziele zusammen**. Der bestehende Problemfall muss mit einem einzigen reversiblen `disp_len`-Eingriff die Wirkung im **echten** REAPER nachweisen, bevor automatisierte Pausenbearbeitung sinnvoll ist. Kein neues Fenster, kein Notator-Nachbau. Projektcode, Nutzer-MIDI und aktive App unveraendert; nur Dokumentation geaendert.
+
+
 ## 02.11.2026 – Machbarkeitsbewertung: Vier REAPER-native Notationsziele NICHT bereits erreicht
 
 **Nutzerfeedback:** Die fruehere Schaltflaeche `Lesbarkeit verbessern` und unsere ersten Konfigurationsversuche haben Notenabstaende, Minipausen, Darstellung und Instrumentenzeilen **nicht gemeinsam auf ein arbeitsfaehiges Niveau** gebracht. Das ist als negatives reales Ergebnis zu respektieren. Keine erneute Schleife der bekannten Sammelaktion.
