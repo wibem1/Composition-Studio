@@ -67,9 +67,9 @@ local function check(cond,message) assert(cond,message);print("PASS "..message) 
 local function run() local chunk,err=loadfile(source);assert(chunk,err);chunk() end
 
 run()
-check(state.chunks.vi:find("SCORE 0 4 0 0",1,true)~=nil,"violin mapped to user-specified SCORE 0 4 0 0")
-check(state.chunks.va:find("SCORE 0 3 0 0",1,true)~=nil,"viola clef candidate mapped per current table")
-check(state.chunks.vc:find("SCORE 0 2 0 0",1,true)~=nil,"cello clef candidate mapped per current table")
+check(state.chunks.vi:find("SCORE 0 2 0 0",1,true)~=nil,"violin mapped to user-specified SCORE 0 2 0 0")
+check(state.chunks.va:find("SCORE 0 4 0 0",1,true)~=nil,"viola mapped to alto code 4")
+check(state.chunks.vc:find("SCORE 0 3 0 0",1,true)~=nil,"cello mapped to bass code 3")
 check(state.actions==1,"one zoom action is sent")
 check(state.time[1]==7 and state.time[2]==9 and state.loop[1]==10 and state.loop[2]==12,"time and loop selections restored")
 check(state.writes==3 and state.undos==1,"all visible tracks updated in one undo block")
