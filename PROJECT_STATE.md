@@ -1,5 +1,17 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Schlüsselsteuerung aus dem früheren Notation Studio übernommen
+
+**Klarstellung des Nutzers:** Die Schlüsselwahl war bereits im bisherigen Notationsskript implementiert und nach seiner Erinnerung erfolgreich. Die mehrfachen Neuentwicklungen mit geratenen `SCORE`-Zahlen waren unnötig. Belegter Quellstand: `Notation Studio.lua` **v0.1.17**, Commit [4bd09ff](https://github.com/wibem1/Composition-Studio/commit/4bd09ffac5419740695f7d732020568dd2b13497), korrigierte numerische Schlüsselwerte; unverändert in **v0.1.24** auf `main` (Blob `48274e5767c8d756543bf7fa3a0b9108b639a272`).
+
+**Technik aus dem Altbestand:** G-/Violinschlüssel `SCORE 0 1 0 0`, F-/Bassschlüssel `SCORE 0 2 0 0`, Alt-C `SCORE 0 3 0 0`, Tenor-C `SCORE 0 4 0 0`. Standard-Verfahren: vorhandene SCORE-Zeile im Track-State-Chunk ersetzen bzw. falls sie fehlt, nach der `VU`-Zeile einsetzen, dann `SetTrackStateChunk`. Diese Zuordnung **ersetzt** die zuvor fehlerhafte, um eins verschobene Zuordnung `grand=1,treble=2,bass=3,alto=4` des Einmal-Skripts. `grand` bleibt unberührt, weil die alte Methode hierfür bewusst keinen belegten numerischen SCORE-Wert verwendete.
+
+**Aktuelle Implementierung:** Weiterhin auf Branch `feat/reaper-notation-one-shot-20261102`, Draft-PR #7. Neue musikalische MIDI-Hilfslinien-Analyse ist **vollständig unabhängig von Tracknamen**; Schlüssel-Schreibmethode und Werte wurden gezielt an v0.1.24 angeglichen. Unbekanntes SCORE-Format, mehrdeutige Tonlage, zu wenige Noten oder erforderliche zweizeilige Klaviernotation werden nicht überschrieben. Vier-Takte-Zoom und Proportionalanzeige bleiben unverändert, keine Quantisierung/Notenbearbeitung/Popup. Ausdrücklich kein ungeprüfter neuer Zahlenwert für das Klaviersystem.
+
+**Objektiver Nachweis:** [GitHub Actions Run 41500680401](https://github.com/wibem1/Composition-Studio/actions/runs/41500680401) `success`: Lua-5.4-Syntax und **20/20 echte Quelldatei-Mocktests** bestanden (irreführende Namen haben keinerlei Wirkung, G/Alt/F anhand Noten, geringe und mehrdeutige Tonumfänge, Polyphonie, kein Grand-Schreibcode, unveränderte Proportionalanzeige/Zoom/Loop-Auswahl, originale SCORE-Werte und fehlende SCORE-Zeile nach `VU` eingefügt). Das belegt **noch nicht**, dass die laufende REAPER-Notationsengine die Schlüssel im offenen Editor grafisch übernimmt.
+
+**Nächster einzelner Schritt:** Ein einziger Praxistest der aktualisierten Kurz-Skriptdatei an der vorhandenen REAPER-Testpartitur auf Projektkopie. Falls dort weiterhin die Schlüssel unverändert bleiben, den realen REAPER-SCORE-/Editor-Zustand diagnostizieren statt erneut an Werten zu raten. Produktivversion `Notation Studio.lua` auf `main` nicht verändert.
+
 ## 02.11.2026 – Einmal-ReaScript aktiviert zusätzlich proportionale Notenabstände
 
 **Neue Nutzeranforderung:** Vorhandenes schlankes Shortcut-Skript um `Notation: Proportional (musical) note spacing` ergänzen. Keine zusätzliche Palette, keine Klicks, keine Darstellungsquantisierung, keine Änderung an Vier-Takte-Zoom und Schlüsselautomatik.
