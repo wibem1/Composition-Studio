@@ -7,6 +7,10 @@ function reaper.GetExtState() return "" end
 function reaper.MIDIEditor_GetActive() return state.focused and "ed" or nil end
 function reaper.MIDIEditor_GetTake(ed) return ed=="ed" and state.alive and "tk" or nil end
 function reaper.TakeIsMIDI(tk) return tk=="tk" end
+function reaper.GetMediaItemTake_Item(tk) return tk=="tk" and "item" or nil end
+function reaper.GetMediaItem_Track(item) return item=="item" and "track" or nil end
+function reaper.GetTrackName(track) assert(track=="track");return true,"Violine - G-Schluessel" end
+function reaper.GetTrackStateChunk(track) assert(track=="track");return true,"<TRACK\nNAME \"Violine - G-Schluessel\"\nSCORE 0 0 0 0\n>\n" end
 function reaper.ValidatePtr2(_,tk,kind) return tk=="tk" and kind=="MediaItem_Take*" and state.alive end
 function reaper.SectionFromUniqueID(id) assert(id==32060); return id end
 function reaper.kbd_enumerateActions(_,i)
