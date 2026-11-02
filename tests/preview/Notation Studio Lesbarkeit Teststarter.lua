@@ -1,10 +1,10 @@
--- @description Notation Studio – sichere Lesbarkeit: Testfassung starten
+-- @description Notation Studio – Instrumentenschlüssel: Testfassung starten
 -- @about Starts a pinned preview in a separate file. Does NOT overwrite Notation Studio.lua.
 -- @version 1.0
 
 -- Public project commit, pinned so the test cannot silently change.
-local COMMIT = "a916b2261b25cd3bbbbb53964ef81ecc402ea52e"
-local EXPECTED_VERSION = "0.1.24-test.1"
+local COMMIT = "9b55bfd6a310c346639f67d2d2bdbfb8daf85e35"
+local EXPECTED_VERSION = "0.1.24-test.2"
 local URL = "https://raw.githubusercontent.com/wibem1/Composition-Studio/" .. COMMIT .. "/Notation%20Studio.lua"
 
 local function fail(message)
