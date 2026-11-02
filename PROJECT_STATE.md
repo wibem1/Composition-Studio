@@ -1,5 +1,18 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Verbindliche Testdisziplin: Keine Testserien beim Nutzer
+
+**Nutzerentscheidung:** Zur Ermittlung der REAPER-Notationsmachbarkeit und zu einer eventuellen kleinen Implementierung darf kein Prozess mit Dutzenden manuellen Versuchen und immer neuen Testpaketen entstehen. Der Assistent organisiert Quellenanalyse, präzise Hypothesen und sichere automatisierte Offline-Pruefungen; der Nutzer soll nur fuer die wenigen unvermeidbaren Beobachtungen der **echten REAPER-Notationsoberflaeche** einbezogen werden.
+
+**Vorgehensweise ohne neue Entwicklungsfreigabe:**
+1. **Vollstaendige Vorarbeit vor einem Praxistest:** Dokumentierte ReaScript-Metadaten (`disp_len`, `voice`, `staff`), gebundene Anzeigeaktionen und konkrete Auswirkung auf einen klein gewaehlten Problemfall abgleichen. Proprietäre Implementierungsdetails von REAPER-Notator nicht kopieren; sein öffentlich beschriebenes Funktionsprinzip darf nur als Ausgangspunkt fuer eine unabhängige Architektur dienen.
+2. **Offline-Checks selbst:** An vorhandener Test-MIDI mit Fallbeispielen für Tiny-Gaps, echte Pausen, Polyphonie, Triolen und Instrumentenzuordnung Verhaltensmodell/Regeln pruefen. Statische Lua-Prüfung, deterministische Unit-/Mocktests, Beweis dass Note-on/-off, Velocity, CC und Tempo unberührt bleiben. Diese Tests beweisen **nicht** die reale grafische Wirkung des eingebauten REAPER-Editors.
+3. **Höchstens ein gebündelter erster Nutzer-Praxistest:** Ein vorbereitetes, unverändertes/gesichertes REAPER-Projekt und ein kurzer konkreter Vorher-/Nachhervergleich im nativen Notationseditor mit den vier Qualitaetsmerkmalen. Bei Bedarf nur **eine weitere gezielte Nachprüfung** fuer eine klar benannte Ungewissheit; keine offene Folge neuer Testversionen. Laufzeit-/Plattformtests können nicht allein aus Lua-Mocks als nachgewiesen bezeichnet werden.
+4. **Stopregel:** Nach spätestens zwei gezielten fehlgeschlagenen realen Versuchen keine neue Paketserie; technische Grenzen anerkennen und vorhandene Alternativen empfehlen bzw. REAPER-API-Grenze dokumentieren. `main` und der letzte bestaetigte Stand bleiben unangetastet, bis Tests gelingen.
+
+**Status:** Nur Prozess-/Qualitaetsentscheidung dokumentiert, keine Softwareaenderung, keine neue Version, kein REAPER-Echttest. Entwicklungsrichtung weiterhin: musikalische Analyse -> native REAPER-Notationseigenschaften, nie eigenes Notenfenster.
+
+
 ## 02.11.2026 – Sieben ReaTeam-Notationsskripte vollständig quellengeprueft, Wiederverwendungskonzept
 
 **Benutzerauftrag:** Zunaechst recherchieren und eine belastbare Uebersicht erstellen, **welche Teile welcher bereits existierenden Entwicklungen** unsere vier Ziele im nativen REAPER-Noteneditor unterstuetzen und wo konkrete Modifikationen erforderlich waeren. **Keine neue Testversion und keine Softwareprogrammierung.**
