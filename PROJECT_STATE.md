@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Einmal-ReaScript aktiviert zusätzlich proportionale Notenabstände
+
+**Neue Nutzeranforderung:** Vorhandenes schlankes Shortcut-Skript um `Notation: Proportional (musical) note spacing` ergänzen. Keine zusätzliche Palette, keine Klicks, keine Darstellungsquantisierung, keine Änderung an Vier-Takte-Zoom und Schlüsselautomatik.
+
+**Implementiert** auf `feat/reaper-notation-one-shot-20261102`, Draft-PR #7, Datei `REAPER Notation - 4 Takte und Instrumentenschluessel.lua`: Liest den Action-Toggle-Zustand über `GetToggleCommandStateEx(32060, cmd)`. Schaltet **nur** von eindeutig AUS (0) nach EIN; bei EIN (1) erfolgt keine Aktion. Bei unbekanntem Toggle (-1), fehlender Notationsaktion oder nicht bestätigter Aktivierung wird kein zweiter blinder Toggle ausgelöst, Fehler nur in REAPER-Konsole; der Vier-Takte-Zoom läuft trotzdem. Schlüsselwahl und Notenquantisierung nicht geändert. Wiederholte Shortcut-Ausführung lässt Proportionalanzeige aktiv.
+
+**Prüfung:** [GitHub Actions Run 41497275745](https://github.com/wibem1/Composition-Studio/actions/runs/41497275745) `success`: Produktionsskript-Syntax und **16 von 16** Lua-Offline-Regressionen erfolgreich, u. a. AUS→EIN, bereits EIN bleibt EIN, unbekannter Zustand bleibt unverändert, fehlende Aktion blockiert Zoom nicht und nicht bestätigte Aktivierung führt zu keinem weiteren Toggle. Kein kostenpflichtiger API-Aufruf. **Kein echter REAPER-Grafiktest für diese neue Aktion**; bisher vom Nutzer real bestätigt nur der Vier-Takte-Zoom. Auch die zuletzt korrigierten Schlüsselwerte bedürfen weiterhin grafischer Bestätigung.
+
+**Nächster einzelner Schritt:** Ein Test auf gesicherter REAPER-Projektkopie mit dem aktualisierten Shortcut. Kurz prüfen, ob die Proportionalanzeige eingeschaltet bleibt und die Schlüssel korrekt angezeigt werden; bei abweichendem Schlüsselbild echte REAPER-Daten erheben statt neue SCORE-Werte zu raten.
+
 ## 02.11.2026 – Reale Rückmeldung und Korrektur der Einmal-Notation
 
 **Realer Anwenderbericht:** Das Einmal-Skript aus PR #7 zoomt nach Ausführung **erfolgreich auf vier Takte**. Die Schlüsselwahl ist **falsch**. Bestätigte Funktion (Zoom) unverändert lassen; Schlüsselwahl nicht als erfolgreich abnehmen.
