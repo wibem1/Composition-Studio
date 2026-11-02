@@ -1,6 +1,6 @@
 -- @description REAPER Notation - 4 Takte und Instrumentenschluessel
 -- @author Klangwerke
--- @about One shortcut: fit four measures in native MIDI notation view and set clefs for all currently visible MIDI tracks. No dialogs, no display quantization, no MIDI note changes. Experimental SCORE chunk format; use on a backed-up project.
+-- @about One shortcut: fit four measures, turn on proportional musical note spacing, set clefs on visible MIDI tracks. No dialogs, no quantization, no MIDI note changes. Experimental SCORE chunk format; use on a backed-up project.
 -- No ReaImGui, SWS, ReaPack, AI, or additional setup required after loading into MIDI Editor actions.
 
 local PROJECT = 0
@@ -154,6 +154,37 @@ local function midi_action(editor, label)
   return false
 end
 
+-- A toggle must only be sent if proportional note spacing is currently OFF.
+-- REAPER exposes the state in the MIDI Editor action section (32060).
+-- Fail closed when the action or its toggle state cannot be identified.
+local function enable_proportional_spacing(editor)
+  if type(reaper.kbd_enumerateActions)~="function" or
+     type(reaper.SectionFromUniqueID)~="function" or
+     type(reaper.GetToggleCommandStateEx)~="function" then
+    return false,"MIDI-Aktionen oder Toggle-Status nicht verfügbar"
+  end
+  local section = reaper.SectionFromUniqueID(32060)
+  if not section then return false,"MIDI-Editor-Aktionsbereich fehlt" end
+  local command
+  for i=0,19999 do
+    local id,label = reaper.kbd_enumerateActions(section,i)
+    if not id or id==0 then break end
+    if label=="Notation: Proportional (musical) note spacing" then
+      command=id
+      break
+    end
+  end
+  if not command then return false,"Aktion für proportionale Notenabstände nicht gefunden" end
+  local state = reaper.GetToggleCommandStateEx(32060,command)
+  if state==1 then return true,"bereits aktiv" end
+  if state~=0 then return false,"Zustand unbekannt; Abstände unverändert" end
+  reaper.MIDIEditor_OnCommand(editor,command)
+  if reaper.GetToggleCommandStateEx(32060,command)~=1 then
+    return false,"Aktivierung nicht bestätigt; REAPER-Einstellung prüfen"
+  end
+  return true,"aktiviert"
+end
+
 local function zoom_four_bars(editor)
   local startTime,endTime,problem = four_bar_window()
   if not startTime then return false,problem end
@@ -212,10 +243,13 @@ local function main()
       for _,take in ipairs(takes) do reaper.MIDI_RefreshEditors(take) end
     end
   end
+  local spacingOk,spacingInfo=enable_proportional_spacing(editor)
+  if not spacingOk then note("Proportionale Abstände: "..tostring(spacingInfo)) end
   local zoomed,zoomErr=zoom_four_bars(editor)
   if not zoomed then note("Vier-Takte-Zoom: "..tostring(zoomErr)) end
-  note(string.format("Abgeschlossen: %d sichtbare Tracks, %d geänderte Schlüssel, Vier-Takte-Zoom %s.",
-    #tracks,changed,zoomed and "ausgeführt" or "nicht verfügbar"))
+  note(string.format("Abgeschlossen: %d sichtbare Tracks, %d geänderte Schlüssel, Vier-Takte-Zoom %s, proportionale Abstände %s.",
+    #tracks,changed,zoomed and "ausgeführt" or "nicht verfügbar",
+    spacingOk and spacingInfo or "unverändert (Status prüfen)"))
 end
 
 local ok,problem=pcall(main)
