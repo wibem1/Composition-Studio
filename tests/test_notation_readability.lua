@@ -1,7 +1,7 @@
 -- Offline regression test for the real Notation Studio.lua; no REAPER or AI needed.
 -- Run from repository root: texlua tests/test_notation_readability.lua
 local source="Notation Studio.lua"
-local state={focused=true,alive=true,visible=true,click=true,toggle=0,actions={},ends=0,frames=0,labels={}}
+local state={focused=true,alive=true,visible=true,click=true,toggle=0,actions={},ends=0,frames=0,labels={},action_available=true,manual_click=false,stuck=false}
 local reaper={}
 function reaper.GetExtState() return "" end
 function reaper.MIDIEditor_GetActive() return state.focused and "ed" or nil end
@@ -11,7 +11,7 @@ function reaper.ValidatePtr2(_,tk,kind) return tk=="tk" and kind=="MediaItem_Tak
 function reaper.SectionFromUniqueID(id) assert(id==32060); return id end
 function reaper.kbd_enumerateActions(_,i)
  if i==0 then return 401,"Notation: Set display quantization to 1/16 (default)" end
- if i==1 then return 405,"Notation: Proportional (musical) note spacing" end
+ if i==1 and state.action_available then return 405,"Notation: Proportional (musical) note spacing" end
  return 0,""
 end
 function reaper.GetToggleCommandStateEx(_,cmd) assert(cmd==405); return state.toggle end
@@ -19,7 +19,7 @@ function reaper.MIDIEditor_OnCommand(ed,cmd)
  assert(ed=="ed" and state.alive,"invalid editor")
  assert(cmd==405,"wrong action: must not invoke quantization or other commands")
  state.actions[#state.actions+1]=cmd
- if state.toggle==0 or state.toggle==1 then state.toggle=1-state.toggle end
+ if not state.stuck and (state.toggle==0 or state.toggle==1) then state.toggle=1-state.toggle end
 end
 function reaper.MIDIEditor_EnumTakes() return nil end
 function reaper.ImGui_CreateContext() return {} end
@@ -33,6 +33,7 @@ function reaper.ImGui_TextWrapped(_,s) state.labels[#state.labels+1]=s end
 function reaper.ImGui_SameLine() end
 function reaper.ImGui_Button(_,label)
  if label=="Lesbarkeit verbessern" and state.click then state.click=false; return true end
+ if label:find("##spacing",1,true) and state.manual_click then state.manual_click=false; return true end
  return false
 end
 function reaper.ImGui_OpenPopup() end
@@ -77,4 +78,18 @@ check(#state.actions==2,"stale cached editor is refused")
 state.visible=false
 frame(false)
 check(state.ends==state.frames,"ImGui Begin/End paired when collapsed")
-print("OK: 6 REAPER-API mock regression checks; real REAPER GUI not tested")
+state.alive=true
+state.focused=true
+state.toggle=1
+state.manual_click=true
+frame(false)
+check(#state.actions==3 and state.toggle==0,"explicit manual spacing-off remains possible")
+state.action_available=false
+frame(true)
+check(#state.actions==3,"missing spacing action fails closed")
+state.action_available=true
+state.stuck=true
+frame(true)
+check(#state.actions==4 and state.toggle==0,"unconfirmed action does not report success")
+check(not table.concat(state.labels,"\n"):find("Track State geschrieben",1,true),"UI makes no false claim of track mutation")
+print("OK: 10 REAPER-API mock regression checks; real REAPER GUI not tested")
