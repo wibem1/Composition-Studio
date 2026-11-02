@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Testkandidat für sichere Lesbarkeit bereit (nur Entwicklungsbranch)
+
+**Status:** `Notation Studio.lua` auf Branch `fix/notation-readability-safe-20261102`, als `0.1.24-test.1` eindeutig gekennzeichnet. Die Produktversion `0.1.24` auf `main` ist **weiter unverändert**. Draft-PR #5 bleibt offen und wird vor dem echten REAPER-Praxistest nicht gemergt. Die interne Updatefunktion ist in dieser Testfassung deaktiviert, damit sie nicht die Installation überschreibt.
+
+**Verifizierte Offline-Prüfung (GitHub Actions):** Run https://github.com/wibem1/Composition-Studio/actions/runs/41433185746, Status `success`. Lua-5.4-Syntaxprüfung der gesamten Skriptdatei und des gesonderten Teststarters bestanden. `tests/test_notation_readability.lua`: **10/10** REAPER-API-Mockfälle bestanden (einzige Abstandsumschaltung, idempotent, Toggle -1, gültiger/falscher Editor, ImGui-End, manuelles Ausschalten, fehlende Aktion, unbestätigtes Umschalten, keine falsche Track-Meldung). `tests/test_notation_preview.lua`: **3/3** Starter-Simulationen bestanden (macOS, Windows, Netzwerkfehler; bestehende Datei jeweils unverändert). **Keine** reale REAPER-GUI getestet, keine KI-API-Aufrufe. Der Teststarter lädt den Produktionscode ausschließlich von fest gepinntem Commit `a916b2261b25cd3bbbbb53964ef81ecc402ea52e`.
+
+**Einmaliger REAPER-Test:** Originalskript schließen, eine gesicherte Projektkopie mit bekannter problematischer Notenansicht öffnen, `tests/preview/Notation Studio Lesbarkeit Teststarter.lua` als ReaScript laden und ausführen. Die separate Palette zeigt `TESTFASSUNG`; einmal auf `Lesbarkeit verbessern` klicken. Erwartung: ausschließlich proportionale musikalische Abstände aktivieren (oder bereits aktiv melden), keine Änderung von Quantisierung, Stimmen, Schlüsseln, Zoom oder Note-on/off. Falls REAPER den Toggle-Zustand nicht meldet, bricht die Funktion bewusst ohne Änderung ab. Ein Vorher-/Nachher-Screenshot desselben Bereichs genügt. Nach Test Testpalette schließen und Standardversion weiternutzen. Kein automatisches Update auf `main` und keine Freigabe als wirksamer musikalischer Optimierer.
+
+**Noch offen:** Wirkung und tatsächliche Qualität in REAPER; gezielte künstliche Minipausen und variable Taktbreiten werden nicht korrigiert. Erst bei einem erfolgreichen echten Lauf gezielte Folgeimplementierung planen. Separate, reversible Kandidaten statt einer neuen unkontrollierten Sammelaktion.
+
 ## 02.11.2026 – Gezielte Reparatur Lesbarkeit (Entwicklungsbranch, NICHT freigegeben)
 
 **Branch:** `fix/notation-readability-safe-20261102`; **Basis:** `main` mit unverändertem `Notation Studio.lua` v0.1.24 (Blob `48274e5767c8d756543bf7fa3a0b9108b639a272`). Auf dem Branch ist die erste Sicherheitskorrektur implementiert; **keine neue App-Version**, keine Übernahme auf main, keine Veröffentlichung.
