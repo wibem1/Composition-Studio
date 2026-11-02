@@ -80,6 +80,7 @@ frame(false)
 check(state.ends==state.frames,"ImGui Begin/End paired when collapsed")
 state.alive=true
 state.focused=true
+state.visible=true
 state.toggle=1
 state.manual_click=true
 frame(false)
