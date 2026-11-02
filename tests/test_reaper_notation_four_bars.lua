@@ -67,7 +67,7 @@ local function check(cond,message) assert(cond,message);print("PASS "..message) 
 local function run() local chunk,err=loadfile(source);assert(chunk,err);chunk() end
 
 run()
-check(state.chunks.vi:find("SCORE 0 2 0 0",1,true)~=nil,"violin mapped to user-specified SCORE 0 2 0 0")
+check(state.chunks.vi:find("SCORE 0 2 0 0",1,true)~=nil,"violin mapped to corrected SCORE 0 2 0 0")
 check(state.chunks.va:find("SCORE 0 4 0 0",1,true)~=nil,"viola mapped to alto code 4")
 check(state.chunks.vc:find("SCORE 0 3 0 0",1,true)~=nil,"cello mapped to bass code 3")
 check(state.actions==1,"one zoom action is sent")
