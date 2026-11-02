@@ -172,4 +172,14 @@ run()
 check(state.writes==writes and state.chunks.c:find("SCORE 0 1 0 0 77",1,true)~=nil,
       "unknown SCORE chunk layout never overwritten")
 
+-- The older Notation Studio inserted missing SCORE after a VU line.
+state.notes.c=fixture({44,47,48,49,50,52})
+state.chunks.c="<TRACK\nNAME \"Untitled\"\nVU 2\n>\n"
+state.spacing=1
+state.spacing_present=true
+run()
+check(has("c",2),"missing SCORE line receives bass with original v0.1.24 insertion method")
+check(state.chunks.c:find("VU 2\nSCORE 0 2 0 0",1,true)~=nil,
+      "new SCORE line inserted directly after VU, like Notation Studio v0.1.24")
+
 print("OK: "..checks.." real-script mock checks; REAPER GUI and SCORE field semantics still require an actual test")
