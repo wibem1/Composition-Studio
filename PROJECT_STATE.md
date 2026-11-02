@@ -1,5 +1,17 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Vollständige statische Bestandsaufnahme Notation Studio v0.1.24
+
+**Nutzerentscheidung:** Das vorhandene Native-REAPER-Notation-/Notation-Studio-Skript wird **weiterentwickelt, nicht ersetzt**. Das Grundkonzept der direkt mit dem REAPER-MIDI-Noteneditor verbundenen ReaImGui-Palette inklusive KI-Anbindung bleibt erhalten. Der Nutzer berichtet, dass `Lesbarkeit verbessern` die Lesbarkeit verschlechtert.
+
+**Quellprüfung:** Aktuelle Datei `Notation Studio.lua` v0.1.24 auf `main`, 729 Zeilen, 38 lokale Funktionsdefinitionen, Blob `48274e5767c8d756543bf7fa3a0b9108b639a272`. Vollständiger Bericht: [docs/NOTATION-STUDIO-0.1.24-CODE-AUDIT-2026-11-02.md](docs/NOTATION-STUDIO-0.1.24-CODE-AUDIT-2026-11-02.md). Quellcode, bestehende Notationsberichte und Anforderungen geprüft, keine neue REAPER-Laufzeitprüfung.
+
+**Kernbefunde:** `cleanup_notation()` ist eine unkontrollierte Kombination von neun Einstellungen/Zoom-/Schlüsselmaßnahmen ohne musikalische Analyse, sichere Rücknahme oder garantierte Wirkung. Zusätzlich: unscharfe Aktionsauswahl, fehlende Behandlung unbekannter Toggle-Zustände, undokumentiertes `SCORE`-Chunk-Schreiben, problematische ImGui-Begin/End-Paarung, veralteter MIDI-Editor-Zeiger, nur heuristische Zoom-/Instrumentenwahl. KI sendet ausgewählte Noten an Anbieter und zeigt Text, **ändert keine Noten**; Provider-/Modellwahl in dieser Palette fehlt, Artikulation/Dynamik/SWAM-Gruppen sind nur Platzhalter. Update-/KI-Transporte benötigen robuste Plattform-, Fehler- und Sicherheitsbehandlung. Im Code werden keine direkten Note-on/off-Schreibfunktionen aufgerufen; unerkannte native REAPER-Aktionen sind trotzdem nicht automatisch sicher.
+
+**Evidenzgrenze:** Alle neuen Ergebnisse sind statisch geprüft, nicht in der laufenden REAPER-Anwendung getestet. Keine neue Skriptversion, keine Programmänderung, kein kostenpflichtiger KI-Aufruf, keine GitHub Actions. `main`-Quellcode v0.1.24 bleibt unverändert.
+
+**Nächster EINZELNER Entwicklungsschritt:** Lesbarkeitsfunktion isoliert entschärfen und mittels Mock-/Regressionstests absichern: sichere Action-Auflösung/Toggle-Behandlung, keine automatische `SCORE`-Chunk-Mutation, kein mehrfacher Zwangszoom, stabile ImGui-Begin/End-Paarung und gültigen Editorhandle beachten; danach **ein** gezielter Vorher-/Nachher-Praxistest (ggf. eine fokussierte Nachprüfung) ohne MIDI-Event-Änderungen. Umsetzung erst auf separatem Branch, v0.1.24 als unveränderte Referenz.
+
 ## 02.11.2026 – Schnittstellenprüfung: Welche Notationsanweisungen kann REAPER wirklich umsetzen?
 
 **Anlass:** Der Nutzer weist zutreffend darauf hin, dass vor einer musikalischen Vorinterpretation zunächst genau geklärt sein muss, welche **Steuerungsmöglichkeiten und -grenzen** REAPERs interne Notationsengine hat.
