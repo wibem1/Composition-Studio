@@ -1,5 +1,22 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Machbarkeitsbewertung: Vier REAPER-native Notationsziele NICHT bereits erreicht
+
+**Nutzerfeedback:** Die fruehere Schaltflaeche `Lesbarkeit verbessern` und unsere ersten Konfigurationsversuche haben Notenabstaende, Minipausen, Darstellung und Instrumentenzeilen **nicht gemeinsam auf ein arbeitsfaehiges Niveau** gebracht. Das ist als negatives reales Ergebnis zu respektieren. Keine erneute Schleife der bekannten Sammelaktion.
+
+**Quellen:** Aktuelles offizielles REAPER-Handbuch v7.84 (Nov. 2026) als HTML https://dlx.reaper.fm/userguide/html/, Kapitel 14.5–14.7, aktueller `Notation Studio.lua` v0.1.24 auf main sowie bestehendes ReaTeam-/juliansader-Skript `js_Notation - Set displayed length of selected notes to custom value.lua` auf https://github.com/ReaTeam/ReaScripts/blob/master/MIDI%20Editor/js_Notation%20-%20Set%20displayed%20length%20of%20selected%20notes%20to%20custom%20value.lua.
+
+**Einzelurteil:**
+1. Notenabstaende: bedingt machbar durch REAPER `Proportional (musical) note spacing` und Zoom; keine bekannte ReaScript-Steuerung des internen Kollision-/Engravingalgorithmus, Erfolg bei dichter Mehrstimmigkeit offen.
+2. Minipausen: **groesstes technisches Risiko**. Display quantization/minimum note length ist KEIN allgemeines musikalisch intelligentes Pausenkorrekturwerkzeug. Gezielte visuelle Notenlaengen-Aenderungen per `NOTE ... disp_len` sind durch existierendes ReaTeam-Skript real belegt und reversibel. Nur optische Darstellung, aber Metadaten im MIDI-Take werden geaendert; unveraenderte Note-on/-off-Ereignisse/Wiedergabe sind Bedingung. Bei mehreren Stimmen muss vorher die musikalische Zugehoerigkeit der kurzen Luecke klar sein.
+3. Displayquantisierung: REAPER nativ und je Track vorhanden; MIDI-Performance bleibt bei reiner Anzeigequantisierung unveraendert. Technisch machbar, richtige Rasterwahl bei Triolen/kurzen Noten individuell.
+4. Separate Notenzeilen und Schluessel: REAPER kann mehrere MIDI-Tracks mit je eigenem `Default clef` darstellen. Wichtige Grenze: Bei mehr als einem sichtbaren Track erfolgt nur horizontale kontinuierliche Ansicht, keine mehrzeilige Satzseite.
+
+**Entscheidung:** Einfache und maessig polyphone Arbeitsnotation erscheint technisch plausibel, aber weder fuer dichte Orgelpolyphonie noch fuer alle vier Anforderungen gleichzeitig bisher nachgewiesen. Keine neue Version/keine neue App/kein weiterer Renderer. **Einzig sinnvoller naechster Test:** einmaliger enger Wirkungsnachweis der bestehenden `disp_len`-Funktion an einer problematischen Kurzpausenstelle der echten REAPER-Notation, mit Vorher/Nachher-Bild und identischen Note-on/-off-Ereignissen, reversibel und auf Kopie. Gegebenenfalls danach die dreispurige Ansicht gegenpruefen. Scheitert dies, ausdruecklich No-Go fuer weitere Eigenautomatik ohne neue REAPER-Schnittstelle und Nutzung bereits fertiger Alternativen erwägen.
+
+**Ausfuehrlichere technische Einordnung:** `NOTATION-MODULE.md`, `Technische Machbarkeit der vier Ziele – 02.11.2026`. Stand ausschliesslich Quell-/Handbuchanalyse, KEIN neuer realer Nutzer-Praxistest.
+
+
 ## 02.11.2026 – Vier konkrete Qualitätskriterien vom Nutzer festgelegt
 
 **Verbindlicher Schwerpunkt:** (1) Optimierung musikalischer Notenabstände, (2) Beseitigung **unsinniger** Minipausen bei Erhalt echter Pausen, (3) reine Displayquantisierung unabhängig von MIDI, (4) separate Notensysteme/Notenzeilen mit zum Instrument passenden Schlüsseln. Konkretisiert im dauerhaften `NOTATION-MODULE.md` unter `Vier verbindliche Qualitätsanforderungen – 02.11.2026`.
