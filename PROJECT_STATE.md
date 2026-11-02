@@ -1,5 +1,19 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Richtige Instrumentenschlüssel statt blindem Klavier-Doppelsystem
+
+**Praxismeldung:** Die 8-Takt-Test-MIDI wurde für die Violinstimme auf G+F-Doppelsystem mit leerem unteren System angezeigt. Die erste Testfassung `0.1.24-test.1` hatte nur die bereits aktiven proportionalen Abstände erkannt; das Notenbild blieb unverändert. Nutzer verlangt, dass `Lesbarkeit verbessern` die ungeeignete System-/Schlüsselwahl berücksichtigt.
+
+**Technische Referenz:** REAPER-Handbuch 7.84 / 7.29, Staff-Kontextmenü `Default clef → Treble/Bass/Alto/Tenor`. Keine für diese Default-Clef-Option dokumentierte direkte ReaScript-Setterfunktion gefunden. Der alte pauschale `SCORE`-Chunk-Schreiber ist weiterhin tabu. Die SCORE-Struktur ist **undokumentiert**; eine eingeschränkte Änderung kann deshalb erst als ausdrücklich bestätigter Testversuch auf einer gesicherten Projektkopie gelten, nicht als produktiv geprüfte Funktion.
+
+**Entwicklung:** Separater Branch `fix/notation-instrument-clef-20261102`, Draft-PR #6 auf Basis des noch nicht freigegebenen PR #5. Aktueller Pilot `Notation Studio.lua` `0.1.24-test.2`. `active_instrument_clef()` nutzt den **aktiven Tracknamen ohne Notenauswahl** (Violine→G, Bratsche→Alt-C, Cello/Kontrabass→F; Klavier behält G+F); unbekannte Namen führen zu keiner Vermutung. `Lesbarkeit verbessern` gibt eine konkrete Empfehlung aus; ein separater Button `Instrumentenschlüssel prüfen / übernehmen` verlangt vor jedem Schreibversuch ausdrücklich Bestätigung. Er verändert ausschließlich eine einzelne bekannte `SCORE 0 <clef> 0 0`-Zeile, sofern die alte Zeile dem engen Ausgangsschema entspricht (sonst keine Änderung) und über ReaScript Undo und anschließende Lesekontrolle; bei Fehlschlag wird versucht, den Originalchunk zurückzuschreiben. Keine direkten MIDI-Event-Schreibfunktionen.
+
+**Automatische Prüfungen:** [GitHub Actions Run 41484797220](https://github.com/wibem1/Composition-Studio/actions/runs/41484797220) erfolgreich: 15/15 REAPER-Mock-Regressionstests (u.a. 0 markierte Noten, sichere Default-Clef-Änderung, bestätigte und abgelehnte Eingriffe, ungewöhnliche SCORE-Form, unbekanntes Instrument) und 3/3 Teststarter-Prüfungen für macOS/Windows/Netzwerkfehler. Lua 5.4 Syntaxprüfungen erfolgreich. **Keine reale REAPER-Umsetzung der Schlüsselkorrektur nachgewiesen.** Ohne Praxisbestätigung kein Merge oder Produktrelease.
+
+**Testübergabe:** Neuer isolierter Starter `tests/preview/Notation Studio Lesbarkeit Teststarter.lua` lädt fest gepinnt den geprüften `0.1.24-test.2`-Quellstand von Commit `9b55bfd6a310c346639f67d2d2bdbfb8daf85e35` und überschreibt die vorhandene v0.1.24 nicht. Testergebnis muss sowohl das Verschwinden des überflüssigen Basssystems als auch unveränderte MIDI-Noten/Pausen bestätigen. Wenn die SCORE-Zeile fehlt oder von der erwarteten Form abweicht, erhält der Nutzer den sicheren REAPER-Kontextmenü-Hinweis statt eines unsicheren Schreibzugriffs.
+
+**Nächster Schritt:** Höchstens ein gezielter REAPER-Praxistest **auf Projektkopie** mit aktiver Violinstimme, danach bei Fehler zunächst Diagnose des echten SCORE-Chunks und Abbruchregel; keinerlei automatische Wiederholungen.
+
 ## 02.11.2026 – Erste echte REAPER-Rückmeldung zu 0.1.24-test.1
 
 **Nutzer-Screenshot der laufenden Testfassung:** Die ReaImGui-Palette zeigt `Notation Studio v0.1.24-test.1` und `Editor gebunden`. Nach Klick auf `Lesbarkeit verbessern` erscheint `Musikalische Abstände sind bereits aktiv. Keine weiteren Änderungen nötig. Zoom, Quantisierung, Notenschlüssel und Stimmen bleiben unverändert.` Die Anzeige nennt 0 markierte Noten.
