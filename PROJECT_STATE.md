@@ -1,5 +1,42 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Erste echte REAPER-Rückmeldung zu 0.1.24-test.1
+
+**Nutzer-Screenshot der laufenden Testfassung:** Die ReaImGui-Palette zeigt `Notation Studio v0.1.24-test.1` und `Editor gebunden`. Nach Klick auf `Lesbarkeit verbessern` erscheint `Musikalische Abstände sind bereits aktiv. Keine weiteren Änderungen nötig. Zoom, Quantisierung, Notenschlüssel und Stimmen bleiben unverändert.` Die Anzeige nennt 0 markierte Noten.
+
+**Präzise Evidenz:** Start und sichtbare Statusmeldung in realem REAPER nachgewiesen. Die bereits aktive Abstandsoption bedeutet, dass der Button absichtlich **keine Veränderung** ausführt. Damit ist **keine Verbesserung** der Notenlesbarkeit nachgewiesen. Der Screenshot überlagert die Notenansicht; Pausen/Notenlayout sind darauf nicht auswertbar. Eine von REAPER unabhängige MIDI-Vorher-/Nachher-Verifikation erfolgte nicht. Die Offline-Tests aus dem vorigen Abschnitt bleiben die Nachweise für die anderen Guardrails.
+
+**Produktkorrektur:** `Lesbarkeit verbessern` ist in dieser Testfassung ein missverständlicher Name, weil die neue Funktion nur einen Abstandsmodus aktiviert. Für den nächsten produktiven Schritt entweder ehrlich als `Musikalische Abstände aktivieren` ausweisen oder einen wirklich musikalisch begründeten, zunächst rein lesenden Diagnosemodus ergänzen. Keine pauschale Quantisierung und kein optischer Erfolg aus einer No-op-Meldung ableiten.
+
+**Nächster schmaler Prüfpunkt:** Nutzer kann die Testpalette schließen und eine freie REAPER-Notenansicht des vorhandenen 8-Takt-Tests zeigen, insbesondere Takte 3–6 mit künstlichen gegenüber echten Pausen. Erst anhand der konkret sichtbaren Abweichungen eine gezielte, rücknehmbare Anzeigeänderung entwickeln. Keine weitere Wiederholung des unveränderten Buttons.
+
+## 02.11.2026 – Testkandidat für sichere Lesbarkeit bereit (nur Entwicklungsbranch)
+
+**Status:** `Notation Studio.lua` auf Branch `fix/notation-readability-safe-20261102`, als `0.1.24-test.1` eindeutig gekennzeichnet. Die Produktversion `0.1.24` auf `main` ist **weiter unverändert**. Draft-PR #5 bleibt offen und wird vor dem echten REAPER-Praxistest nicht gemergt. Die interne Updatefunktion ist in dieser Testfassung deaktiviert, damit sie nicht die Installation überschreibt.
+
+**Verifizierte Offline-Prüfung (GitHub Actions):** Run https://github.com/wibem1/Composition-Studio/actions/runs/41433185746, Status `success`. Lua-5.4-Syntaxprüfung der gesamten Skriptdatei und des gesonderten Teststarters bestanden. `tests/test_notation_readability.lua`: **10/10** REAPER-API-Mockfälle bestanden (einzige Abstandsumschaltung, idempotent, Toggle -1, gültiger/falscher Editor, ImGui-End, manuelles Ausschalten, fehlende Aktion, unbestätigtes Umschalten, keine falsche Track-Meldung). `tests/test_notation_preview.lua`: **3/3** Starter-Simulationen bestanden (macOS, Windows, Netzwerkfehler; bestehende Datei jeweils unverändert). **Keine** reale REAPER-GUI getestet, keine KI-API-Aufrufe. Der Teststarter lädt den Produktionscode ausschließlich von fest gepinntem Commit `a916b2261b25cd3bbbbb53964ef81ecc402ea52e`.
+
+**Einmaliger REAPER-Test:** Originalskript schließen, eine gesicherte Projektkopie mit bekannter problematischer Notenansicht öffnen, `tests/preview/Notation Studio Lesbarkeit Teststarter.lua` als ReaScript laden und ausführen. Die separate Palette zeigt `TESTFASSUNG`; einmal auf `Lesbarkeit verbessern` klicken. Erwartung: ausschließlich proportionale musikalische Abstände aktivieren (oder bereits aktiv melden), keine Änderung von Quantisierung, Stimmen, Schlüsseln, Zoom oder Note-on/off. Falls REAPER den Toggle-Zustand nicht meldet, bricht die Funktion bewusst ohne Änderung ab. Ein Vorher-/Nachher-Screenshot desselben Bereichs genügt. Nach Test Testpalette schließen und Standardversion weiternutzen. Kein automatisches Update auf `main` und keine Freigabe als wirksamer musikalischer Optimierer.
+
+**Noch offen:** Wirkung und tatsächliche Qualität in REAPER; gezielte künstliche Minipausen und variable Taktbreiten werden nicht korrigiert. Erst bei einem erfolgreichen echten Lauf gezielte Folgeimplementierung planen. Separate, reversible Kandidaten statt einer neuen unkontrollierten Sammelaktion.
+
+## 02.11.2026 – Gezielte Reparatur Lesbarkeit (Entwicklungsbranch, NICHT freigegeben)
+
+**Branch:** `fix/notation-readability-safe-20261102`; **Basis:** `main` mit unverändertem `Notation Studio.lua` v0.1.24 (Blob `48274e5767c8d756543bf7fa3a0b9108b639a272`). Auf dem Branch ist die erste Sicherheitskorrektur implementiert; **keine neue App-Version**, keine Übernahme auf main, keine Veröffentlichung.
+
+**Implementiert im vorhandenen Skript:**
+1. `cleanup_notation()` schaltet nur `Notation: Proportional (musical) note spacing` **ein**, und nur bei eindeutig bekanntem Toggle-Zustand. Wiederholter Klick verändert dann nichts; bei `-1` (unbekannt), fehlender Aktion oder ungültigem Editor keine automatische Änderung.
+2. Die alte Sammelautomatik (feste 1/16-Quantisierung, Minimum 1/64, Auto-Triolen, Stimmenumschaltung, `SCORE`-Chunk-Änderung, Seitenmodus, horizontale Dichteskalierung, dreimal vertikaler Zoom) wird **nicht mehr ausgeführt**. Separate bestehende manuelle Zoom- und Quantisierungsbuttons bleiben verfügbar. Der riskante `SCORE`-Chunk-Code bleibt vorläufig als **nicht aufgerufener Altcode** im Quelltext; er ist nicht Teil des neuen Knopfs.
+3. `spacing_state` unterscheidet `false` von **unbekannt**, schaltet bei unbekanntem Zustand nicht um und prüft nach dem Umschalten erneut.
+4. `active_editor` validiert den letzten vom ReaImGui-Fokus verdrängten MIDI-Editor über seinen Take und weist verwaiste Handles zurück; nutzt optional JS_Window_IsWindow, wenn installiert.
+5. Korrekte `ImGui_Begin`/`ImGui_End`-Paarung auch für eingeklappte/nicht sichtbare Fenster; UI-Texte beschreiben den sicheren, begrenzten Funktionsumfang.
+
+**Prüfnachweise:** Isolierter Lua-Laufzeittest der relevanten Funktionen über `texlua`: 6/6 Fälle bestanden (Off→On, zweiter Klick idempotent, Toggle=-1, Fokusverlust mit gültigem Editor, verwaister Editor, gezieltes manuelles Abschalten). Ferner GitHub-Branch-Inhaltsprüfung: `cleanup_notation` enthält keine alten riskanten Aufrufe, kein direkter MIDI-Event-Schreibcode hinzugefügt, UI-Begin/End angepasst; `main`-Blob weiterhin identisch. Reproduzierbare Vollskript-Mocktests in `tests/test_notation_readability.lua` hinterlegt; **diese Vollskript-Mocks sind noch nicht in einer REAPER-/ReaImGui-Laufzeit ausgeführt**. Kein kostenpflichtiger API-Aufruf und kein Build.
+
+**Einschränkung:** Dies ist ein Sicherheits-/Zuverlässigkeitsschritt, **noch keine intelligente automatische Korrektur von Minipausen, Notenabständen oder Taktbreiten**. Ohne einen echten REAPER-Praxistest kann weder die Funktion der Anzeigeaktion noch eine optische Verbesserung freigegeben werden.
+
+**Nächster einzelner Schritt:** Vollskript-Mocktest ausführen und **ein** kurzer REAPER-Vorher-/Nachher-Test an einer gesicherten Projektkopie. Erst danach bei Erfolg versionieren und kontrolliert über den vorhandenen Updateweg bereitstellen; anderenfalls nicht mit wiederholten Sammelaktionen experimentieren.
+
 ## 02.11.2026 – Vollständige statische Bestandsaufnahme Notation Studio v0.1.24
 
 **Nutzerentscheidung:** Das vorhandene Native-REAPER-Notation-/Notation-Studio-Skript wird **weiterentwickelt, nicht ersetzt**. Das Grundkonzept der direkt mit dem REAPER-MIDI-Noteneditor verbundenen ReaImGui-Palette inklusive KI-Anbindung bleibt erhalten. Der Nutzer berichtet, dass `Lesbarkeit verbessern` die Lesbarkeit verschlechtert.
