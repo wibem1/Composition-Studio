@@ -1,5 +1,20 @@
 # Projektstand – Composition-Studio
 
+## 02.11.2026 – Kontrollierte 8-Takt-Referenz-MIDI erzeugt und offline geprueft
+
+**Ausloeser:** Nutzer schlaegt statt zufaellig gewaehlter Musik eine gezielt aufgebaute Test-MIDI-Datei vor, um die vier Kriterien ohne lange Testserie objektiv zu pruefen.
+
+**Konkretes Artefakt (Chat):** `REAPER_Notation_Gezielter_Machbarkeitstest_8_Takte.mid`, MIDI SMF Type 1, PPQ 960, g-Moll, 4/4, 96 BPM, 8 Takte, 1451 Byte, SHA-256 `f55ec9c9f2d8a18174959ef7acdfcb4e703a9fe69c657d5d0bf2d49de638fbbf`, 3 Instrumentalspuren mit 117 Noten: Violine (62, G-Schluessel), Bratsche (36, Alt-C-Schluessel), Violoncello (19, F-Schluessel), plus eine Metaspur. Dazu wurden `REAPER_Notation_Testanleitung.txt` und `REAPER_Notation_Testreferenz.json` erstellt; ein ZIP-Gesamtpaket `REAPER_Notation_Machbarkeitstest_Komplettpaket.zip` liegt ebenfalls im Chat.
+
+**Testfaelle:** Takte 1–2 exakt gerasterte Kontrolle; 3–4 **exakt dieselben Onsets/Tonhoehen**, aber MIDI-Note-offs um 1–55 Ticks frueher (bewusst kunstliche Minipausen); 5–6 echte Achtel-/Sechzehntel-/Viertelpausen, die **nicht** entfernt werden duerfen; 7 exakt 320-Tick-Achteltriolen und leicht humanisierte Viola-Onsets; 8 echte Polyphonie in Violine/Bratsche. Bewusst ein *einziger* 8-Takt-Datensatz fuer alle vier Ziele.
+
+**Nachweise:** Die erzeugte MIDI-Datei wurde unmittelbar mit einem getrennten mido-Datei-Parser wieder eingelesen; alle 117 Noten, ihre Start-/Endzeiten, Tonhoehen, Anschlagsstaerken und die spezifischen 1–55-Tick-Luecken, 320-Tick-Triolen und ueberlappenden Stimmen wurden gegen die vorgabeseitig gebildete Goldstandard-Referenz geprueft. Ebenso wurde ZIP-Integritaet/Dateigleichheit geprueft. **Dies belegt nur MIDI-Dateistruktur und Testfaelle, keinen REAPER-Grafiktest und noch keine Verbesserung.** Standard-MIDI speichert Schluessel nicht verbindlich; Zuordnung muss im nativen REAPER-Editor erfolgen.
+
+**GitHub-Dokumentation:** [tests/fixtures/reaper-notation/README.md](tests/fixtures/reaper-notation/README.md) enthaelt Kurzspezifikation, Sollbedingungen, Pruefstatus und SHA. Die MIDI-Binaerdatei/JSON sind weiterhin **nur Chat-Artefakte**, nicht ins Repo hochgeladen. **Keine Veraenderung an Notation Studio 0.1.24, keine neue App-Version, kein Nutzer-Praxistest.**
+
+**Naechster Schritt:** Die vier eigentlichen Darstellungsalgorithmen/Notationsmetadaten gegen diese kontrollierten Faelle offline absichern und erst danach **einen** gebuendelten REAPER-7.83-Praxistest fuer die native Notation organisieren. Keine neue Testserie.
+
+
 ## 02.11.2026 – Verbindliche Testdisziplin: Keine Testserien beim Nutzer
 
 **Nutzerentscheidung:** Zur Ermittlung der REAPER-Notationsmachbarkeit und zu einer eventuellen kleinen Implementierung darf kein Prozess mit Dutzenden manuellen Versuchen und immer neuen Testpaketen entstehen. Der Assistent organisiert Quellenanalyse, präzise Hypothesen und sichere automatisierte Offline-Pruefungen; der Nutzer soll nur fuer die wenigen unvermeidbaren Beobachtungen der **echten REAPER-Notationsoberflaeche** einbezogen werden.
