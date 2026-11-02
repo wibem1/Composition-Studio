@@ -1,7 +1,7 @@
 -- Offline regression test for the real Notation Studio.lua; no REAPER or AI needed.
 -- Run from repository root: texlua tests/test_notation_readability.lua
 local source="Notation Studio.lua"
-local state={focused=true,alive=true,visible=true,click=true,toggle=0,actions={},ends=0,frames=0,labels={},action_available=true,manual_click=false,stuck=false}
+local state={focused=true,alive=true,visible=true,click=true,toggle=0,actions={},ends=0,frames=0,labels={},action_available=true,manual_click=false,stuck=false,clef_click=false,clef_writes=0,confirm=6,instrument="Violine - G-Schluessel",chunk="<TRACK\nNAME \"Violine - G-Schluessel\"\nSCORE 0 0 0 0\n>\n"}
 local reaper={}
 function reaper.GetExtState() return "" end
 function reaper.MIDIEditor_GetActive() return state.focused and "ed" or nil end
@@ -9,8 +9,8 @@ function reaper.MIDIEditor_GetTake(ed) return ed=="ed" and state.alive and "tk" 
 function reaper.TakeIsMIDI(tk) return tk=="tk" end
 function reaper.GetMediaItemTake_Item(tk) return tk=="tk" and "item" or nil end
 function reaper.GetMediaItem_Track(item) return item=="item" and "track" or nil end
-function reaper.GetTrackName(track) assert(track=="track");return true,"Violine - G-Schluessel" end
-function reaper.GetTrackStateChunk(track) assert(track=="track");return true,"<TRACK\nNAME \"Violine - G-Schluessel\"\nSCORE 0 0 0 0\n>\n" end
+function reaper.GetTrackName(track) assert(track=="track");return true,state.instrument end
+function reaper.GetTrackStateChunk(track) assert(track=="track");return true,state.chunk end
 function reaper.ValidatePtr2(_,tk,kind) return tk=="tk" and kind=="MediaItem_Take*" and state.alive end
 function reaper.SectionFromUniqueID(id) assert(id==32060); return id end
 function reaper.kbd_enumerateActions(_,i)
@@ -37,6 +37,7 @@ function reaper.ImGui_TextWrapped(_,s) state.labels[#state.labels+1]=s end
 function reaper.ImGui_SameLine() end
 function reaper.ImGui_Button(_,label)
  if label=="Lesbarkeit verbessern" and state.click then state.click=false; return true end
+ if label=="Instrumentenschlüssel prüfen / übernehmen" and state.clef_click then state.clef_click=false; return true end
  if label:find("##spacing",1,true) and state.manual_click then state.manual_click=false; return true end
  return false
 end
@@ -48,7 +49,13 @@ function reaper.ImGui_TreeNodeFlags_DefaultOpen() return 0 end
 function reaper.ImGui_GetContentRegionAvail() return 440,400 end
 function reaper.ImGui_InputTextMultiline(_,_,text) return false,text end
 function reaper.defer(fn) state.next_frame=fn end
-function reaper.SetTrackStateChunk() error("Must not edit SCORE track chunk") end
+function reaper.SetTrackStateChunk(track,chunk)
+ assert(track=="track");state.clef_writes=state.clef_writes+1;state.chunk=chunk;return true
+end
+function reaper.Undo_BeginBlock2() end
+function reaper.Undo_EndBlock2() end
+function reaper.ShowMessageBox() return state.confirm end
+function reaper.UpdateArrange() end
 function reaper.MIDI_SetNote() error("Must not mutate MIDI") end
 function reaper.MIDI_SetAllEvts() error("Must not mutate MIDI") end
 function reaper.MIDI_InsertTextSysexEvt() error("Must not mutate metadata") end
@@ -97,4 +104,30 @@ state.stuck=true
 frame(true)
 check(#state.actions==4 and state.toggle==0,"unconfirmed action does not report success")
 check(not table.concat(state.labels,"\n"):find("Track State geschrieben",1,true),"UI makes no false claim of track mutation")
-print("OK: 10 REAPER-API mock regression checks; real REAPER GUI not tested")
+check(state.clef_writes==0,"readability does not automatically modify the clef")
+state.stuck=false
+state.toggle=1
+state.clef_click=true
+frame(false)
+check(state.clef_writes==1 and state.chunk:find("SCORE 0 1 0 0",1,true)~=nil,
+      "confirmed violin clef changes exactly the documented SCORE field subset")
+state.clef_click=true
+frame(false)
+check(state.clef_writes==1,"repeated clef action remains unchanged")
+state.instrument="Viola - C-Schluessel"
+state.chunk="<TRACK\\nSCORE 0 0 0 0\\n>\\n"
+state.confirm=7
+state.clef_click=true
+frame(false)
+check(state.clef_writes==1,"user declined clef change, no mutation")
+state.confirm=6
+state.chunk="<TRACK\\nSCORE 0 0 0 0 99\\n>\\n"
+state.clef_click=true
+frame(false)
+check(state.clef_writes==1,"unknown SCORE layout refuses mutation")
+state.instrument="Unbekanntes Instrument"
+state.chunk="<TRACK\\nSCORE 0 0 0 0\\n>\\n"
+state.clef_click=true
+frame(false)
+check(state.clef_writes==1,"unknown instrument is not guessed")
+print("OK: 15 REAPER-API mock regression checks; real REAPER GUI not tested")
