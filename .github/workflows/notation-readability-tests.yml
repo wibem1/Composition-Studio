@@ -1,0 +1,24 @@
+name: Notation Studio - Offline Regression
+on:
+  pull_request:
+    paths:
+      - 'Notation Studio.lua'
+      - 'tests/test_notation_readability.lua'
+      - '.github/workflows/notation-readability-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-lua:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua 5.4
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4
+      - name: Check production script syntax
+        run: luac5.4 -p 'Notation Studio.lua'
+      - name: Run complete offline REAPER mock
+        run: lua5.4 tests/test_notation_readability.lua
