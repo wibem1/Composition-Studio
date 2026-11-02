@@ -1,5 +1,25 @@
 # Composition Studio – Notationsmodul
 
+## Technische Machbarkeit der vier Ziele – 02.11.2026 (Pruefung, keine Freigabe)
+
+**Ausgangslage und Korrektur:** Das fruehere `Lesbarkeit verbessern` in `Notation Studio.lua` v0.1.24 schaltet mehrere Anzeigeoptionen zusammen und greift ueber `SetTrackStateChunk` auch in `SCORE`-Metadaten ein. Der Nutzer hat bestaetigt, dass der bisherige Lesbarkeitsversuch die vier Ziele **nicht erreicht hat**. Die blosse Existenz von REAPER-Aktionen ist **kein Erfolg**.
+
+**Aktuelle Quellen:** Offizielles REAPER-Handbuch 7.84 als HTML https://dlx.reaper.fm/userguide/html/ (insbes. Kap. 14.5, 14.7), REAPER-7.83-Bestand des Nutzers, REAPER-Notationsaktionen auf main sowie der existierende ReaPack-/ReaTeam-Code `js_Notation - Set displayed length of selected notes to custom value.lua` (https://github.com/ReaTeam/ReaScripts/blob/master/MIDI%20Editor/js_Notation%20-%20Set%20displayed%20length%20of%20selected%20notes%20to%20custom%20value.lua). Keine neue Implementierung.
+
+| Kriterium | Technisch belegter Weg | Realistische Grenze / Status |
+| --- | --- | --- |
+| Horizontale Notenabstaende | `Proportional (musical) note spacing` + Zoom und vertikale Staff-Skalierung im nativen Editor | **Eingeschraenkt machbar.** REAPERs Layout bleibt intern; kein frei steuerbarer Engraving-Kollisions-/Abstandsalgorithmus via ReaScript dokumentiert. Bedienbarkeit muss am dichten Originalabschnitt nachgewiesen werden. |
+| Unnoetige Minipausen | Erst reine Displayquantisierung/Minimum note length; falls das nicht genuegt, **gezielte** Notations-Metadaten `NOTE ... disp_len` fuer einzelne Noten, ohne Note-on/-off zu verschieben; bestehendes ReaTeam-ReaScript zeigt Machbarkeit und Reset | **Schwierigster und kritischer Punkt, nicht garantiert.** `Minimum note length` ist kein universeller Restfilter. Visuelles Verlaengern darf echte Pausen, polyphone Stimmen und Phrasen nicht unterdruecken; nur klar erkennbare Mikro-Luecken zwischen zugehoerigen Noten bearbeiten. `disp_len` schreibt Notations-Metadaten **in den MIDI-Take**, veraendert aber nicht die eigentlichen Note-on/-off-Ereignisse; mit Undo/Reset/Backup absichern. |
+| Anzeigequantisierung | REAPER `Display quantization` und `Minimum note length` individuell pro Track, ohne Tonereignisse zu veraendern | **Technisch klar machbar**, musikalisch sinnvolle Einstellung individuell pruefen. `1/16` und `1/32` nur Testkandidaten, keine garantierten Universalwerte. |
+| Notenzeile je Instrument + Schluessel | MIDI-Items der Instrumente getrennten REAPER-Tracks zuordnen, im selben MIDI-Editor `Contents > Track list` sichtbar schalten, je Track `Default clef` waehlen | **Machbar mit Layoutgrenze:** Bei mehr als einem sichtbaren Track waehlt REAPER laut offizieller Dokumentation **kontinuierliche** links-rechts Notationsansicht, nicht mehrzeilig umgebrochene Partiturseite. Besonders grand staff/manuelle polyphone Stimmen beduerfen weiterer Pruefung. |
+
+**Go/No-Go, kein neues Grossprojekt:** Vor Codierung neuer Automatik ein **einziger enger Machbarkeitsbeweis** an einem problematischen Originalausschnitt im nativen REAPER-Notationseditor, bevorzugt dort, wo die vielen Minipausen sichtbar sind. Ausgangsansicht sichern, REAPER-Anzeigeoptionen pruefen, ggf. **eine** ausgewaehlte Note mit bestehendem ReaTeam-`disp_len`-Skript nur optisch verlaengern und kontrollieren, ob die unerwuenschte Pause dadurch verschwindet, bei identischem Note-on/-off und Wiedergabe. Anschliessend Darstellung zuruecksetzen und zweiten Stimmen-/Staff-Fall einmal pruefen. **Kein** erneuter allumfassender `Lesbarkeit verbessern`-Knopf, keine Aenderung der gesamten MIDI-Performance und kein Nachbau einer Notensatzengine.
+
+**Entscheidung:** Durch native Optionen und gegebenenfalls gezielte `disp_len`-Metadaten ist **eine pragmatische Arbeitsnotation in einfachen und manchen polyphonen Passagen realistisch**, aber **kein Nachweis fuer alle vier Anforderungen gleichzeitig und kein allgemeines Versprechen fuer komplexe Orgelpartituren**. Wenn die Minipausen oder voicing-/spacingbedingten Fehler in genau diesem Nachweis bestehen bleiben und nicht gezielt steuerbar sind, **No-Go fuer weitere Eigenentwicklung am nativen Renderer**. Dann existierende fertige Alternative evaluieren, statt mehrfache Varianten/Tests zu produzieren.
+
+**Stand:** Dokumentierte Machbarkeitspruefung; kein echter neuer REAPER-7.83-Praxistest, keine Versionsnummer, kein Merge, keine Aenderung am produktiven Skript.
+
+
 ### Vier verbindliche Qualitätsanforderungen – 02.11.2026
 
 Die Zielerreichung wird ab jetzt **an genau diesen vier sichtbaren Eigenschaften des eingebauten REAPER-Notationseditors** beurteilt:
