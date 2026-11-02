@@ -205,10 +205,30 @@ local function find_action_variants(variants)
  return nil,nil
 end
 
+-- ReaImGui can take focus away from the MIDI editor. Keep the last editor
+-- only while its MIDI take is still valid; never reuse an orphaned handle.
+local function editor_is_live(ed)
+ if not ed or type(reaper.MIDIEditor_GetTake)~="function" then return false end
+ if type(reaper.JS_Window_IsWindow)=="function" then
+  local ok,exists=pcall(reaper.JS_Window_IsWindow,ed)
+  if ok and not exists then return false end
+ end
+ local ok,tk=pcall(reaper.MIDIEditor_GetTake,ed)
+ if not ok or not tk then return false end
+ if type(reaper.ValidatePtr2)=="function" then
+  local valid_ok,valid=pcall(reaper.ValidatePtr2,0,tk,"MediaItem_Take*")
+  if not valid_ok or not valid then return false end
+ end
+ local valid_ok,valid=pcall(reaper.TakeIsMIDI,tk)
+ return valid_ok and valid==true
+end
+
 local function active_editor()
  local cur=type(reaper.MIDIEditor_GetActive)=="function" and reaper.MIDIEditor_GetActive() or nil
- if cur then midi_editor=cur end
- return midi_editor
+ if editor_is_live(cur) then midi_editor=cur; return cur end
+ if editor_is_live(midi_editor) then return midi_editor end
+ midi_editor=nil
+ return nil
 end
 
 local function run_action(name,times)
@@ -235,16 +255,27 @@ local function spacing_state()
  local cmd=midi_action_by_name("Notation: Proportional (musical) note spacing")
  if not cmd then return nil,nil end
  local st=type(reaper.GetToggleCommandStateEx)=="function" and reaper.GetToggleCommandStateEx(32060,cmd) or -1
+ if st~=0 and st~=1 then return nil,cmd end
  return st==1,cmd
 end
 
 local function set_musical_spacing(enable)
  local ed=active_editor()
- if not ed then status="Kein aktiver MIDI-Editor."; return false end
+ if not ed then status="Kein gültiger MIDI-Editor geöffnet."; return false end
  local on,cmd=spacing_state()
- if not cmd then status="Musikalische Notenabstände wurden nicht gefunden."; return false end
- if on~=enable then reaper.MIDIEditor_OnCommand(ed,cmd) end
- status=enable and "Musikalische proportionale Abstände eingeschaltet." or "Absolute Rasterabstände eingeschaltet."
+ if not cmd then status="Aktion für musikalische Abstände nicht gefunden; keine Änderung."; return false end
+ if on==nil then status="Zustand der musikalischen Abstände unbekannt; keine automatische Umschaltung."; return false end
+ if on==enable then
+  status=enable and "Musikalische Abstände sind bereits eingeschaltet." or "Rasterabstände sind bereits eingeschaltet."
+  return true
+ end
+ reaper.MIDIEditor_OnCommand(ed,cmd)
+ local after=select(1,spacing_state())
+ if after~=enable then
+  status="Umschaltung nicht eindeutig bestätigt; bitte REAPER-Einstellung kontrollieren."
+  return false
+ end
+ status=enable and "Musikalische Abstände eingeschaltet." or "Rasterabstände eingeschaltet."
  return true
 end
 
@@ -439,95 +470,29 @@ local function set_default_clef_chunk(profile)
  return true,newline
 end
 
+-- Deliberately conservative: no blanket quantization, voice/clef edits,
+-- timebase scaling, forced page mode, or accumulating vertical zoom.
+-- REAPER's notation renderer has no accessible collision/measure-width API.
 local function cleanup_notation()
- local ed=active_editor()
- if not ed then
-  status="Keine Verbindung zum MIDI-/Notationseditor. Notation Studio bitte direkt aus dem geöffneten MIDI-Editor starten."
+ if not active_editor() then
+  status="Keine Verbindung zum gültigen MIDI-/Notationseditor. Bitte MIDI-Editor öffnen."
   return
  end
-
- local done={}
- local missing={}
-
- local function execute_found(label,variants,toggle_on)
-  local cmd,txt=find_action_variants(variants)
-  if not cmd then missing[#missing+1]=label; return false end
-  if toggle_on then
-   local st=reaper.GetToggleCommandStateEx(32060,cmd)
-   if st~=1 then reaper.MIDIEditor_OnCommand(ed,cmd) end
-  else
-   reaper.MIDIEditor_OnCommand(ed,cmd)
-  end
-  done[#done+1]=label.." ["..txt.."]"
-  return true
+ local on,cmd=spacing_state()
+ if not cmd then
+  status="REAPER-Aktion für proportionale Notenabstände fehlt. Keine Änderung durchgeführt."
+  return
  end
-
- execute_found("proportionale Abstände",{
-   {"notation","proportional"},
-   {"proportional","spacing"}
- },true)
-
- execute_found("Anzeigequantisierung 1/16",{
-   {"notation","1/16","quant"},
-   {"notation","1/16"}
- },false)
-
- execute_found("Mindestnotenlänge 1/64",{
-   {"notation","minimum","1/64"},
-   {"notation","mindest","1/64"}
- },false)
-
- execute_found("Triolenerkennung",{
-   {"notation","triplet"},
-   {"notation","triol"}
- },true)
-
- local profile,instrument=selected_track_profile()
-
- -- Für Solo-Streicher sind MIDI-Überlappungen meist Legato/Performance-Daten
- -- und sollen nicht automatisch als zusätzliche Notationsstimmen erscheinen.
- local voice_cmd,voice_txt=find_action_variants({
-   {"notation","voice","overlapping"},
-   {"notation","stimm"}
- })
- if voice_cmd then
-  local want_voice=(profile=="grand")
-  local vst=reaper.GetToggleCommandStateEx(32060,voice_cmd)
-  if vst~=-1 and (vst==1)~=want_voice then reaper.MIDIEditor_OnCommand(ed,voice_cmd) end
-  done[#done+1]="automatische Stimmenzuordnung "..(want_voice and "EIN" or "AUS").." ["..tostring(voice_txt).."]"
- else
-  missing[#missing+1]="automatische Stimmenzuordnung"
+ if on==nil then
+  status="REAPER meldet keinen zuverlässigen An/Aus-Zustand. Keine automatische Änderung; bitte musikalische Abstände im MIDI-Editor prüfen."
+  return
  end
- local clef_ok,clef_info=set_default_clef_chunk(profile)
- if clef_ok then
-  done[#done+1]="Notensystem: "..instrument.." → "..profile.." ["..tostring(clef_info).."]"
- elseif profile=="grand" then
-  done[#done+1]="Notensystem: "..instrument.." → Treble+bass unverändert"
- else
-  missing[#missing+1]="Notensystem: "..instrument.." → "..tostring(clef_info)
+ if on then
+  status="Musikalische Abstände sind bereits aktiv. Keine weiteren Änderungen nötig. Zoom, Quantisierung, Notenschlüssel und Stimmen bleiben unverändert."
+  return
  end
-
- local visible_tracks=count_visible_tracks(ed)
- if visible_tracks and visible_tracks>1 then
-  missing[#missing+1]="Page View benötigt genau einen sichtbaren Track; aktuell sichtbar: "..tostring(visible_tracks)
- end
-
- local page_ok,page_info=disable_continuous_view(ed)
- if page_ok then done[#done+1]=page_info
- else missing[#missing+1]=page_info end
-
- local scaled,scale_info=apply_readable_scale(ed)
- if scaled then done[#done+1]="lesbare horizontale Zielskalierung ["..scale_info.."]"
- else missing[#missing+1]="Horizontale Zielskalierung: "..tostring(scale_info) end
-
- local vertical_ok,vertical_info=enlarge_notation_vertically(ed)
- if vertical_ok then done[#done+1]="größere Notensysteme ["..vertical_info.."]"
- else missing[#missing+1]="Vertikale Skalierung: "..tostring(vertical_info) end
-
- if #missing==0 then
-  status="Ausgeführt:\n• "..table.concat(done,"\n• ")
- else
-  status="Ausgeführt:\n• "..table.concat(done,"\n• ").."\n\nNicht gefunden:\n• "..table.concat(missing,"\n• ")
+ if set_musical_spacing(true) then
+  status="Musikalische Abstände aktiviert. Quantisierung, Stimmen, Notenschlüssel, Systemansicht, Zoom und MIDI-Daten wurden von dieser Funktion nicht verändert."
  end
 end
 
@@ -651,12 +616,16 @@ local function draw()
   reaper.ImGui_Separator(ctx)
 
   if reaper.ImGui_CollapsingHeader(ctx,"Lesbarkeit",reaper.ImGui_TreeNodeFlags_DefaultOpen()) then
-   reaper.ImGui_TextWrapped(ctx,"Für den mehrzeiligen Seitenumbruch darf in REAPER nur ein Track sichtbar sein.")
+   reaper.ImGui_TextWrapped(ctx,"Sicherer Modus: Nur proportionale musikalische Abstände einschalten, falls eindeutig möglich. Andere Einstellungen und MIDI bleiben unverändert.")
    if reaper.ImGui_Button(ctx,"Lesbarkeit verbessern",-1,36) then cleanup_notation() end
    if status~="" then reaper.ImGui_TextWrapped(ctx,status) end
-   reaper.ImGui_TextWrapped(ctx,"Seitendarstellung mit adaptiver Skalierung. Für Solo-Streicher: Mindestnotenlänge 1/64 und automatische Überlappungs-Stimmen AUS, damit kurze Läufe und Legato-Überlappungen nicht künstlich verdichtet werden.")
+   reaper.ImGui_TextWrapped(ctx,"Bei Bedarf Zoom oder Anzeigequantisierung unten einzeln wählen. REAPER kann Taktbreiten und Kollisionsabstände nicht über dieses Skript frei optimieren.")
    local on=select(1,spacing_state())
-   if reaper.ImGui_Button(ctx,(on and "Musikalische Abstände ✓" or "Musikalische Abstände").."##spacing",-1,30) then set_musical_spacing(not on) end
+   local spacing_label=on==nil and "Musikalische Abstände (Status unbekannt)" or (on and "Musikalische Abstände ✓" or "Musikalische Abstände")
+   if reaper.ImGui_Button(ctx,spacing_label.."##spacing",-1,30) then
+    if on==nil then status="Unbekannter Toggle-Zustand: bitte direkt in REAPER prüfen."
+    else set_musical_spacing(not on) end
+   end
    local w=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local g=6; local h=math.max(100,(w-g)/2)
    if reaper.ImGui_Button(ctx,"Breiter +",h,30) then run_action("View: Zoom in horizontally",1) end
    reaper.ImGui_SameLine(ctx,0,g)
@@ -714,8 +683,8 @@ local function draw()
    reaper.ImGui_TextWrapped(ctx,status)
   end
   if pushed then reaper.ImGui_PopFont(ctx) end
-  reaper.ImGui_End(ctx)
  end
+ reaper.ImGui_End(ctx)
 end
 
 local function loop()
