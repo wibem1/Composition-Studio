@@ -1,22 +1,21 @@
 -- @description REAPER Notation - 4 Takte und Instrumentenschluessel
 -- @author Klangwerke
--- @about One shortcut: fit four measures, turn on proportional musical note spacing, set clefs on visible MIDI tracks. No dialogs, no quantization, no MIDI note changes. Experimental SCORE chunk format; use on a backed-up project.
+-- @about One shortcut: show four measures, enable proportional spacing and choose clefs by MIDI-note register. No track-name inference, dialogs, quantization or MIDI note changes. Experimental SCORE chunk format: test on a backup project.
 -- No ReaImGui, SWS, ReaPack, AI, or additional setup required after loading into MIDI Editor actions.
 
 local PROJECT = 0
 local BARS = 4
 
--- In the earlier REAL notation test, SCORE ... 4 produced an alto clef,
--- not a treble clef. The previous script copied the incorrect mapping.
--- This table follows the native "Default clef" menu order (1=grand,
--- 2=treble, 3=bass, 4=alto). The result is still subject to a visual
--- check in the installed REAPER version; do not treat a mock as proof.
--- Unknown instruments are deliberately left untouched.
+-- REAPER's SCORE track-chunk format is undocumented. Values follow the
+-- observed default-clef menu order (1=grand,2=treble,3=bass,4=alto,5=tenor).
+-- Keep this mapping isolated: a successful chunk write does NOT prove the
+-- notation renderer changed in an open REAPER editor.
 local SCORE_CLEF = {
-  grand = 1,    -- Treble + bass (piano)
-  treble = 2,   -- Violin, flute
-  bass = 3,     -- Cello, bassoon
-  alto = 4,     -- Viola
+  grand = 1,    -- Two staves only for confirmed overlapping registers
+  treble = 2,
+  bass = 3,
+  alto = 4,
+  tenor = 5,
 }
 
 local function note(msg)
@@ -25,48 +24,115 @@ local function note(msg)
   end
 end
 
-local function identify(name)
-  local n = tostring(name or ""):lower()
-  -- Long/specific terms first; avoid "violin" matching "violoncello".
-  if n:find("violoncello", 1, true) or n:find("cello", 1, true)
-    or n:find("bassoon", 1, true) or n:find("fagott", 1, true)
-    or n:find("kontrabass", 1, true) or n:find("double bass", 1, true)
-    or n:find("contrabass", 1, true) then
-    return "bass"
-  elseif n:find("viola", 1, true) or n:find("bratsche", 1, true) then
-    return "alto"
-  elseif n:find("violin", 1, true) or n:find("geige", 1, true)
-    or n:find("flute", 1, true) or n:find("flöte", 1, true) then
-    return "treble"
-  elseif n:find("piano", 1, true) or n:find("klavier", 1, true)
-    or n:find("grand piano", 1, true) then
-    return "grand"
+-- Determine a staff from actual MIDI pitches, never track/item names.
+-- Candidate single staves use diatonic distances to staff boundaries.
+-- Four-pitched-note minimum prevents arbitrary key choices from tiny fragments.
+local NATURAL_STEP = {[0]=0,0,1,1,2,3,3,4,4,5,5,6}
+local STAVES = {
+  treble={lo=30,hi=38}, -- E4 .. F5
+  alto  ={lo=24,hi=32}, -- F3 .. G4
+  tenor ={lo=22,hi=30}, -- D3 .. E4
+  bass  ={lo=18,hi=26}, -- G2 .. A3
+}
+local CHOICES={"treble","alto","tenor","bass"}
+
+local function diatonic_step(pitch)
+  local octave=math.floor(pitch/12)-1
+  local pitchclass=pitch%12
+  return octave*7+NATURAL_STEP[pitchclass]
+end
+
+local function staff_cost(pitch,clef)
+  local bounds=STAVES[clef]
+  local d=diatonic_step(pitch)
+  local out=math.max(0,bounds.lo-d,d-bounds.hi)
+  -- Ledger lines are much more expensive than placement away from center.
+  return (out*out*1.8+out*2)+0.06*math.abs(d-(bounds.lo+bounds.hi)/2)
+end
+
+local function note_analysis(takes)
+  if type(reaper.MIDI_CountEvts)~="function" or type(reaper.MIDI_GetNote)~="function" then
+    return nil,"MIDI-Notenlesefunktionen fehlen"
   end
-  return nil
+  local notes,sums={},{}
+  for _,clef in ipairs(CHOICES) do sums[clef]=0 end
+  local low,high={},{}
+  for _,take in ipairs(takes or {}) do
+    local ok,count=reaper.MIDI_CountEvts(take)
+    if ok and count and count>0 then
+      -- Stable sampling when a track has very many notes.
+      local step=math.max(1,math.ceil(count/4096))
+      for i=0,count-1,step do
+        local valid,_,muted,startPPQ,endPPQ,_,pitch=reaper.MIDI_GetNote(take,i)
+        if valid and not muted and type(pitch)=="number" and pitch>=0 and pitch<=127 then
+          notes[#notes+1]=pitch
+          for _,clef in ipairs(CHOICES) do
+            sums[clef]=sums[clef]+staff_cost(pitch,clef)
+          end
+          -- For grand staff, demand actual overlapping low/high voices
+          -- within the SAME take, not just a wide melodic range.
+          if startPPQ and endPPQ and endPPQ>startPPQ then
+            if pitch<=55 then low[#low+1]={take=take,a=startPPQ,b=endPPQ} end
+            if pitch>=68 then high[#high+1]={take=take,a=startPPQ,b=endPPQ} end
+          end
+        end
+      end
+    end
+  end
+  if #notes<4 then return nil,"weniger als vier auswertbare MIDI-Noten" end
+  local chosen,best,second=nil,math.huge,math.huge
+  for _,clef in ipairs(CHOICES) do
+    local score=sums[clef]/#notes
+    if score<best then second=best;best=score;chosen=clef
+    elseif score<second then second=score end
+  end
+  -- Score only the clef quality, not the track name or MIDI program.
+  local lowFraction=#low/#notes
+  local highFraction=#high/#notes
+  if #low>=3 and #high>=3 and lowFraction>=0.15 and highFraction>=0.15 then
+    local overlaps=0
+    for _,l in ipairs(low) do
+      for _,h in ipairs(high) do
+        if l.take==h.take and l.a<h.b and h.a<l.b then
+          overlaps=overlaps+1
+          if overlaps>=2 then break end
+        end
+      end
+      if overlaps>=2 then break end
+    end
+    if overlaps>=2 then
+      return {clef="grand",notes=#notes,score=best,margin=second-best,polyphony=true},nil
+    end
+  end
+  return {clef=chosen,notes=#notes,score=best,margin=second-best,polyphony=false},nil
 end
 
 local function visible_tracks(editor)
-  local tracks, seen, takes = {}, {}, {}
+  local tracks,seen,takes,byTrack={},{},{},{}
   local function add(take)
     if not take or not reaper.TakeIsMIDI(take) then return end
-    if reaper.ValidatePtr2 and not reaper.ValidatePtr2(PROJECT, take, "MediaItem_Take*") then return end
-    local item = reaper.GetMediaItemTake_Item(take)
-    local track = item and reaper.GetMediaItem_Track(item)
-    if track and not seen[tostring(track)] then
-      seen[tostring(track)] = true
-      tracks[#tracks+1] = track
+    if reaper.ValidatePtr2 and not reaper.ValidatePtr2(PROJECT,take,"MediaItem_Take*") then return end
+    local item=reaper.GetMediaItemTake_Item(take)
+    local track=item and reaper.GetMediaItem_Track(item)
+    if not track then return end
+    local id=tostring(track)
+    if not seen[id] then
+      seen[id]=true
+      tracks[#tracks+1]=track
+      byTrack[id]={}
     end
-    takes[#takes+1] = take
+    byTrack[id][#byTrack[id]+1]=take
+    takes[#takes+1]=take
   end
   if reaper.MIDIEditor_EnumTakes then
     for i=0,2047 do
-      local take = reaper.MIDIEditor_EnumTakes(editor,i,false)
+      local take=reaper.MIDIEditor_EnumTakes(editor,i,false)
       if not take then break end
       add(take)
     end
   end
   if #tracks==0 then add(reaper.MIDIEditor_GetTake(editor)) end
-  return tracks,takes
+  return tracks,takes,byTrack
 end
 
 local function edit_clef(track, code)
@@ -209,17 +275,18 @@ end
 local function main()
   local editor = reaper.MIDIEditor_GetActive()
   if not editor then note("Kein aktiver MIDI-Editor. Shortcut im MIDI-Editor zuweisen.");return end
-  local tracks,takes = visible_tracks(editor)
+  local tracks,takes,byTrack = visible_tracks(editor)
   if #tracks==0 then note("Keine sichtbaren MIDI-Tracks gefunden.");return end
 
   local plans = {}
-  for _,track in ipairs(tracks) do
-    local _,name = reaper.GetTrackName(track)
-    local clef = identify(name)
-    if clef and SCORE_CLEF[clef] then
-      plans[#plans+1]={track=track,clef=clef,name=name}
+  for index,track in ipairs(tracks) do
+    local result,reason=note_analysis(byTrack[tostring(track)])
+    if result and SCORE_CLEF[result.clef] then
+      plans[#plans+1]={track=track,clef=result.clef,name="System "..index}
+      note(string.format("System %d: %d MIDI-Noten → %s (Hilfslinienanalyse)",
+        index,result.notes,result.clef))
     else
-      note("Unbekanntes Instrument übersprungen: "..tostring(name))
+      note("System "..index..": keine automatische Schlüsselwahl – "..tostring(reason or "unbestimmt"))
     end
   end
 
