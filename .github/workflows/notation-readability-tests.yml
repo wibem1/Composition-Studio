@@ -4,6 +4,8 @@ on:
     paths:
       - 'Notation Studio.lua'
       - 'tests/test_notation_readability.lua'
+      - 'tests/test_notation_preview.lua'
+      - 'tests/preview/Notation Studio Lesbarkeit Teststarter.lua'
       - '.github/workflows/notation-readability-tests.yml'
   workflow_dispatch:
 
@@ -22,3 +24,7 @@ jobs:
         run: luac5.4 -p 'Notation Studio.lua'
       - name: Run complete offline REAPER mock
         run: lua5.4 tests/test_notation_readability.lua
+      - name: Check and test isolated preview launcher
+        run: |
+          luac5.4 -p 'tests/preview/Notation Studio Lesbarkeit Teststarter.lua'
+          lua5.4 tests/test_notation_preview.lua
