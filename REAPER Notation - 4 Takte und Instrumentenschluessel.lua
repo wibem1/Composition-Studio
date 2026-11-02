@@ -6,16 +6,14 @@
 local PROJECT = 0
 local BARS = 4
 
--- REAPER's SCORE track-chunk format is undocumented. Values follow the
--- observed default-clef menu order (1=grand,2=treble,3=bass,4=alto,5=tenor).
--- Keep this mapping isolated: a successful chunk write does NOT prove the
--- notation renderer changed in an open REAPER editor.
+-- Exact default-clef SCORE values restored from the existing, user-tested
+-- Notation Studio v0.1.17 and retained in v0.1.24. Do not shift by one.
+-- Its previous implementation did NOT offer a numeric grand-staff value.
 local SCORE_CLEF = {
-  grand = 1,    -- Two staves only for confirmed overlapping registers
-  treble = 2,
-  bass = 3,
-  alto = 4,
-  tenor = 5,
+  treble = 1,
+  bass = 2,
+  alto = 3,
+  tenor = 4,
 }
 
 local function note(msg)
@@ -135,54 +133,47 @@ local function visible_tracks(editor)
   return tracks,takes,byTrack
 end
 
+-- Reuse the successful v0.1.24 algorithm on every visible track:
+-- replace the track's SCORE line; if missing, insert after VU (not an item).
+-- Strictly leave grand staff alone (original function did likewise).
 local function edit_clef(track, code)
-  local ok, original = reaper.GetTrackStateChunk(track,"",false)
-  if not ok or not original then return false,"Track-Chunk nicht lesbar" end
-
-  local target = "SCORE 0 " .. tostring(code) .. " 0 0"
-  -- Work with a single, simple top-level SCORE line only; preserve all other chunk content.
-  local found, count = nil,0
+  local ok,original = reaper.GetTrackStateChunk(track,"",false)
+  if not ok or type(original)~="string" then
+    return false,"Track-State nicht lesbar"
+  end
+  local desired="SCORE 0 "..tostring(code).." 0 0"
+  local seen,count=nil,0
   for line in original:gmatch("[^\r\n]+") do
-    if line:match("^SCORE%s") then
-      count = count+1
-      found = line
+    if line:match("^SCORE%s+") then
+      count=count+1
+      seen=line
     end
   end
-  if count>1 then return false,"mehrere SCORE-Zeilen; übersprungen" end
-
-  local changed
+  if count>1 then return false,"Mehrdeutige SCORE-Zeilen; unverändert" end
+  if seen==desired then return false,nil end
+  local updated,changed
   if count==1 then
-    local a,b,c,d = found:match("^SCORE%s+(%d+)%s+(%d+)%s+(%d+)%s+(%d+)%s*$")
-    if not a or a~="0" or c~="0" or d~="0" then
-      return false,"unbekanntes SCORE-Format; übersprungen"
-    end
-    if tonumber(b)==code then return false,nil end
-    -- Replace the exact line, not a substring; preserve other settings and line endings.
-    local escaped = found:gsub("([^%w])","%%%1")
-    changed = original:gsub("("..escaped..")",function() return target end,1)
+    -- This follows Notation Studio 0.1.24's SCORE replacement, but
+    -- matches the full line literally to avoid changing unrelated text.
+    local escaped=seen:gsub("([^%w])","%%%1")
+    updated,changed=original:gsub(escaped,function() return desired end,1)
   else
-    -- New MIDI tracks may not yet have a SCORE setting. Add it in the top-level
-    -- track header; never inside nested item or FX chunks.
-    local start,finish = original:find("^<TRACK[^\r\n]*\r?\n")
-    if not start then return false,"TRACK-Header nicht erkannt" end
-    local newline = original:find("\r\n",1,true) and "\r\n" or "\n"
-    changed = original:sub(1,finish)..target..newline..original:sub(finish+1)
+    -- Original code inserted the default clef after the top-level VU line.
+    updated,changed=original:gsub("(\nVU%s+[^\r\n]+)","%1\n"..desired,1)
   end
-
-  if changed==original then return false,nil end
-  if not reaper.SetTrackStateChunk(track,changed,false) then
-    return false,"REAPER hat Track-Chunk abgewiesen"
+  if changed~=1 then return false,"SCORE-Zeile konnte nicht sicher gesetzt werden" end
+  if not reaper.SetTrackStateChunk(track,updated,false) then
+    return false,"SetTrackStateChunk wurde abgewiesen"
   end
-  -- A successful setter does not prove that REAPER accepted the SCORE value.
-  -- Read back the exact canonical line and report the result in the console.
-  local read_ok,now = reaper.GetTrackStateChunk(track,"",false)
-  local seen = false
-  if read_ok and type(now)=="string" then
-    for line in now:gmatch("[^\r\n]+") do
-      if line==target then seen=true; break end
-    end
+  local readOK,readback=reaper.GetTrackStateChunk(track,"",false)
+  if not readOK or type(readback)~="string" then
+    return false,"Änderung konnte nicht nachgelesen werden"
   end
-  if not seen then return false,"SCORE-Wert nach SetTrackStateChunk nicht gespeichert" end
+  local verified=false
+  for line in readback:gmatch("[^\r\n]+") do
+    if line==desired then verified=true; break end
+  end
+  if not verified then return false,"REAPER hat den Schlüsselwert nicht gespeichert" end
   return true,nil
 end
 
@@ -281,10 +272,13 @@ local function main()
   local plans = {}
   for index,track in ipairs(tracks) do
     local result,reason=note_analysis(byTrack[tostring(track)])
-    if result and SCORE_CLEF[result.clef] and (result.polyphony or result.margin>=0.20) then
+    if result and SCORE_CLEF[result.clef] and result.margin>=0.20 then
       plans[#plans+1]={track=track,clef=result.clef,name="System "..index}
       note(string.format("System %d: %d MIDI-Noten → %s (Hilfslinienanalyse)",
         index,result.notes,result.clef))
+    elseif result and result.clef=="grand" then
+      -- Previous working method did not support grand staff as a numeric SCORE value.
+      note("System "..index..": echte hohe und tiefe Stimmen; bisheriges Doppelsystem beibehalten")
     elseif result then
       note("System "..index..": uneindeutiger Tonumfang; bisherigen Schlüssel beibehalten")
     else
