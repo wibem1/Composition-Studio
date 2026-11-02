@@ -1,6 +1,6 @@
 -- @description REAPER Notation - 4 Takte und Instrumentenschluessel
 -- @author Klangwerke
--- @about One shortcut: show four measures, enable proportional spacing and choose clefs by MIDI-note register. No track-name inference, dialogs, quantization or MIDI note changes. Experimental SCORE chunk format: test on a backup project.
+-- @about One shortcut: zoom four measures horizontally, adaptive vertical notation zoom, proportional spacing and MIDI-based clefs. No UI, track-name inference, quantization or MIDI note edits.
 -- No ReaImGui, SWS, ReaPack, AI, or additional setup required after loading into MIDI Editor actions.
 
 local PROJECT = 0
@@ -245,6 +245,78 @@ local function enable_proportional_spacing(editor)
   return true,"aktiviert"
 end
 
+-- Automatic VERTICAL page-view enlargement. REAPER has no documented
+-- absolute notation staff-size setter/getter. Reset to its native
+-- "Zoom to content" baseline FIRST, then make a bounded number of
+-- "Zoom in vertically" calls. The final four-bar zoom below restores
+-- horizontal zoom lost by Zoom to content.
+local function visible_item_measure_count(takes)
+  if type(reaper.GetMediaItemInfo_Value)~="function" then return nil end
+  local first,last=nil,nil
+  for _,take in ipairs(takes) do
+    local item=reaper.GetMediaItemTake_Item(take)
+    if item then
+      local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION")
+      local length=reaper.GetMediaItemInfo_Value(item,"D_LENGTH")
+      if type(pos)=="number" and type(length)=="number" and length>0 then
+        first=first and math.min(first,pos) or pos
+        last=last and math.max(last,pos+length) or pos+length
+      end
+    end
+  end
+  if not (first and last and last>first) then return nil end
+  local q1=reaper.TimeMap2_timeToQN(PROJECT,first)
+  local q2=reaper.TimeMap2_timeToQN(PROJECT,math.max(first,last-0.000001))
+  if not (q1 and q2) then return nil end
+  local m1=reaper.TimeMap_QNToMeasures(PROJECT,q1)
+  local m2=reaper.TimeMap_QNToMeasures(PROJECT,q2)
+  if not (type(m1)=="number" and type(m2)=="number") then return nil end
+  return math.max(1,m2-m1+1)
+end
+
+local function set_automatic_vertical_zoom(editor,trackCount,takes)
+  if not reaper.kbd_enumerateActions or not reaper.SectionFromUniqueID then
+    return false,"MIDI-Aktionsliste nicht verfügbar"
+  end
+  local section=reaper.SectionFromUniqueID(32060)
+  if not section then return false,"MIDI-Aktionsbereich fehlt" end
+  local contentID,zoomInID
+  for i=0,19999 do
+    local id,label=reaper.kbd_enumerateActions(section,i)
+    if not id or id==0 then break end
+    if label=="View: Zoom to content" then contentID=id end
+    if label=="View: Zoom in vertically" then zoomInID=id end
+    if contentID and zoomInID then break end
+  end
+  -- No '3 extra steps every run': that would grow without bound.
+  if not contentID or not zoomInID then
+    return false,"Zoom to content oder vertikale Zoom-Aktion nicht gefunden"
+  end
+  local bars=visible_item_measure_count(takes)
+  -- Bounded heuristic, not an exact 'fit last staff to window height':
+  -- that height is unavailable through the stock ReaScript API.
+  local systems=bars and math.ceil(bars/BARS) or nil
+  local steps=3
+  if systems then
+    if systems<=2 then steps=5
+    elseif systems<=4 then steps=4
+    elseif systems<=8 then steps=3
+    else steps=2 end
+  end
+  if trackCount>=5 then steps=math.max(1,steps-2)
+  elseif trackCount>=3 then steps=math.max(1,steps-1) end
+  if reaper.MIDIEditor_OnCommand(editor,contentID)==false then
+    return false,"Zoom to content konnte nicht ausgeführt werden"
+  end
+  for _=1,steps do
+    if reaper.MIDIEditor_OnCommand(editor,zoomInID)==false then
+      return false,"Vertikaler Zoom wurde abgebrochen"
+    end
+  end
+  return true,string.format("%d Schritte, %s Takte, %d sichtbare Spuren",
+    steps,bars and tostring(bars) or "Länge unbekannt",trackCount)
+end
+
 local function zoom_four_bars(editor)
   local startTime,endTime,problem = four_bar_window()
   if not startTime then return false,problem end
@@ -311,10 +383,14 @@ local function main()
   end
   local spacingOk,spacingInfo=enable_proportional_spacing(editor)
   if not spacingOk then note("Proportionale Abstände: "..tostring(spacingInfo)) end
+  local verticalOK,verticalInfo=set_automatic_vertical_zoom(editor,#tracks,takes)
+  if not verticalOK then note("Vertikaler Zoom: "..tostring(verticalInfo)) end
+  -- Always zoom horizontally LAST; 'Zoom to content' changes the time range.
   local zoomed,zoomErr=zoom_four_bars(editor)
   if not zoomed then note("Vier-Takte-Zoom: "..tostring(zoomErr)) end
-  note(string.format("Abgeschlossen: %d sichtbare Tracks, %d geänderte Schlüssel, Vier-Takte-Zoom %s, proportionale Abstände %s.",
+  note(string.format("Abgeschlossen: %d sichtbare Tracks, %d geänderte Schlüssel, Vier-Takte-Zoom %s, vertikaler Zoom %s, proportionale Abstände %s.",
     #tracks,changed,zoomed and "ausgeführt" or "nicht verfügbar",
+    verticalOK and verticalInfo or "unverändert (nicht verfügbar)",
     spacingOk and spacingInfo or "unverändert (Status prüfen)"))
 end
 
