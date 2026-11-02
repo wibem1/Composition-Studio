@@ -1,10 +1,10 @@
 -- @description Notation Studio
--- @version 0.1.24
+-- @version 0.1.24-test.1
 -- @author Klangwerke
 -- @about Native REAPER notation tools and AI palette.
 
 local EXT_SECTION="CompositionStudio"
-local VERSION="0.1.24"
+local VERSION="0.1.24-test.1"
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local SCRIPT_PATH=(debug.getinfo(1,"S").source or ""):gsub("^@","")
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Notation%20Studio.lua"
@@ -67,6 +67,7 @@ local function fetch_update(url,extra_headers)
 end
 
 local function install_update()
+ if VERSION:find("-test",1,true) then status="Testfassung: Updates sind hier deaktiviert. Die reguläre Version bleibt unverändert."; return end
  if ai_busy then status="Update erst möglich, wenn die KI fertig ist."; return end
  status="Update wird geladen …"
 
@@ -603,6 +604,7 @@ local function draw()
    pushed=pcall(reaper.ImGui_PushFont,ctx,ui_font,20)
   end
   local _,nsel=selection_context()
+  reaper.ImGui_Text(ctx,"TESTFASSUNG · nur sichere Lesbarkeitssteuerung")
   reaper.ImGui_Text(ctx,"Native REAPER-Notation · "..tostring(nsel).." Note(n) markiert · Editor "..(active_editor() and "gebunden" or "NICHT gebunden"))
   reaper.ImGui_SameLine(ctx)
   if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##notationstudio_menu") end
