@@ -108,4 +108,4 @@ check(state.spacing_calls==2 and state.spacing==0,"failed activation is reported
 state.spacing_present=false
 run()
 check(state.spacing_calls==2 and state.actions==6,"missing spacing action does not block four-bar zoom")
-print("OK: 15 offline integration checks, not a real REAPER notation-renderer validation.")
+print("OK: 16 offline integration checks, not a real REAPER notation-renderer validation.")
