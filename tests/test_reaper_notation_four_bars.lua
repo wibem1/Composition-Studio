@@ -26,6 +26,7 @@ local state={
   writes=0,undos=0,refreshes=0,console={},editCursor=0,
   itemLength=32,vertical_present=true,content_present=true,vertical=50,
   verticalResets=0,verticalIns=0,commands={},
+  selected={},visibleTakes={"a","b","c"},multiOpenCalls=0,projectModeCalls=0,selectedModeCalls=0,
   time={7,9},loop={10,12},
 }
 local reaper={}
@@ -33,9 +34,17 @@ _G.reaper=reaper
 function reaper.MIDIEditor_GetActive() return 100 end
 function reaper.MIDIEditor_EnumTakes(_,i,editable)
  assert(editable==false)
- return ({"a","b","c"})[i+1]
+ return state.visibleTakes[i+1]
 end
-function reaper.MIDIEditor_GetTake() return "a" end
+function reaper.MIDIEditor_GetTake() return state.visibleTakes[1] end
+function reaper.CountSelectedMediaItems() return #state.selected end
+function reaper.GetSelectedMediaItem(_,i) return state.selected[i+1] end
+function reaper.GetActiveTake(item) return item end
+function reaper.Main_OnCommand(cmd,flag)
+ assert(cmd==40153 and flag==0,"must open selected items in built-in editor")
+ state.multiOpenCalls=state.multiOpenCalls+1
+ state.visibleTakes={table.unpack(state.selected)}
+end
 function reaper.TakeIsMIDI(take) return state.notes[take]~=nil end
 function reaper.ValidatePtr2() return true end
 function reaper.GetMediaItemTake_Item(take) return take end
@@ -109,6 +118,10 @@ function reaper.MIDIEditor_OnCommand(editor,id)
  elseif id==413 then
   state.verticalIns=state.verticalIns+1
   state.vertical=state.vertical+1
+ elseif id==40896 then
+  state.projectModeCalls=state.projectModeCalls+1
+ elseif id==40898 then
+  state.selectedModeCalls=state.selectedModeCalls+1
  else error("unexpected action; quantization must never run") end
  return true
 end
@@ -229,4 +242,23 @@ resetsBefore,insBefore=state.verticalResets,state.verticalIns
 run()
 check(state.verticalResets==resetsBefore and state.verticalIns==insBefore,
  "missing vertical zoom-in action does not reset the editor")
-print("OK: "..checks.." real-script mock checks; REAPER GUI vertical reset behavior remains unverified")
+-- Selected items not yet present in the MIDI editor must be opened together.
+state.visibleTakes={"a"}
+state.selected={"a","b","c"}
+local selections=table.concat(state.selected,",")
+run()
+check(table.concat(state.visibleTakes,",")=="a,b,c","missing selected MIDI items are opened in a common editor")
+check(state.multiOpenCalls==1 and state.projectModeCalls==1 and state.selectedModeCalls==1,
+ "native per-project editor mode and open-all-selected behavior used")
+check(table.concat(state.selected,",")==selections,"arrangement item selection remains unchanged")
+check(state.commands[#state.commands]==410,"four-bar zoom follows opening selected items")
+local opens=state.multiOpenCalls
+run()
+check(state.multiOpenCalls==opens,"when all selected items are visible, do not reopen editor")
+-- No MIDI selection: keep existing visible takes and never reopen the editor.
+state.selected={}
+state.visibleTakes={"a","b"}
+run()
+check(state.multiOpenCalls==opens and #state.visibleTakes==2,"no selected items leaves current multi-item editor intact")
+
+print("OK: "..checks.." real-script mock checks; REAPER GUI multi-item display and vertical reset remain unverified")
