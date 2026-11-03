@@ -130,6 +130,11 @@ assert(source:find('local items=scoreItems or selected_items(false)',1,true),
  "explicit score context takes precedence over arrangement selection")
 assert(source:find('r.score_scope or #(r.notation_selection or {})>0',1,true),
  "score modifications must reject original-track replacement")
+assert(source:find('if notationCount==0 and mentionsSelectedNotes then',1,true),
+ "Piano-Roll selected-note request with no selection must fail closed")
+assert(source:find('if it.score_context then',1,true) and
+ source:find('Sofortaktionen auf komplette Items sind im Piano-Roll-/Partiturkontext gesperrt',1,true),
+ "whole-item immediate ACTION must be blocked for full-editor references")
 assert(source:find('score_context_tracks(scoreItems)',1,true),
  "score-only analysis and composition inherit visible track bindings")
 assert(source:find('if score_request_intent(request:lower()) then',1,true),
