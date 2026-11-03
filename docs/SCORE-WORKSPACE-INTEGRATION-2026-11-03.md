@@ -2,6 +2,22 @@
 
 **03.11.2026 · Entwicklungszweig `feat/score-workspace-bridge-20261103` · Draft-PR #9 · kein Release**
 
+## Erweiterung am 03.11.2026 – Piano-Roll gleichberechtigt
+
+**Nutzerwunsch:** Auch REAPERs **Piano-Roll-Ansicht** soll denselben Composition-Studio-Workflow wie Arrangement und Notenansicht unterstützen. Beide REAPER-MIDI-Editor-Darstellungen benutzen dieselben MIDI-Takes und Note-Selection-API. Die neu implementierte MIDI-Editor-Brücke ist deshalb nicht auf das grafische Notenbild beschränkt; keine separate Engine oder Palette.
+
+**Aufträge im vorhandenen Composition Studio:**
+- `Zeige die Piano-Roll` bzw. `Öffne den Piano-Roll`: öffnet den vorhandenen MIDI-Editor (bei markierten MIDI-Items nötigenfalls über REAPER-Main-Aktion `40153`), wechselt per bekannter nativer MIDI-Aktion **View: Mode: piano roll** in diese Darstellung. Der Notations-Shortcut (Notenschlüssel, Vier-Takte-Zoom) wird dabei **nicht** ausgeführt. Ist die Aktion unbekannt, erfolgt eine sichtbare Fehlermeldung mit manuellem Fallback **Alt+1**, keine unbestätigte Erfolgsmeldung.
+- `Analysiere den Piano-Roll` oder `Analysiere die sichtbaren Noten im MIDI-Editor`: verwendet alle im MIDI-Editor enthaltenen MIDI-Takes als Analysekontext, ohne eine explizite Auswahl einzelner Noten zu verlangen; Kontext ist read-only und auf 2500 MIDI-Noten begrenzt.
+- `Analysiere die markierten Noten im Piano-Roll`, `Verbessere die markierten Noten`, `Transponiere die ausgewählten MIDI-Noten um 2 Halbtöne`: nur die **ausdrücklich ausgewählten, editierbaren Noten** werden zum Bearbeitungsziel. Bei leerer Auswahl Abbruch, kein stiller Fallback auf vollständige Items.
+- `Ergänze eine neue Gegenstimme zum Piano-Roll`, `Verlängere die Musik im MIDI-Editor`: bereits vorhandene KI-Kompositions- und Fortsetzungsfunktionen auf Basis der sichtbaren MIDI-Spuren; Vorschlag und Freigabe bleiben erhalten. Der Schutz gegen ungeprüfte Änderungen vollständiger Original-Items gilt genauso wie für die Partitur.
+
+**Neu: harmonisch/kontrapunktisch informierte Einzelnotenarbeit.** Für den *ausdrücklich markierten* Ausschnitt wird vor dem KI-Aufruf ein eigener **read-only Referenzauszug** aus den zusätzlich sichtbaren Instrumentalstimmen angelegt (QN-Fenster des Auswahlbereichs ±2 Viertel, höchstens 160 Noten im Referenzauszug). Dieser Kontext wird in den Analyse-, Kompositions- und eingeschränkten Einzelnotenverbesserungspfad aufgenommen. Die Referenzstimmen sind **nicht** Bestandteil der Bearbeitungsfreigabe. KI-Änderungen werden nur auf die ursprünglich markierten Quellnoten und nur nach expliziter Bestätigung angewendet. Ist der Auszug unvollständig, wird dies gekennzeichnet.
+
+Der Anwender kann den Editor-Modus nach eigenem Ermessen umschalten; der nächste musikalische Auftrag wertet den weiterhin geöffneten MIDI-Editor aus, **ohne** den Zoom oder die Darstellung automatisch zu wechseln.
+
+**Objektive Prüfung:** neuer Produktionsfunktions-Mocktest für den nativen Piano-Roll-Modus ohne Notations-Shortcut, mehrspurige Referenzdaten mit nicht editierbarer Begleitspur, Abgrenzung von Notenauswahl vs. allen sichtbaren Noten, keine schreibenden Aktionen, Schutz bei leerer Selektion und Schutz gegen unkontrollierte `ACTION|`-Whole-Item-Kommandos. GitHub Actions prüft zusätzlich den vollständigen Lua-Code und die bisherigen Einzelnoten-/KI-Änderungs-Regressionstests. **Echter REAPER-7.83-Echtlauf und die Interaktion mit einem realen KI-Modell bleiben ausstehend.** `main` bleibt bei v1.1.7, PR #9 bleibt Draft.
+
 ## Konzept
 REAPERs Arrangement und seine native Notenansicht sind **gleichwertige Arbeitsorte** auf demselben MIDI-Projekt. Composition Studio bleibt die einzige KI-/Auftragsebene. MIDI-Items, Instrumentalspuren und ausgesuchte Noten sind keine getrennten Kopien, sondern verschiedene Ansichten derselben REAPER-Daten. Es wird kein eigener Notensatzeditor programmiert und es gibt keine zweite Composition-Studio-Palette.
 
