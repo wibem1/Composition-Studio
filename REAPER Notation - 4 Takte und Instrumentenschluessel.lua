@@ -1,6 +1,6 @@
 -- @description REAPER Notation - 4 Takte und Instrumentenschluessel
 -- @author Klangwerke
--- @about One shortcut: zoom four measures horizontally, adaptive vertical notation zoom, proportional spacing and MIDI-based clefs. No UI, track-name inference, quantization or MIDI note edits.
+-- @about One shortcut: show selected MIDI items together, zoom four measures horizontally, adaptive vertical zoom, proportional spacing and MIDI-based clefs. No dialogs or MIDI note edits.
 -- No ReaImGui, SWS, ReaPack, AI, or additional setup required after loading into MIDI Editor actions.
 
 local PROJECT = 0
@@ -129,6 +129,67 @@ local function visible_tracks(editor)
   end
   if #tracks==0 then add(reaper.MIDIEditor_GetTake(editor)) end
   return tracks,takes,byTrack
+end
+
+-- Make all selected MIDI items available in ONE project MIDI editor.
+-- Native MIDI menu actions 40896 (one editor per project) and 40898
+-- (open all selected MIDI items) are documented as REAPER Contents options.
+-- Native Main action 40153 reopens the current selection in that editor.
+-- Never change which media items are selected or their MIDI note data.
+local function open_selected_items_if_missing(editor)
+  if type(reaper.CountSelectedMediaItems)~="function" or
+     type(reaper.GetSelectedMediaItem)~="function" or
+     type(reaper.GetActiveTake)~="function" then
+    return editor,false,"Auswahl-API nicht verfügbar"
+  end
+  local selected,selectedSet={},{}
+  local n=reaper.CountSelectedMediaItems(PROJECT)
+  for i=0,n-1 do
+    local item=reaper.GetSelectedMediaItem(PROJECT,i)
+    local take=item and reaper.GetActiveTake(item)
+    if take and reaper.TakeIsMIDI(take) then
+      selected[#selected+1]=item
+      selectedSet[tostring(item)]=true
+    end
+  end
+  if #selected==0 then return editor,false,nil end
+
+  local visible={}
+  if type(reaper.MIDIEditor_EnumTakes)=="function" then
+    for i=0,2047 do
+      local take=reaper.MIDIEditor_EnumTakes(editor,i,false)
+      if not take then break end
+      local item=reaper.GetMediaItemTake_Item(take)
+      if item then visible[tostring(item)]=true end
+    end
+  else
+    local take=reaper.MIDIEditor_GetTake(editor)
+    local item=take and reaper.GetMediaItemTake_Item(take)
+    if item then visible[tostring(item)]=true end
+  end
+  local allVisible=true
+  for _,item in ipairs(selected) do
+    if not visible[tostring(item)] then allVisible=false;break end
+  end
+  if allVisible then return editor,false,nil end
+
+  if type(reaper.MIDIEditor_OnCommand)~="function" or
+     type(reaper.Main_OnCommand)~="function" or
+     type(reaper.MIDIEditor_GetActive)~="function" then
+    return editor,false,"Aktionen zum Öffnen ausgewählter MIDI-Items fehlen"
+  end
+  -- Set the existing native menu options, not a makeshift item-visibility
+  -- chunk modification. The IDs are from REAPER's MIDI Contents menu.
+  if reaper.MIDIEditor_OnCommand(editor,40896)==false then
+    return editor,false,"Ein Editor pro Projekt nicht verfügbar"
+  end
+  if reaper.MIDIEditor_OnCommand(editor,40898)==false then
+    return editor,false,"Alle ausgewählten MIDI-Items nicht verfügbar"
+  end
+  reaper.Main_OnCommand(40153,0)
+  local updated=reaper.MIDIEditor_GetActive()
+  if not updated then return editor,false,"MIDI-Editor nach Öffnen nicht gefunden" end
+  return updated,true,nil
 end
 
 -- Reuse the successful v0.1.24 algorithm on every visible track:
@@ -339,6 +400,9 @@ end
 local function main()
   local editor = reaper.MIDIEditor_GetActive()
   if not editor then note("Kein aktiver MIDI-Editor. Shortcut im MIDI-Editor zuweisen.");return end
+  -- Only when the editor is missing selected items: reopen selection via
+  -- REAPER's own multi-item editor; do not change project item selection.
+  editor=open_selected_items_if_missing(editor)
   local tracks,takes,byTrack = visible_tracks(editor)
   if #tracks==0 then note("Keine sichtbaren MIDI-Tracks gefunden.");return end
 
