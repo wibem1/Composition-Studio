@@ -55,6 +55,18 @@ assert(rows[1].notes[1].pitch==60 and rows[1].notes[2].pitch==64,"selected pitch
 assert(rows[1].selection_source[1].index==0 and rows[1].selection_source[2].index==2,"stable note identities")
 local readonly,rc=env.notation_selection_items(false)
 assert(rc==4 and #readonly[1].notes==0,"count-only API does not collect all notes")
+-- Verify REAPER's native selected-note enumeration, not a scan of every note.
+local scanned=0
+local previousGet=mock.MIDI_GetNote
+mock.MIDI_GetNote=function(...) scanned=scanned+1;return previousGet(...) end
+mock.MIDI_EnumSelNotes=function(t,index)
+ for i=index+1,#notes[t]-1 do if notes[t][i+1].sel then return i end end
+ return -1
+end
+local chosen,chosenCount=env.notation_selection_items(true)
+assert(chosenCount==4 and #chosen==2,"native selected-note enumeration matches fallback")
+assert(scanned==5,"only selected events read; muted selected event is ignored")
+mock.MIDI_GetNote=previousGet
 mock.MIDIEditor_GetActive=function() return nil end
 assert(select(2,env.notation_selection_items(true))==4,
  "note selection remains accessible after keyboard focus moves from notation editor to Studio")
