@@ -1,0 +1,23 @@
+name: Score workspace bridge regression
+on:
+  push:
+    branches:
+      - feat/score-workspace-bridge-20261103
+  pull_request:
+    paths:
+      - 'Composition Studio.lua'
+      - 'tests/test_score_workspace_bridge.lua'
+      - '.github/workflows/score-workspace-bridge.yml'
+jobs:
+  score-bridge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua
+        run: sudo apt-get update -qq && sudo apt-get install -y lua5.4
+      - name: Parse and regression
+        run: |
+          luac5.4 -p 'Composition Studio.lua'
+          luac5.4 -p tests/test_score_workspace_bridge.lua
+          lua5.4 tests/test_score_workspace_bridge.lua
+          lua5.4 tests/test_notation_selection_integration.lua
