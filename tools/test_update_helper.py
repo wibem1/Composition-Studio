@@ -1,6 +1,6 @@
 """Execute the standalone updater on real temporary files with simulated HTTP outcomes."""
 from pathlib import Path
-import shlex,tempfile,re
+import shlex,tempfile,re,subprocess
 from lupa.lua54 import LuaRuntime
 root=Path(__file__).resolve().parents[1]
 helper=(root/'Composition-Studio-Update.lua').read_text()
@@ -60,3 +60,8 @@ for kwargs in [dict(name='install'),dict(name='fallback',statuses=('503','200'))
 r=LuaRuntime();messages=[];r.globals().reaper=r.table_from({'GetExtState':lambda *_:'','ShowMessageBox':lambda text,*_:messages.append(text)})
 r.execute(helper);assert messages and 'nicht gefunden' in messages[0]
 print('PASS standalone updater: missing target reports failure without guessing a path')
+
+previous=subprocess.check_output(['git','show','9dfebaeb2b2cda7fc562aee693162b9aada7801b:Composition Studio.lua'],cwd=root).decode()
+case('install',installed=previous)
+case('windows-install',installed=previous,windows=True)
+print('PASS exact v1.1.7 -> current source installation and byte-exact backup (Unix/Windows transport mocks)')

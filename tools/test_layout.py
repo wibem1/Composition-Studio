@@ -36,6 +36,7 @@ def case(width,height,font_size,state):
     MODELS={openai={},anthropic={},google={}}
     costs={order={},total={},amount=function()return "0,35 €" end}
     poll_update=dummy;poll_job=dummy;finish_save_panel=dummy
+    focused_or_last_notation_editor=function()return nil end
     selected_items=function()return {} end;selected_tracks=function()return {} end
     model_label=function()return string.rep("Sehr langer Modellname mit UTF-8 äöü ",8) end
     push_font=function()reaper.ImGui_PushFont(ctx,nil,font_size);return true end

@@ -2,7 +2,7 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
-Aktueller Stand: **v1.1.7 · 03.11.2026 · TESTFREIGABE (REAPER-Praxistest ausstehend)**.
+Aktueller Stand: **v1.1.8 · 03.11.2026 · TESTFREIGABE (REAPER-Praxistest ausstehend)**.
 
 Denkaufwand im Hauptfenster: **Kurz / Mittel / Hoch / Automatisch**, mit **Mittel** als Voreinstellung. Die Auswahl wird dauerhaft gespeichert und gilt für die KI-Aufrufe des Auftrags einschließlich Konzeption und Komposition. Während eines laufenden Auftrags ist sie gesperrt. Automatisch sendet keine Denksteuerung und verwendet die Modellvorgabe.
 
@@ -11,6 +11,18 @@ OpenAI erhält `reasoning.effort`, Anthropic `output_config.effort`, Gemini 3 `g
 Die langfristige Zielsetzung des Notationsmoduls ist in [NOTATION-MODULE.md](NOTATION-MODULE.md) dokumentiert.
 
 Die bestehende Updatefunktion bleibt der normale Installationsweg: **Studio-Menü → Update**.
+
+### Testfreigabe v1.1.8 – Arrangement, Notenansicht und Piano-Roll
+
+**Studio-Menü → Update** lädt Version **1.1.8** aus `main`. Die bereits vorhandene Integration aus PR #9 verbindet die drei Arbeitsbereiche mit demselben Composition Studio. Beispiele: `Analysiere die sichtbare Partitur`, `Analysiere den Piano-Roll`, `Verbessere die markierten Noten`, `Ergänze eine neue Cellostimme zur Partitur`.
+
+Markierte Noten bleiben das genaue Bearbeitungsziel; weitere sichtbare Stimmen werden als separater, schreibgeschützter KI-Referenzkontext übergeben (Auswahlzeitraum ±2 QN, maximal 160 Referenznoten; Kürzung wird gekennzeichnet). Der Gesamteditor-Kontext ist auf 2500 Noten begrenzt. Direkte KI-Änderungen sind weiterhin auf **Tonhöhe und Velocity** beschränkt und benötigen `Änderungen anwenden`. Rhythmische Varianten werden separat erzeugt. Fortsetzung einzelner markierter Noten ist nicht freigegeben; hierfür ganze Arrangement-Items oder ausdrücklich den Editor als Quelle wählen. Analyse-Folgeaufträge erhalten den gespeicherten Auswahlbereich und Referenzschutz.
+
+`Zeige Piano-Roll` schaltet die native Ansicht um. `Zeige Partitur` nutzt zusätzlich den bisherigen separat in REAPER registrierten Vier-Takte-Notations-Shortcut; dessen Fehlen wird gemeldet. Kein automatischer Ansichtswechsel nach musikalischen Änderungen.
+
+**Prüfung:** Lua-5.4-Syntax, alle drei Lua-Tests und alle neun vorhandenen Python-Testsuiten bestanden, darunter 64 Dear-ImGui-Layouts, gespeicherte Analysebereiche sowie Update 1.1.7 → 1.1.8 mit bytegenauer Rücksicherung. **Keine realen REAPER-/Live-KI-Tests**, kein bestätigter SAFE-Status. Erst mit gesicherter Projektkopie einsetzen. Einstellungen, API-Schlüssel und vorhandene Projekte werden durch das Update nicht zurückgesetzt; ein realer Update-/Neustarttest in REAPER bleibt offen.
+
+[Freigabe, Testmatrix und Wiederherstellung von 1.1.7](docs/RELEASE-1.1.8.md).
 
 ### Testfreigabe v1.1.7 – Notenauswahl im REAPER-Editor
 

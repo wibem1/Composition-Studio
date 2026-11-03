@@ -15,6 +15,8 @@ local context={{guid="item",end_qn=64,notes={}}};local tracks={{guid="track"}}
 local reaper={CountSelectedMediaItems=function()return selected and 1 or 0 end,EnumProjects=function()return 1 end}
 local function selected_items()return selected and context or {} end
 local function selected_tracks()return tracks end
+local function notation_selection_items()return {},0 end
+local function score_request_intent()return false end
 local function track_context_items()return context end
 local function trim(x)return x end
 local function add(_,x)messages[#messages+1]=x end
@@ -38,7 +40,7 @@ local function analysis_prompt(req)return req end
 local function begin_swam_interpretation()launch("swam_interpretation","SWAM","KEY",{})end
 local workflow_core={prompt=function(mode)return mode end}
 local reviewed=nil
-local workflow_adapter={
+local workflow_adapter={guard=function()return "guard" end,
  transition=function(_,endpoint,count)if blocked then error("crossing note") end;return endpoint-count*4 end,
  review=function(task)assert(not busy);reviewed=task end,
  offer=function(stage,text,data)sent[#sent+1]={stage="proposal",payload=text,data=data};busy=false end}

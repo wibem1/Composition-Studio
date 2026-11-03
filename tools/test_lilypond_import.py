@@ -45,6 +45,7 @@ def startup_smoke():
 
       GetOS=function() return "Win64" end,
       EnumProjects=function() return 1 end,
+      MIDIEditor_GetActive=function() return nil end,
       ImGui_CreateContext=function() return {} end,
       ImGui_CreateFont=function() return {} end,
       ImGui_Begin=function(_,_,open) return true,open end,

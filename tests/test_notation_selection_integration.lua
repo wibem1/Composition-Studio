@@ -122,8 +122,8 @@ before=writes
 local result=nenv.apply_notation_transpose(bad)
 assert(not result and writes==before,"invalid pitch prevalidated before Undo")
 
-assert(src:find('r.stage=="composition" and #(r.notation_selection or {})>0',1,true),"variant guard exists")
-assert(src:find('workflow_guard=hasSelection and workflow_adapter.guard() or nil',1,true),"guard captured at request time")
+assert(src:find('r.stage=="composition" and (r.score_scope or #(r.notation_selection or {})>0)',1,true),"variant guard protects individual notes AND full score contexts")
+assert(src:find('workflow_guard=(hasSelection or scoreItems) and workflow_adapter.guard() or nil',1,true),"guard captured for selected notes AND explicit score context")
 assert(src:find("Sofortaktionen auf ganze MIDI-Items",1,true),"no immediate whole item action from note selection")
 assert(src:find("Keine editierbaren Einzelnoten",1,true) or src:find("keine editierbaren Einzelnoten",1,true),"must block selected-note requests with empty note selection")
 

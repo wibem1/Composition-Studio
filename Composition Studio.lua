@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.7
+-- @version 1.1.8
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.7"
+local VERSION="1.1.8"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -554,11 +554,142 @@ local function notation_selection_items(with_notes)
  return rows,count
 end
 
+-- Score workspace: all VISIBLE MIDI takes are context, not an edit selection.
+-- Unlike notation_selection_items(), this does not authorize in-place writes.
+local function notation_visible_items(with_notes)
+ local ed=focused_or_last_notation_editor()
+ if not ed then return nil,"Kein geöffneter REAPER-MIDI-Editor für die Partitur gefunden." end
+ local takes={}
+ if reaper.MIDIEditor_EnumTakes then
+  for i=0,2047 do
+   local tk=reaper.MIDIEditor_EnumTakes(ed,i,false)
+   if not tk then break end
+   takes[#takes+1]=tk
+  end
+ else
+  local tk=reaper.MIDIEditor_GetTake(ed)
+  if tk then takes[1]=tk end
+ end
+ local result,seen,events={},{},0
+ for _,tk in ipairs(takes) do
+  if reaper.TakeIsMIDI(tk) and (not reaper.ValidatePtr2 or reaper.ValidatePtr2(0,tk,"MediaItem_Take*")) then
+   local item=reaper.GetMediaItemTake_Item(tk)
+   local track=item and reaper.GetMediaItem_Track(item)
+   if track then
+    local guid=item_guid(item)
+    if guid=="" then return nil,"Ein sichtbares MIDI-Item hat keine gültige GUID." end
+    if not seen[guid] then
+     seen[guid]=true
+     local _,tn=reaper.GetTrackName(track)
+     local _,kn=reaper.GetSetMediaItemTakeInfo_String(tk,"P_NAME","",false)
+     local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION")
+     local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH")
+     local row={item=item,take=tk,track=track,guid=guid,track_guid=track_guid(track),
+      track_name=tn~="" and tn or "Unbenannte Spur",take_name=kn~="" and kn or "Unbenanntes MIDI-Item",
+      start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),
+      notes={},score_context=true}
+     if with_notes then
+      local ok,nc=reaper.MIDI_CountEvts(tk)
+      if not ok then return nil,"MIDI-Noten der sichtbaren Partitur konnten nicht gelesen werden." end
+      events=events+(nc or 0)
+      -- Fail closed instead of silently truncating musical context or
+      -- sending unbounded amounts of music to a paid AI provider.
+      if events>2500 then return nil,"Sichtbare Partitur umfasst mehr als 2500 MIDI-Noten. Bitte einen kleineren Bereich auswählen." end
+      for n=0,(nc or 0)-1 do
+       local valid,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(tk,n)
+       if valid and not muted then
+        local sq=reaper.TimeMap2_timeToQN(0,reaper.MIDI_GetProjTimeFromPPQPos(tk,s))
+        local eq=reaper.TimeMap2_timeToQN(0,reaper.MIDI_GetProjTimeFromPPQPos(tk,e))
+        row.notes[#row.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch}
+       end
+      end
+     end
+     result[#result+1]=row
+    end
+   end
+  end
+ end
+ if #result==0 then return nil,"Keine sichtbaren MIDI-Items im Noteneditor gefunden." end
+ return result,nil
+end
+
+-- A selected phrase is the ONLY edit target. Nearby visible voices, in
+-- notation OR piano roll, are separate READ-ONLY harmonic/contrapuntal context.
+-- Bound the excerpt before calling any paid AI model.
+local function editor_reference_excerpt(selection)
+ local first,last=math.huge,-math.huge
+ for _,it in ipairs(selection or {}) do
+  for _,n in ipairs(it.notes or {}) do
+   local start=n.start_qn or 0
+   first=math.min(first,start)
+   last=math.max(last,start+(n.duration_qn or 0))
+  end
+ end
+ if first==math.huge then return "" end
+ local visible,problem=notation_visible_items(true)
+ if not visible then
+  return "REFERENZSTIMMEN: nicht verfügbar ("..tostring(problem).."); keine Annahmen über ungehörte Stimmen."
+ end
+ local lo,hi=first-2,last+2
+ local lines={
+  "REFERENZSTIMMEN NUR ZUR HARMONISCHEN/KONTRAPUNKTISCHEN ORIENTIERUNG;",
+  "diese Töne sind NICHT zur Bearbeitung freigegeben. Originale außer der expliziten Notenauswahl nicht verändern.",
+  string.format("REFERENZFENSTER QN %.4f..%.4f",lo,hi),
+ }
+ local total,limit=0,160
+ for _,it in ipairs(visible) do
+  local entries={}
+  for _,n in ipairs(it.notes or {}) do
+   local st=n.start_qn or 0
+   local ending=st+(n.duration_qn or 0)
+   if st<hi and ending>lo then
+    total=total+1
+    if total<=limit then
+     entries[#entries+1]=string.format("REF %.5f %.5f %d %d %d",
+      st,n.duration_qn or 0,n.pitch or 0,n.velocity or 0,n.channel or 0)
+    end
+   end
+  end
+  if #entries>0 then
+   lines[#lines+1]="REFERENZSPUR "..tostring(it.track_name).." item="..tostring(it.guid)
+   for _,line in ipairs(entries) do lines[#lines+1]=line end
+  end
+ end
+ if total>limit then
+  lines[#lines+1]="REFERENZDATEN gekürzt auf "..limit.." von "..total..
+    " Noten; die vollständige Begleitung ist nicht enthalten."
+ end
+ if total==0 then lines[#lines+1]="Keine weiteren Noten innerhalb des Referenzfensters." end
+ return table.concat(lines,"\n")
+end
+
+local function score_request_intent(lower)
+ lower=lower or ""
+ return lower:find("partitur",1,true) or lower:find("notenansicht",1,true)
+  or lower:find("notensicht",1,true) or lower:find("noteneditor",1,true)
+  or lower:find("pianoroll",1,true) or lower:find("piano-roll",1,true)
+  or lower:find("piano roll",1,true) or lower:find("midi-editor",1,true)
+  or lower:find("midi editor",1,true) or lower:find("sichtbaren noten",1,true)
+  or lower:find("angezeigten noten",1,true)
+end
+
+local function score_context_tracks(items)
+ local out,seen={},{}
+ for _,it in ipairs(items or {}) do
+  if it.track and not seen[it.track_guid] then
+   seen[it.track_guid]=true
+   out[#out+1]={track=it.track,guid=it.track_guid,name=it.track_name,
+    index=math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))}
+  end
+ end
+ return out
+end
+
 local function selected_items(with_notes,scope) if scope~="items" then local rows,n=notation_selection_items(with_notes); if n>0 then return rows end end; local a={}; for i=0,reaper.CountSelectedMediaItems(0)-1 do local item=reaper.GetSelectedMediaItem(0,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local tr=reaper.GetMediaItem_Track(item); local _,tn=reaper.GetTrackName(tr); local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=tr,guid=item_guid(item),track_guid=track_guid(tr),track_name=tn~="" and tn or "Unbenannte Spur",take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; if with_notes then local _,ncount=reaper.MIDI_CountEvts(take); for n=0,(ncount or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end end; a[#a+1]=it end end; return a end
 
 local function track_context_items(tracks) local a={}; local seen={}; for _,t in ipairs(tracks) do for i=0,reaper.CountTrackMediaItems(t.track)-1 do local item=reaper.GetTrackMediaItem(t.track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local g=item_guid(item); if not seen[g] then seen[g]=true; local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=t.track,guid=g,track_guid=t.guid,track_name=t.name,take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; local _,nc=reaper.MIDI_CountEvts(take); for n=0,(nc or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end; a[#a+1]=it end end end end; return a end
 local function time_selection_context() local s,e=reaper.GetSet_LoopTimeRange(false,false,0,0,false); if not s or not e or e<=s then return "TIME_SELECTION none" end; local sq=reaper.TimeMap2_timeToQN(0,s); local eq=reaper.TimeMap2_timeToQN(0,e); local _,sm,sb=reaper.TimeMap2_timeToBeats(0,s); local _,em,eb=reaper.TimeMap2_timeToBeats(0,e); return string.format("TIME_SELECTION startQN=%.3f endQN=%.3f startBar=%d startBeat=%.3f endBar=%d endBeat=%.3f",sq,eq,(sm or 0)+1,(sb or 0)+1,(em or 0)+1,(eb or 0)+1) end
-local function compact_context(items,tracks,ignore_time) tracks=tracks or selected_tracks(); local l={string.format("Tempo %.2f BPM; selected MIDI items=%d; selected tracks=%d",reaper.Master_GetTempo(),#items,#tracks)}; l[#l+1]=ignore_time and "TIME_SELECTION ignored for free new composition" or time_selection_context(); for i,t in ipairs(tracks) do l[#l+1]=string.format("TRACK %d id=%s name=%s index=%d",i,t.guid,t.name,t.index) end; for i,it in ipairs(items) do l[#l+1]=string.format("ITEM %d id=%s trackId=%s track=%s take=%s rangeQN=%.3f..%.3f",i,it.guid,it.track_guid,it.track_name,it.take_name,it.start_qn,it.end_qn); if it.selection_source then l[#l+1]="NOTATION_SELECTION: "..#it.selection_source.." selected notes" end end; return table.concat(l,"\n") end
+local function compact_context(items,tracks,ignore_time) tracks=tracks or selected_tracks(); local l={string.format("Tempo %.2f BPM; selected MIDI items=%d; selected tracks=%d",reaper.Master_GetTempo(),#items,#tracks)}; l[#l+1]=ignore_time and "TIME_SELECTION ignored for free new composition" or time_selection_context(); for i,t in ipairs(tracks) do l[#l+1]=string.format("TRACK %d id=%s name=%s index=%d",i,t.guid,t.name,t.index) end; for i,it in ipairs(items) do l[#l+1]=string.format("ITEM %d id=%s trackId=%s track=%s take=%s rangeQN=%.3f..%.3f",i,it.guid,it.track_guid,it.track_name,it.take_name,it.start_qn,it.end_qn); if it.selection_source then l[#l+1]="NOTATION_SELECTION: "..#it.selection_source.." selected notes" end; if it.score_context then l[#l+1]="SCORE_CONTEXT: sichtbares MIDI-Item; musikalischer Kontext, keine Freigabe zum direkten Überschreiben" end end; return table.concat(l,"\n") end
 local function music_context(items,tracks,ignore_time) local l={compact_context(items,tracks,ignore_time)}; for _,it in ipairs(items) do if it.selection_source then l[#l+1]="NOTATION_SELECTION "..it.guid.." count="..#it.selection_source..". Only selected notes are the edit context; keep unselected notes unchanged." end end; for _,it in ipairs(items) do for _,n in ipairs(it.notes) do l[#l+1]=string.format("N %s %.5f %.5f %d %d %d",it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end end; return table.concat(l,"\n") end
 local function recent_dialog() local l={}; for i=math.max(1,#history-7),#history do l[#l+1]=history[i].role..": "..history[i].text end; return table.concat(l,"\n") end
 
@@ -627,6 +758,12 @@ local function composition_prompt(request,items,tracks,is_new)
  local has_note_selection=false
  for _,it in ipairs(items) do if it.selection_source and #it.selection_source>0 then has_note_selection=true; break end end
  if has_note_selection then request=request.."\nNOTATIONSAUSWAHL: Nur markierte Noten sind das Material. Nicht markierte Noten müssen unverändert bleiben. Ausschließlich CS|revised-Variante auf neuer Spur oder CS|new-Stimme erzeugen, niemals CS|target oder CS|track." end
+ for _,it in ipairs(items) do
+  if it.score_context then
+   request=request.."\nPARTITURKONTEXT: Alle sichtbaren MIDI-Items sind Kontext. Vorhandene Spuren nicht verändern. Nur CS|unchanged, CS|revised auf separater Spur oder CS|new für zusätzliche Stimme. CS|target und CS|track sind untersagt."
+   break
+  end
+ end
  return [[Du komponierst Musik in Composition Studio. Nutze das konkret übergebene vorhandene Material als musikalischen Kontext und erfülle den freien Auftrag eigenständig; füge keine unnötigen Regeln hinzu. Bei einer reinen Ergänzung einer weiteren Stimme bleiben alle vorhandenen Stimmen unverändert: erzeuge die zusätzliche Stimme mit CS|new und kennzeichne vorhandene Items mit CS|unchanged. TIME_SELECTION ist nur bei ausdrücklichem Bezug auf den markierten Bereich ein Zielbereich. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item direkt Ziel sein. Jedes neu erzeugte MIDI-Item MUSS einen passenden General-MIDI-Program-Change (0-127) erhalten.
 Antworte ausschließlich:
 CS|unchanged|SOURCE_GUID
@@ -1558,6 +1695,9 @@ function workflow_adapter.offer(stage,text,data)
  for _,it in ipairs(data.full or {}) do r.bindings[#r.bindings+1]=it.guid end
  r.notation_selection={}
  for _,it in ipairs(data.full or {}) do if it.selection_source and #it.selection_source>0 then r.notation_selection[#r.notation_selection+1]={guid=it.guid,notes=it.selection_source} end end
+ r.reference_context=data.reference_context or ""
+ r.score_scope=false
+ for _,it in ipairs(data.full or {}) do if it.score_context then r.score_scope=true;break end end
  for _,tr in ipairs(data.music_tracks or data.tracks or {}) do r.track_bindings[#r.track_bindings+1]=tr.guid end
  workflow_adapter.records[#workflow_adapter.records+1]=r
  workflow_adapter.save()
@@ -1735,7 +1875,7 @@ function workflow_adapter.apply()
   workflow_core.check("apply",{state=r.state,source_guard=r.source_guard,current_guard=workflow_adapter.guard()})
   workflow_adapter.save()
   local result,why
-  if r.stage=="composition" and #(r.notation_selection or {})>0 then
+  if r.stage=="composition" and (r.score_scope or #(r.notation_selection or {})>0) then
    assert(not r.payload:find("CS|target|",1,true),"Notenauswahl darf Original-Item nicht überschreiben.")
    assert(not r.payload:find("CS|track|",1,true),"Notenauswahl darf nicht ungeprüft in bestehende Spuren schreiben.")
   end
@@ -1780,13 +1920,39 @@ function workflow_adapter.review(task)
   if #tracks==0 then
    local seen={}; for _,it in ipairs(items) do local guid=track_guid(it.track); if not seen[guid] then seen[guid]=true; local _,name=reaper.GetTrackName(it.track); tracks[#tracks+1]={track=it.track,guid=guid,name=name} end end
   end
-  -- Capture fresh notes from the bound source tracks.
+  -- Preserve the analysed editor scope even after saving/reloading a result.
+  -- Track membership never authorizes extending a selected-note edit.
   local full=track_context_items(tracks)
+  if r.score_scope or #(r.notation_selection or {})>0 then
+   local allowed,selection={},{}
+   for _,guid in ipairs(r.bindings or {}) do allowed[guid]=true end
+   for _,scope in ipairs(r.notation_selection or {}) do selection[scope.guid]=scope.notes end
+   local scoped={}
+   for _,it in ipairs(full) do
+    if allowed[it.guid] then
+     if r.score_scope then it.score_context=true end
+     if selection[it.guid] then
+      it.notes={};it.selection_source=selection[it.guid]
+      for _,ref in ipairs(it.selection_source) do
+       local sq=reaper.TimeMap2_timeToQN(0,reaper.MIDI_GetProjTimeFromPPQPos(it.take,ref.start_ppq))
+       local eq=reaper.TimeMap2_timeToQN(0,reaper.MIDI_GetProjTimeFromPPQPos(it.take,ref.end_ppq))
+       it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=ref.pitch,velocity=ref.velocity,channel=ref.channel}
+      end
+      it.start_qn=it.notes[1] and it.notes[1].start_qn or it.start_qn
+      it.end_qn=it.start_qn
+      for _,n in ipairs(it.notes) do it.end_qn=math.max(it.end_qn,n.start_qn+n.duration_qn) end
+     end
+     scoped[#scoped+1]=it
+    end
+   end
+   full=scoped
+  end
   assert(#full>0,"Bitte die analysierten Spuren auswählen und erneut analysieren.")
   local key=get_key(); assert(key,"API-Key fehlt.")
   local task=task or (trim(input)~="" and trim(input) or "Setze die musikalisch sinnvollen Vorschläge aus der Analyse um.")
   local prompt=workflow_core.prompt("revise").."\nANALYSE:\n"..r.raw_response.."\n"..composition_prompt(task,full,tracks,false).."\nDie vorhandene Tempo- und Taktkarte erhalten. Keine CSMETA-Zeilen ausgeben. Ausdruck kann in CSCTRL stehen."
-  busy=true; launch("composition",prompt,key,{request=task,full=full,music_tracks=tracks,workflow_guard=r.source_guard})
+  if r.reference_context and r.reference_context~="" then prompt=prompt.."\n\n"..r.reference_context end
+  busy=true; launch("composition",prompt,key,{request=task,full=full,music_tracks=tracks,reference_context=r.reference_context,workflow_guard=r.source_guard})
  end)
  if not ok then update_status=tostring(err); busy=false end
 end
@@ -1893,8 +2059,19 @@ local function begin_continuation(request,bars,tail)
  if type(bars)~="number" or bars~=math.floor(bars) or bars<1 or bars>128 or (tail~=0 and tail~=2 and tail~=3 and tail~=4) then
   add("KI","Bitte eine Verlängerung von 1 bis 128 Takten und gegebenenfalls 2, 3 oder 4 Übergangstakte angeben.");busy=false;return
  end
+ local lower=request:lower()
+ if (lower:find("markiert",1,true) or lower:find("ausgewählt",1,true)) and lower:find("noten",1,true) then
+  add("KI","Fortsetzung einzelner markierter Noten ist noch nicht freigegeben. Bitte ausdrücklich die Partitur, den Piano-Roll oder Arrangement-Items als Quelle wählen.");busy=false;return
+ end
  local tracks=selected_tracks()
  local context=selected_items(true,"items")
+ -- An explicit score-workspace command must not silently fall back to the
+ -- current arrangement item selection, even when items are selected there.
+ if score_request_intent(request:lower()) then
+  local visible,why=notation_visible_items(true)
+  if not visible then add("KI",why);busy=false;return end
+  context=visible; tracks=score_context_tracks(context)
+ end
  if #context==0 and #tracks>0 then context=track_context_items(tracks) end
  if #context==0 then add("KI","Bitte die MIDI-Items oder Spuren des vorhandenen Stücks auswählen.");busy=false;return end
  local endpoint=0;for _,it in ipairs(context) do endpoint=math.max(endpoint,it.end_qn or 0) end
@@ -1933,17 +2110,123 @@ local function notation_patch_prompt(request,items)
     it.guid,ref.index,ref.pitch,ref.velocity,ref.channel,n.start_qn or 0,n.duration_qn or 0)
   end
  end
+ local reference=editor_reference_excerpt(items)
+ if reference~="" then lines[#lines+1]=reference end
  return table.concat(lines,"\n")
+end
+
+-- Reuse the separately installed, standalone notation shortcut through
+-- REAPER's own MIDI action registry. No duplicate SCORE/zoom implementation.
+-- This first integration never changes media-item selection or MIDI events.
+local function open_score_workspace(mode)
+ mode=mode=="pianoroll" and "pianoroll" or "notation"
+ local ed=focused_or_last_notation_editor()
+ if not ed then
+  local count=0
+  for i=0,reaper.CountSelectedMediaItems(0)-1 do
+   local it=reaper.GetSelectedMediaItem(0,i)
+   local tk=it and reaper.GetActiveTake(it)
+   if tk and reaper.TakeIsMIDI(tk) then count=count+1 end
+  end
+  if count==0 then return false,"Bitte MIDI-Items im Arrangement auswählen oder den Noteneditor öffnen." end
+  if not reaper.Main_OnCommand then return false,"REAPER-Aktion zum Öffnen des Noteneditors fehlt." end
+  reaper.Main_OnCommand(40153,0)
+  ed=focused_or_last_notation_editor()
+  if not ed then return false,"MIDI-Editor wurde nicht geöffnet; REAPER-Einstellungen überprüfen." end
+ end
+ if not (reaper.kbd_enumerateActions and reaper.SectionFromUniqueID and reaper.MIDIEditor_OnCommand) then
+  return false,"REAPER-MIDI-Aktionen sind nicht verfügbar."
+ end
+ local section=reaper.SectionFromUniqueID(32060)
+ if not section then return false,"REAPER-MIDI-Aktionsbereich nicht verfügbar." end
+ local notationMode,pianoMode,shortcut
+ for i=0,19999 do
+  local id,label=reaper.kbd_enumerateActions(section,i)
+  if not id or id==0 then break end
+  label=tostring(label or "")
+  local lower=label:lower()
+  if lower=="view: mode: musical notation" or lower=="view: mode: notation"
+    or lower=="view: notation" then notationMode=id end
+  if lower=="view: mode: piano roll" or lower=="view: mode: pianoroll"
+    or lower=="view: piano roll" then pianoMode=id end
+  if lower:find("reaper notation - 4 takte und instrumentenschluessel.lua",1,true) then
+   shortcut=id
+  end
+ end
+ if mode=="pianoroll" then
+  if not pianoMode then return false,"Piano-Roll-Modus nicht als REAPER-MIDI-Aktion gefunden. Bitte im MIDI-Editor Ansicht → Modus: Piano-Roll (Alt+1) wählen." end
+  if reaper.MIDIEditor_OnCommand(ed,pianoMode)==false then
+   return false,"REAPER konnte nicht in den Piano-Roll-Modus wechseln."
+  end
+  return true,"Piano-Roll-Editor aktiviert. Markierte Noten und sichtbare Instrumentalstimmen sind für Composition Studio verfügbar."
+ end
+ if notationMode and reaper.MIDIEditor_OnCommand(ed,notationMode)==false then
+  return false,"REAPER konnte nicht in die Notenansicht wechseln."
+ end
+ if not shortcut then
+  return false,"Notationseditor geöffnet, aber das separate Vier-Takte-Notationsskript ist nicht in der MIDI-Aktionsliste registriert. Bitte den bisherigen Notations-Shortcut einmalig als MIDI-ReaScript laden."
+ end
+ if reaper.MIDIEditor_OnCommand(ed,shortcut)==false then
+  return false,"Der Notations-Shortcut konnte nicht ausgeführt werden."
+ end
+ -- Do not alter note selection; do not force a new editor on later calls.
+ return true,notationMode and "Notationsansicht vorbereitet; Notenschlüssel, Abstände und Zoom über den bestehenden Shortcut angefordert."
+  or "Notations-Shortcut ausgeführt. Falls noch Piano-Roll sichtbar ist, in REAPER einmal auf Ansicht → Notation wechseln (Alt+4)."
 end
 
 local function begin_process(request)
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
+ local pianoDisplay=(lower:find("pianoroll",1,true) or lower:find("piano-roll",1,true)
+  or lower:find("piano roll",1,true))
+ local viewRequest=(lower:find("zeig",1,true) or lower:find("öffne",1,true)
+  or lower:find("öffnen",1,true) or lower:find("aktualisier",1,true)
+  or lower:find("vorbereit",1,true) or lower:find("stelle",1,true))
+ local nonDisplay=(lower:find("analys",1,true) or lower:find("komponier",1,true)
+  or lower:find("verbesser",1,true) or lower:find("überarbeit",1,true)
+  or lower:find("ergänz",1,true) or lower:find("verlänger",1,true))
+ if pianoDisplay and viewRequest and not nonDisplay then
+  local ok,why=open_score_workspace("pianoroll")
+  add("KI",why)
+  busy=false;return
+ end
+ -- Local, free display action; never route a view-only command to an AI model.
+ if (lower:find("zeig",1,true) or lower:find("öffne",1,true)
+    or lower:find("öffnen",1,true) or lower:find("aktualisier",1,true)
+    or lower:find("vorbereit",1,true) or lower:find("stelle",1,true))
+    and (lower:find("partitur",1,true) or lower:find("notenansicht",1,true)
+      or lower:find("notensicht",1,true)) and
+    not (lower:find("analys",1,true) or lower:find("komponier",1,true)
+      or lower:find("verbesser",1,true) or lower:find("überarbeit",1,true)) then
+  local ok,why=open_score_workspace()
+  add("KI",why)
+  busy=false;return
+ end
  local notationItems,notationCount=notation_selection_items(true)
+ local mentionsSelectedNotes=(lower:find("markiert",1,true) or lower:find("ausgewählt",1,true))
+   and lower:find("noten",1,true)
+ local explicitScore=score_request_intent(lower) and not mentionsSelectedNotes
+ local scoreItems=nil
+ if explicitScore then
+  local visible,why=notation_visible_items(true)
+  if not visible then add("KI",why);busy=false;return end
+  scoreItems=visible
+  -- An explicit score analysis uses all VISIBLE MIDI takes, not the
+  -- arrangement selection or the currently selected individual notes.
+  if lower:find("analys",1,true) or lower:find("untersuch",1,true) then
+   local key=get_key()
+   if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar.");busy=false;return end
+   local tracks=score_context_tracks(scoreItems)
+   local prompt=analysis_prompt(request,scoreItems,tracks)
+   diag_set("context",music_context(scoreItems,tracks,false))
+   launch("analysis",prompt,key,{request=request,full=scoreItems,music_tracks=tracks,workflow_guard=workflow_adapter.guard()})
+   return
+  end
+ end
  -- Never interpret "selected notes" as "entire selected item" when no
  -- editable note selection can be read from the native notation editor.
- if notationCount==0 and (lower:find("markierte noten",1,true) or lower:find("ausgewählte noten",1,true) or lower:find("ausgewählten noten",1,true)) then
-  add("KI","Im REAPER-Noteneditor sind keine editierbaren Einzelnoten markiert. Kein MIDI-Item wird ersatzweise bearbeitet.")
+ if notationCount==0 and mentionsSelectedNotes then
+  add("KI","Im REAPER-MIDI-Editor (Piano-Roll oder Notenansicht) sind keine editierbaren Einzelnoten markiert. Kein ganzes MIDI-Item wird ersatzweise bearbeitet.")
   busy=false;return
  end
  local semitones=lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbton")
@@ -1984,7 +2267,7 @@ local function begin_process(request)
   launch("notation_patch",context,key,{request=request,full=notationItems,workflow_guard=guard})
   return
  end
- if reaper.CountSelectedMediaItems(0)==0 and select(2,notation_selection_items(false))==0 and
+ if not explicitScore and reaper.CountSelectedMediaItems(0)==0 and select(2,notation_selection_items(false))==0 and
   (lower:find("^%s*komponier") or lower:find("^%s*erstelle%s+ein") or lower:find("^%s*schreibe%s+ein")) and
   (lower:find("stück",1,true) or lower:find("fuge",1,true) or lower:find("sonate",1,true) or lower:find("walzer",1,true) or lower:find("komposition",1,true)) then
   local key=get_key()
@@ -2006,9 +2289,11 @@ local function begin_process(request)
  end
 
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
- local items=selected_items(false); local tracks=selected_tracks(); if #tracks==0 then for _,it in ipairs(items) do if it.selection_source then tracks[#tracks+1]={track=it.track,guid=it.track_guid,name=it.track_name,index=math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))} end end end; diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); local snapshot=selected_items(true); local hasSelection=false
+ local items=scoreItems or selected_items(false); local tracks=scoreItems and score_context_tracks(scoreItems) or selected_tracks(); if #tracks==0 then for _,it in ipairs(items) do if it.selection_source then tracks[#tracks+1]={track=it.track,guid=it.track_guid,name=it.track_name,index=math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))} end end end; diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); local snapshot=scoreItems or selected_items(true); local hasSelection=false
  for _,it in ipairs(snapshot) do if it.selection_source and #it.selection_source>0 then hasSelection=true;break end end
- launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=snapshot,workflow_guard=hasSelection and workflow_adapter.guard() or nil})
+ local reference=hasSelection and editor_reference_excerpt(snapshot) or ""
+ if reference~="" then prompt=prompt.."\n\n"..reference; diag_set("controller_prompt",prompt) end
+ launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=snapshot,reference_context=reference,workflow_guard=(hasSelection or scoreItems) and workflow_adapter.guard() or nil})
 end
 
 local function title_prompt()
@@ -2060,8 +2345,12 @@ local function poll_job()
   if cb then begin_continuation(data.request,tonumber(cb),tonumber(ct));return end
   if text:match("^NEED_REVISE|") then busy=false;workflow_adapter.review(data.request);return end
   if text:match("^NEED_SWAM|") then busy=false;begin_swam_interpretation();return end
-  local awhy=text:match("^NEED_ANALYSIS|(.*)$"); if awhy then local full=data.notation_snapshot or selected_items(true); if #full==0 and #data.tracks>0 then full=track_context_items(data.tracks) end; if #full==0 then add("KI","Für die Analyse ist kein MIDI-Material ausgewählt."); busy=false; return end; data.full=full; data.music_tracks=data.tracks; launch("analysis",analysis_prompt(data.request,full,data.tracks),key,data); return end
-  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or (data.notation_snapshot or selected_items(true)); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil); diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; local ext=why and continuation_bars(data.request) or nil
+  local awhy=text:match("^NEED_ANALYSIS|(.*)$"); if awhy then local full=data.notation_snapshot or selected_items(true); if #full==0 and #data.tracks>0 then full=track_context_items(data.tracks) end; if #full==0 then add("KI","Für die Analyse ist kein MIDI-Material ausgewählt."); busy=false; return end; data.full=full; data.music_tracks=data.tracks; local prompt=analysis_prompt(data.request,full,data.tracks)
+   if data.reference_context and data.reference_context~="" then prompt=prompt.."\n\n"..data.reference_context end
+   launch("analysis",prompt,key,data); return end
+  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or (data.notation_snapshot or selected_items(true)); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil)
+   if data.reference_context and data.reference_context~="" and not newwhy then cp=cp.."\n\n"..data.reference_context end
+   diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; local ext=why and continuation_bars(data.request) or nil
   if ext then
    local tail,tail_error=request_transition(data.request)
    if tail==nil then add("KI",tail_error);busy=false;return end
@@ -2071,6 +2360,9 @@ local function poll_job()
    else launch(newwhy and "composition_music" or "composition",cp,key,data) end; return end
   if text:match("^ACTION|") then
    for _,it in ipairs(data.notation_snapshot or {}) do
+    if it.score_context then
+     add("KI","Alle sichtbaren MIDI-Spuren sind nur Referenzmaterial. Sofortaktionen auf komplette Items sind im Piano-Roll-/Partiturkontext gesperrt.");busy=false;return
+    end
     if it.selection_source and #it.selection_source>0 then
      add("KI","Sofortaktionen auf ganze MIDI-Items sind bei Notenauswahl gesperrt. Bitte eine gezielte Transposition oder Vorschlagsvariante verwenden.");busy=false;return
     end
@@ -2204,7 +2496,7 @@ if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(compositi
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
-if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if workflow_adapter.models.message and workflow_adapter.models.message~="" then reaper.ImGui_TextWrapped(ctx,workflow_adapter.models.message) end; if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Notenansicht vorbereiten") then local ok,msg=open_score_workspace(); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Piano-Roll öffnen") then local ok,msg=open_score_workspace("pianoroll"); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if workflow_adapter.models.message and workflow_adapter.models.message~="" then reaper.ImGui_TextWrapped(ctx,workflow_adapter.models.message) end; if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
 if reaper.ImGui_Button(ctx,"Denken: "..REASONING_LABELS[reasoning_mode].." v##reasoning",model_width) and not busy then reaper.ImGui_OpenPopup(ctx,"##reasoning_menu") end
 if reaper.ImGui_BeginPopup(ctx,"##reasoning_menu") then
  for _,choice in ipairs({"low","medium","high","auto"}) do
