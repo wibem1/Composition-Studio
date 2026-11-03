@@ -2,7 +2,7 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
-Aktueller Stand: **v1.1.6 · 19.10.2026 · TEST CANDIDATE**.
+Aktueller Stand: **v1.1.7 · 03.11.2026 · TESTFREIGABE (REAPER-Praxistest ausstehend)**.
 
 Denkaufwand im Hauptfenster: **Kurz / Mittel / Hoch / Automatisch**, mit **Mittel** als Voreinstellung. Die Auswahl wird dauerhaft gespeichert und gilt für die KI-Aufrufe des Auftrags einschließlich Konzeption und Komposition. Während eines laufenden Auftrags ist sie gesperrt. Automatisch sendet keine Denksteuerung und verwendet die Modellvorgabe.
 
@@ -11,6 +11,14 @@ OpenAI erhält `reasoning.effort`, Anthropic `output_config.effort`, Gemini 3 `g
 Die langfristige Zielsetzung des Notationsmoduls ist in [NOTATION-MODULE.md](NOTATION-MODULE.md) dokumentiert.
 
 Die bestehende Updatefunktion bleibt der normale Installationsweg: **Studio-Menü → Update**.
+
+### Testfreigabe v1.1.7 – Notenauswahl im REAPER-Editor
+
+Die bestehende Updatefunktion lädt v1.1.7 direkt vom Branch `main`. Die Version ergänzt die Übernahme markierter MIDI-Noten aus dem nativen Noteneditor (auch aus mehreren editierbaren Spuren), den präzisen Analysekontext und die bestätigungspflichtige Transposition sowie KI-Überarbeitung markierter Noten. Die direkte KI-Überarbeitung ist **auf Tonhöhe und Velocity begrenzt**: keine Änderung an Notenlängen, Einsätzen, Controllerdaten oder unmarkierten Noten. Gespeicherte Vorschläge werden erst über `Änderungen anwenden` übernommen und sind per REAPER Undo rückgängig zu machen.
+
+**Testfreigabe, keine bestätigte Produktreife:** Automatisierte Lua-5.4-/Mocktests bestanden. Die tatsächliche Funktion mit der mehrspurigen REAPER-Notenansicht und echten KI-Antworten ist noch nicht praktisch nachgewiesen. Für den ersten Einsatz **Projektkopie sichern**, dann mit einem kleinen markierten MIDI-Abschnitt testen. Bestehende Projekte, API-Schlüssel und Einstellungen werden beim Update nicht absichtlich zurückgesetzt; die bisherige Skriptdatei wird vom Updater gesichert. Eine vollständige Datenmigrations-/Kompatibilitätsprüfung in REAPER steht noch aus.
+
+
 
 ## Gemeinsamer Workflow-Kern 1.0.0
 

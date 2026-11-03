@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.6
+-- @version 1.1.7
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.6"
+local VERSION="1.1.7"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -476,12 +476,90 @@ load_history(current_project)
 local function item_guid(item) local ok,g=reaper.GetSetMediaItemInfo_String(item,"GUID","",false); return ok and g or "" end
 local function track_guid(track) return reaper.GetTrackGUID(track) or "" end
 local function selected_tracks() local a={}; for i=0,reaper.CountSelectedTracks(0)-1 do local tr=reaper.GetSelectedTrack(0,i); local _,n=reaper.GetTrackName(tr); a[#a+1]={track=tr,guid=track_guid(tr),name=n~="" and n or "Unbenannte Spur",index=math.floor(reaper.GetMediaTrackInfo_Value(tr,"IP_TRACKNUMBER"))} end; return a end
-local function selected_items(with_notes) local a={}; for i=0,reaper.CountSelectedMediaItems(0)-1 do local item=reaper.GetSelectedMediaItem(0,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local tr=reaper.GetMediaItem_Track(item); local _,tn=reaper.GetTrackName(tr); local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=tr,guid=item_guid(item),track_guid=track_guid(tr),track_name=tn~="" and tn or "Unbenannte Spur",take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; if with_notes then local _,ncount=reaper.MIDI_CountEvts(take); for n=0,(ncount or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end end; a[#a+1]=it end end; return a end
+-- MIDIEditor_GetActive returns the FOCUSED MIDI editor. Cache that handle
+-- during the deferred UI loop, before Composition Studio takes keyboard focus.
+-- Revalidate its active take before using the previously focused editor.
+local last_notation_editor=nil
+local function focused_or_last_notation_editor()
+ local focused=reaper.MIDIEditor_GetActive and reaper.MIDIEditor_GetActive()
+ if focused then
+  last_notation_editor=focused
+  return focused
+ end
+ if not last_notation_editor or not reaper.MIDIEditor_GetTake then return nil end
+ local ok,take=pcall(reaper.MIDIEditor_GetTake,last_notation_editor)
+ if ok and take and (not reaper.ValidatePtr2 or reaper.ValidatePtr2(0,take,"MediaItem_Take*")) then
+  return last_notation_editor
+ end
+ last_notation_editor=nil
+ return nil
+end
+
+-- REAPER notation and piano roll expose the same selected MIDI notes.
+-- Use only editable takes; read-only and never touch unselected notes.
+local function notation_selection_items(with_notes)
+ local ed=focused_or_last_notation_editor()
+ if not ed then return {},0 end
+ local takes={}
+ if reaper.MIDIEditor_EnumTakes then
+  for i=0,2047 do local tk=reaper.MIDIEditor_EnumTakes(ed,i,true); if not tk then break end; takes[#takes+1]=tk end
+ else local tk=reaper.MIDIEditor_GetTake(ed); if tk then takes[1]=tk end end
+ local rows,found,count={},{},0
+ for _,tk in ipairs(takes) do
+  if reaper.TakeIsMIDI(tk) and (not reaper.ValidatePtr2 or reaper.ValidatePtr2(0,tk,"MediaItem_Take*")) then
+   local item=reaper.GetMediaItemTake_Item(tk)
+   local track=item and reaper.GetMediaItem_Track(item)
+   if track then
+    -- Native enumeration avoids scanning every MIDI note on each Studio UI frame.
+    local nextIndex=-1
+    local _,fallbackCount
+    if not reaper.MIDI_EnumSelNotes then _,fallbackCount=reaper.MIDI_CountEvts(tk) end
+    while true do
+     local i
+     if reaper.MIDI_EnumSelNotes then
+      i=reaper.MIDI_EnumSelNotes(tk,nextIndex)
+      if not i or i<0 then break end
+     else
+      i=nextIndex+1
+      if i>=(fallbackCount or 0) then break end
+     end
+     nextIndex=i
+     local ok,sel,mut,s,e,ch,p,v=reaper.MIDI_GetNote(tk,i)
+     if ok and sel and not mut then
+      local guid=item_guid(item)
+      local row=found[guid]
+      if not row then
+       local _,tn=reaper.GetTrackName(track)
+       local _,kn=reaper.GetSetMediaItemTakeInfo_String(tk,"P_NAME","",false)
+       local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION")
+       local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH")
+       row={item=item,take=tk,track=track,guid=guid,track_guid=track_guid(track),
+        track_name=tn~="" and tn or "Unbenannte Spur",take_name=kn~="" and kn or "Unbenanntes MIDI-Item",
+        start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),
+        notes={},selection_source={}}
+       rows[#rows+1]=row;found[guid]=row
+      end
+      if with_notes then
+       local sq=reaper.TimeMap2_timeToQN(0,reaper.MIDI_GetProjTimeFromPPQPos(tk,s))
+       local eq=reaper.TimeMap2_timeToQN(0,reaper.MIDI_GetProjTimeFromPPQPos(tk,e))
+       row.notes[#row.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch}
+      end
+      row.selection_source[#row.selection_source+1]={index=i,start_ppq=s,end_ppq=e,channel=ch,pitch=p,velocity=v}
+      count=count+1
+     end
+    end
+   end
+  end
+ end
+ return rows,count
+end
+
+local function selected_items(with_notes,scope) if scope~="items" then local rows,n=notation_selection_items(with_notes); if n>0 then return rows end end; local a={}; for i=0,reaper.CountSelectedMediaItems(0)-1 do local item=reaper.GetSelectedMediaItem(0,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local tr=reaper.GetMediaItem_Track(item); local _,tn=reaper.GetTrackName(tr); local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=tr,guid=item_guid(item),track_guid=track_guid(tr),track_name=tn~="" and tn or "Unbenannte Spur",take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; if with_notes then local _,ncount=reaper.MIDI_CountEvts(take); for n=0,(ncount or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end end; a[#a+1]=it end end; return a end
 
 local function track_context_items(tracks) local a={}; local seen={}; for _,t in ipairs(tracks) do for i=0,reaper.CountTrackMediaItems(t.track)-1 do local item=reaper.GetTrackMediaItem(t.track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local g=item_guid(item); if not seen[g] then seen[g]=true; local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=t.track,guid=g,track_guid=t.guid,track_name=t.name,take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; local _,nc=reaper.MIDI_CountEvts(take); for n=0,(nc or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end; a[#a+1]=it end end end end; return a end
 local function time_selection_context() local s,e=reaper.GetSet_LoopTimeRange(false,false,0,0,false); if not s or not e or e<=s then return "TIME_SELECTION none" end; local sq=reaper.TimeMap2_timeToQN(0,s); local eq=reaper.TimeMap2_timeToQN(0,e); local _,sm,sb=reaper.TimeMap2_timeToBeats(0,s); local _,em,eb=reaper.TimeMap2_timeToBeats(0,e); return string.format("TIME_SELECTION startQN=%.3f endQN=%.3f startBar=%d startBeat=%.3f endBar=%d endBeat=%.3f",sq,eq,(sm or 0)+1,(sb or 0)+1,(em or 0)+1,(eb or 0)+1) end
-local function compact_context(items,tracks,ignore_time) tracks=tracks or selected_tracks(); local l={string.format("Tempo %.2f BPM; selected MIDI items=%d; selected tracks=%d",reaper.Master_GetTempo(),#items,#tracks)}; l[#l+1]=ignore_time and "TIME_SELECTION ignored for free new composition" or time_selection_context(); for i,t in ipairs(tracks) do l[#l+1]=string.format("TRACK %d id=%s name=%s index=%d",i,t.guid,t.name,t.index) end; for i,it in ipairs(items) do l[#l+1]=string.format("ITEM %d id=%s trackId=%s track=%s take=%s rangeQN=%.3f..%.3f",i,it.guid,it.track_guid,it.track_name,it.take_name,it.start_qn,it.end_qn) end; return table.concat(l,"\n") end
-local function music_context(items,tracks,ignore_time) local l={compact_context(items,tracks,ignore_time)}; for _,it in ipairs(items) do for _,n in ipairs(it.notes) do l[#l+1]=string.format("N %s %.5f %.5f %d %d %d",it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end end; return table.concat(l,"\n") end
+local function compact_context(items,tracks,ignore_time) tracks=tracks or selected_tracks(); local l={string.format("Tempo %.2f BPM; selected MIDI items=%d; selected tracks=%d",reaper.Master_GetTempo(),#items,#tracks)}; l[#l+1]=ignore_time and "TIME_SELECTION ignored for free new composition" or time_selection_context(); for i,t in ipairs(tracks) do l[#l+1]=string.format("TRACK %d id=%s name=%s index=%d",i,t.guid,t.name,t.index) end; for i,it in ipairs(items) do l[#l+1]=string.format("ITEM %d id=%s trackId=%s track=%s take=%s rangeQN=%.3f..%.3f",i,it.guid,it.track_guid,it.track_name,it.take_name,it.start_qn,it.end_qn); if it.selection_source then l[#l+1]="NOTATION_SELECTION: "..#it.selection_source.." selected notes" end end; return table.concat(l,"\n") end
+local function music_context(items,tracks,ignore_time) local l={compact_context(items,tracks,ignore_time)}; for _,it in ipairs(items) do if it.selection_source then l[#l+1]="NOTATION_SELECTION "..it.guid.." count="..#it.selection_source..". Only selected notes are the edit context; keep unselected notes unchanged." end end; for _,it in ipairs(items) do for _,n in ipairs(it.notes) do l[#l+1]=string.format("N %s %.5f %.5f %d %d %d",it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end end; return table.concat(l,"\n") end
 local function recent_dialog() local l={}; for i=math.max(1,#history-7),#history do l[#l+1]=history[i].role..": "..history[i].text end; return table.concat(l,"\n") end
 
 local function first_program_changes_on_track(track)
@@ -546,6 +624,9 @@ local function composition_prompt(request,items,tracks,is_new)
  if is_new then
   return [[Komponiere jetzt das verlangte Stück vollständig. Erzeuge die Musik selbst – keinen Entwurf, keinen Formplan, kein Konzept, keine Klangbeschreibung und keine Erläuterung darüber, wie das Stück später komponiert werden könnte. Triff die musikalischen Entscheidungen unmittelbar in der Komposition: konkrete Stimmen, Tonhöhen, Dauern, Rhythmus, Harmonik, Artikulation, Dynamik und Verlauf. Die Komposition muss so vollständig und eindeutig notiert sein, dass eine nachfolgende technische Instanz sie ohne eigene musikalische Entscheidungen lediglich übertragen kann. Gib der fertigen Komposition einen kurzen Werktitel und, soweit musikalisch bestimmbar, Tonart und Tempo an. Denke nicht an MIDI-Codierung, QN-Werte, CS-Zeilen oder das technische Zielformat. Keine Analyse und keine Beschreibung der Arbeitsweise.]].."\n\nAUFTRAG:\n"..request
  end
+ local has_note_selection=false
+ for _,it in ipairs(items) do if it.selection_source and #it.selection_source>0 then has_note_selection=true; break end end
+ if has_note_selection then request=request.."\nNOTATIONSAUSWAHL: Nur markierte Noten sind das Material. Nicht markierte Noten müssen unverändert bleiben. Ausschließlich CS|revised-Variante auf neuer Spur oder CS|new-Stimme erzeugen, niemals CS|target oder CS|track." end
  return [[Du komponierst Musik in Composition Studio. Nutze das konkret übergebene vorhandene Material als musikalischen Kontext und erfülle den freien Auftrag eigenständig; füge keine unnötigen Regeln hinzu. Bei einer reinen Ergänzung einer weiteren Stimme bleiben alle vorhandenen Stimmen unverändert: erzeuge die zusätzliche Stimme mit CS|new und kennzeichne vorhandene Items mit CS|unchanged. TIME_SELECTION ist nur bei ausdrücklichem Bezug auf den markierten Bereich ein Zielbereich. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item direkt Ziel sein. Jedes neu erzeugte MIDI-Item MUSS einen passenden General-MIDI-Program-Change (0-127) erhalten.
 Antworte ausschließlich:
 CS|unchanged|SOURCE_GUID
@@ -1385,7 +1466,7 @@ AUFTRAG:
 ]]..request
 end
 -- Host adapter: source binding and durable, reloadable proposals. No AI keys in records.
-local workflow_adapter={labels={engine_json="Komposition",composition="Überarbeitung",analysis="Analyse",lily_continuation="Fortsetzung",lily_composition="Komposition",swam_translation="SWAM-Interpretation"},states={ready="Vorschlag",applied="Übernommen",draft="Analyse",invalid="Fehlerhafte Antwort"},records={},pending=nil,committing=false,analysis=nil}
+local workflow_adapter={labels={engine_json="Komposition",composition="Überarbeitung",analysis="Analyse",notation_patch="Markierte Noten KI-Überarbeitung",notation_transpose="Markierte Noten transponieren",lily_continuation="Fortsetzung",lily_composition="Komposition",swam_translation="SWAM-Interpretation"},states={ready="Vorschlag",applied="Übernommen",draft="Analyse",invalid="Fehlerhafte Antwort"},records={},pending=nil,committing=false,analysis=nil}
 function workflow_adapter.encode(v)
  local kind=type(v)
  if kind=="nil" then return "null" elseif kind=="boolean" or kind=="number" then return tostring(v)
@@ -1475,6 +1556,8 @@ function workflow_adapter.offer(stage,text,data)
  assert(not workflow_adapter.history_error,"Verlauf ist nicht lesbar. Bitte Projektkopie und Diagnose sichern.")
  local r={format=workflow_core.format,core_version=workflow_core.version,id=tostring(os.time()).."-"..tostring(#workflow_adapter.records+1),created=os.date("%Y-%m-%d %H:%M"),stage=stage,request=data.request or "",raw_response=text,payload=text,state=stage=="analysis" and "draft" or workflow_core.advance("draft","propose"),source_guard=data.workflow_guard or workflow_adapter.guard(),provider=data.workflow_provider or provider,model=data.workflow_model or model,bindings={},track_bindings={},extension_start=data.extension_start,extension_bars=data.extension_bars,transition_bars=data.transition_bars or 0,chunk_piano=data.chunk_piano or false}
  for _,it in ipairs(data.full or {}) do r.bindings[#r.bindings+1]=it.guid end
+ r.notation_selection={}
+ for _,it in ipairs(data.full or {}) do if it.selection_source and #it.selection_source>0 then r.notation_selection[#r.notation_selection+1]={guid=it.guid,notes=it.selection_source} end end
  for _,tr in ipairs(data.music_tracks or data.tracks or {}) do r.track_bindings[#r.track_bindings+1]=tr.guid end
  workflow_adapter.records[#workflow_adapter.records+1]=r
  workflow_adapter.save()
@@ -1515,14 +1598,153 @@ function workflow_adapter.transition(items,endpoint,count)
  return start
 end
 
+-- Restrained KI in-place changes: exactly one result per selected MIDI note.
+-- Timing, length, channel, note count, CC, metadata and unselected notes remain unchanged.
+local function apply_notation_patch(r)
+ local items=workflow_adapter.bindings(r)
+ local byGuid,expected,edits,seen={},{},{},{}
+ for _,it in ipairs(items) do byGuid[it.guid]=it end
+ local total=0
+ for _,scope in ipairs(r.notation_selection or {}) do
+  if expected[scope.guid] then return nil,"Doppeltes Quell-Item." end
+  expected[scope.guid]={}
+  for _,ref in ipairs(scope.notes or {}) do
+   if expected[scope.guid][ref.index] then return nil,"Doppelte Quellnote." end
+   expected[scope.guid][ref.index]=ref
+   total=total+1
+  end
+ end
+ if total==0 then return nil,"Keine ausgewählten Noten." end
+ for line in (r.payload or ""):gmatch("[^\r\n]+") do
+  local guid,index,pitch,velocity=line:match("^CSNOTE|([^|]+)|(%d+)|(%d+)|(%d+)$")
+  if not guid then return nil,"KI-Antwort enthält eine unzulässige Zeile." end
+  index,pitch,velocity=tonumber(index),tonumber(pitch),tonumber(velocity)
+  if not expected[guid] or not expected[guid][index] or
+     pitch>127 or velocity<1 or velocity>127 or seen[guid..":"..index] then
+   return nil,"KI-Antwort hat fremde/doppelte Noten oder ungültige Werte."
+  end
+  seen[guid..":"..index]=true
+  edits[#edits+1]={guid=guid,index=index,pitch=pitch,velocity=velocity}
+ end
+ if #edits~=total then return nil,"KI-Antwort ist unvollständig." end
+ local byTake,indexByTake={},{}
+ for _,change in ipairs(edits) do
+  local it=byGuid[change.guid]
+  local ref=expected[change.guid][change.index]
+  if not it or not it.take or not reaper.TakeIsMIDI(it.take) then return nil,"Quell-Item fehlt." end
+  local _,count=reaper.MIDI_CountEvts(it.take)
+  if change.index>=(count or 0) then return nil,"Notenindex ist nicht mehr gültig." end
+  local ok,sel,mut,s,e,ch,p,v=reaper.MIDI_GetNote(it.take,change.index)
+  if not ok or mut or s~=ref.start_ppq or e~=ref.end_ppq or
+     ch~=ref.channel or p~=ref.pitch or v~=ref.velocity then
+   return nil,"Originalnote verändert. Bitte Auftrag erneut ausführen."
+  end
+  change.take=it.take;change.sel=sel;change.s=s;change.e=e;change.ch=ch;change.previous=p
+  byTake[it.take]=byTake[it.take] or {}
+  byTake[it.take][#byTake[it.take]+1]=change
+  indexByTake[it.take]=indexByTake[it.take] or {}
+  indexByTake[it.take][change.index]=true
+ end
+ -- No new overlapping same-pitch/same-channel MIDI pairs in modified notes.
+ for take,changes in pairs(byTake) do
+  local others={}
+  local _,count=reaper.MIDI_CountEvts(take)
+  for i=0,(count or 0)-1 do
+   if not indexByTake[take][i] then
+    local ok,_,mut,s,e,ch,p=reaper.MIDI_GetNote(take,i)
+    if ok and not mut then others[#others+1]={s=s,e=e,ch=ch,pitch=p} end
+   end
+  end
+  for i,n in ipairs(changes) do
+   if n.pitch~=n.previous then
+    for _,other in ipairs(others) do
+     if n.ch==other.ch and n.pitch==other.pitch and n.s<other.e and other.s<n.e then
+      return nil,"Gleichzeitige identische MIDI-Tonhöhen würden kollidieren."
+     end
+    end
+    for j,other in ipairs(changes) do
+     if i~=j and n.ch==other.ch and n.pitch==other.pitch and n.s<other.e and other.s<n.e then
+      return nil,"Gleichzeitige identische MIDI-Tonhöhen würden kollidieren."
+     end
+    end
+   end
+  end
+ end
+ reaper.Undo_BeginBlock2(0)
+ local ok,err=xpcall(function()
+  for _,n in ipairs(edits) do
+   assert(reaper.MIDI_SetNote(n.take,n.index,n.sel,false,n.s,n.e,n.ch,n.pitch,n.velocity,true)~=false,
+    "MIDI_SetNote fehlgeschlagen.")
+  end
+  for take in pairs(byTake) do reaper.MIDI_Sort(take) end
+ end,debug.traceback)
+ if not ok then
+  reaper.Undo_EndBlock2(0,"Composition Studio – KI-Notenänderung fehlgeschlagen",-1)
+  reaper.Undo_DoUndo2(0)
+  return nil,err
+ end
+ reaper.UpdateArrange()
+ reaper.Undo_EndBlock2(0,"Composition Studio – markierte Noten KI-Überarbeitung",-1)
+ return true
+end
+
+-- Approval-only transposition of captured note indices; untouched notes remain intact.
+local function apply_notation_transpose(r)
+ local shift=tonumber((r.payload or ""):match("^TRANSPOSE_NOTATION|([%+%-]?%d+)$"))
+ if not shift or shift~=math.floor(shift) or shift==0 or math.abs(shift)>24 then return nil,"Ungültige Halbton-Transposition." end
+ local items=workflow_adapter.bindings(r)
+ local lookup={};for _,it in ipairs(items) do lookup[it.guid]=it end
+ local edits={}
+ for _,scope in ipairs(r.notation_selection or {}) do
+  local it=lookup[scope.guid]
+  if not it or not it.take or not reaper.TakeIsMIDI(it.take) then return nil,"Quell-Item nicht mehr vorhanden." end
+  local _,count=reaper.MIDI_CountEvts(it.take)
+  for _,ref in ipairs(scope.notes or {}) do
+   if type(ref.index)~="number" or ref.index<0 or ref.index>=(count or 0) then return nil,"Notenindex nicht mehr gültig." end
+   local ok,sel,mut,s,e,ch,p,v=reaper.MIDI_GetNote(it.take,ref.index)
+   if not ok or mut or s~=ref.start_ppq or e~=ref.end_ppq or ch~=ref.channel or p~=ref.pitch or v~=ref.velocity then
+    return nil,"Die markierten Noten wurden verändert. Auftrag neu erstellen."
+   end
+   if p+shift<0 or p+shift>127 then return nil,"Tonhöhe außerhalb MIDI-Bereich." end
+   edits[#edits+1]={take=it.take,index=ref.index,sel=sel,s=s,e=e,ch=ch,p=p+shift,v=v}
+  end
+ end
+ if #edits==0 then return nil,"Keine markierten Noten gesichert." end
+ reaper.Undo_BeginBlock2(0)
+ local ok,err=xpcall(function()
+  local takes={}
+  for _,n in ipairs(edits) do
+   assert(reaper.MIDI_SetNote(n.take,n.index,n.sel,false,n.s,n.e,n.ch,n.p,n.v,true)~=false,"MIDI_SetNote fehlgeschlagen")
+   takes[n.take]=true
+  end
+  for take in pairs(takes) do reaper.MIDI_Sort(take) end
+ end,debug.traceback)
+ if not ok then
+  reaper.Undo_EndBlock2(0,"Composition Studio – fehlgeschlagene Transposition",-1)
+  reaper.Undo_DoUndo2(0)
+  return nil,err
+ end
+ reaper.UpdateArrange()
+ reaper.Undo_EndBlock2(0,"Composition Studio – markierte Noten transponieren",-1)
+ return true
+end
+
 function workflow_adapter.apply()
  local r=workflow_adapter.pending; if not r or busy then return end
  local ok,err=pcall(function()
   workflow_core.check("apply",{state=r.state,source_guard=r.source_guard,current_guard=workflow_adapter.guard()})
   workflow_adapter.save()
   local result,why
+  if r.stage=="composition" and #(r.notation_selection or {})>0 then
+   assert(not r.payload:find("CS|target|",1,true),"Notenauswahl darf Original-Item nicht überschreiben.")
+   assert(not r.payload:find("CS|track|",1,true),"Notenauswahl darf nicht ungeprüft in bestehende Spuren schreiben.")
+  end
   if #(r.bindings or {})>0 and r.stage=="composition" then assert(not r.payload:match("CSMETA|"),"Die vorhandene Tempo- und Taktkarte bleibt bei Varianten erhalten. Bitte ohne globale CSMETA-Angaben neu erzeugen.") end
-  if r.stage=="lily_continuation" or r.stage=="lily_composition" then local items=workflow_adapter.bindings(r)
+  if r.stage=="notation_patch" then
+   result,why=apply_notation_patch(r)
+  elseif r.stage=="notation_transpose" then
+   result,why=apply_notation_transpose(r)
+  elseif r.stage=="lily_continuation" or r.stage=="lily_composition" then local items=workflow_adapter.bindings(r)
    result,why=lily_compile_import(r.payload,r.extension_start,r.extension_bars,r.transition_bars>0 and items or nil)
   else
    local text=r.payload
@@ -1539,7 +1761,9 @@ function workflow_adapter.apply()
   end
   assert(result,why or "Vorschlag konnte nicht angewendet werden.")
   r.state=workflow_core.advance(r.state,"apply"); workflow_adapter.pending=nil; workflow_adapter.save()
-  add("KI","Änderungen angewendet. Das Original bleibt erhalten. Rückgängig über REAPER Undo.")
+  add("KI",(r.stage=="notation_transpose" or r.stage=="notation_patch")
+   and "Nur markierte MIDI-Noten bearbeitet; unmarkierte Noten und Steuerdaten bleiben erhalten. Rückgängig über REAPER Undo."
+   or "Änderungen angewendet. Das Original bleibt erhalten. Rückgängig über REAPER Undo.")
  end)
  if not ok then update_status=tostring(err); add("KI",update_status) end
 end
@@ -1670,7 +1894,7 @@ local function begin_continuation(request,bars,tail)
   add("KI","Bitte eine Verlängerung von 1 bis 128 Takten und gegebenenfalls 2, 3 oder 4 Übergangstakte angeben.");busy=false;return
  end
  local tracks=selected_tracks()
- local context=selected_items(true)
+ local context=selected_items(true,"items")
  if #context==0 and #tracks>0 then context=track_context_items(tracks) end
  if #context==0 then add("KI","Bitte die MIDI-Items oder Spuren des vorhandenen Stücks auswählen.");busy=false;return end
  local endpoint=0;for _,it in ipairs(context) do endpoint=math.max(endpoint,it.end_qn or 0) end
@@ -1688,10 +1912,79 @@ local function begin_continuation(request,bars,tail)
  launch("lily_continuation",prompt,key,{request=request,extension_start=start,extension_bars=total,transition_bars=tail,full=context,music_tracks=tracks})
 end
 
+-- A narrow, deterministic AI protocol for the explicitly selected notes.
+-- No musical advice is interpreted as executable MIDI until fully validated.
+local function notation_patch_prompt(request,items)
+ local lines={
+  "Du bearbeitest ausschließlich die folgenden explizit ausgewählten MIDI-Noten musikalisch.",
+  "Erlaubt sind NUR Tonhöhe und Anschlagstärke. Rhythmus, Notenzahl, Notenlängen, ",
+  "Kanal, Ausdrucks-/CC-Daten, andere Stimmen und alle unmarkierten Noten bleiben unverändert.",
+  "Antworte mit GENAU einer Zeile pro Quellnote, ohne Markdown/Kommentare:",
+  "CSNOTE|ITEM_GUID|NOTE_INDEX|PITCH_0_BIS_127|VELOCITY_1_BIS_127",
+  "Übernimm jede Quellnotennummer und GUID exakt; auch unveränderte Noten vollständig aufführen.",
+  "Erfinde keine Quellnoten, lass keine aus. Erhalte die musikalische Idee des Originals.",
+  "AUFTRAG: "..request,
+ }
+ for _,it in ipairs(items or {}) do
+  lines[#lines+1]="SPUR: "..tostring(it.track_name).." ITEM_GUID: "..tostring(it.guid)
+  for j,ref in ipairs(it.selection_source or {}) do
+   local n=it.notes and it.notes[j] or {}
+   lines[#lines+1]=string.format("NOTE guid=%s index=%d pitch=%d velocity=%d kanal=%d startQN=%.6f dauerQN=%.6f",
+    it.guid,ref.index,ref.pitch,ref.velocity,ref.channel,n.start_qn or 0,n.duration_qn or 0)
+  end
+ end
+ return table.concat(lines,"\n")
+end
+
 local function begin_process(request)
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
- if reaper.CountSelectedMediaItems(0)==0 and
+ local notationItems,notationCount=notation_selection_items(true)
+ -- Never interpret "selected notes" as "entire selected item" when no
+ -- editable note selection can be read from the native notation editor.
+ if notationCount==0 and (lower:find("markierte noten",1,true) or lower:find("ausgewählte noten",1,true) or lower:find("ausgewählten noten",1,true)) then
+  add("KI","Im REAPER-Noteneditor sind keine editierbaren Einzelnoten markiert. Kein MIDI-Item wird ersatzweise bearbeitet.")
+  busy=false;return
+ end
+ local semitones=lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbton")
+                 or lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbtön")
+ if notationCount>0 and semitones then
+  local shift=tonumber(semitones)
+  if lower:find("nach unten",1,true) and shift>0 then shift=-shift end
+  if lower:find("nach oben",1,true) and shift<0 then shift=-shift end
+  if shift==0 or math.abs(shift)>24 then add("KI","Markierte Noten um 1–24 Halbtöne transponieren.");busy=false;return end
+  local ok,why=pcall(workflow_adapter.offer,"notation_transpose","TRANSPOSE_NOTATION|"..shift,
+    {request=request,full=notationItems,workflow_guard=workflow_adapter.guard()})
+  if not ok then add("KI",tostring(why));busy=false end
+  return
+ end
+ -- Explicit note editing is routed directly, avoiding an unnecessary
+ -- controller call and prohibiting full-item replacement by a loose AI reply.
+ local explicitNotes=(lower:find("markiert",1,true) or lower:find("ausgewählt",1,true))
+   and lower:find("noten",1,true)
+ local editRequested=lower:find("verbesser",1,true) or lower:find("überarbeit",1,true)
+   or lower:find("variier",1,true) or lower:find("veränder",1,true)
+   or lower:find("ändere",1,true)
+ if notationCount>0 and explicitNotes and editRequested then
+  -- This first direct-in-place protocol is pitch/velocity only. Do not
+  -- silently pretend to honor a rhythmic or structural edit request.
+  local unsupported=lower:find("rhythm",1,true) or lower:find("notenläng",1,true)
+    or lower:find("notendauer",1,true) or lower:find("einsatzzeit",1,true)
+    or lower:find("einfüg",1,true) or lower:find("hinzufüg",1,true)
+    or lower:find("lösche",1,true) or lower:find("entfern",1,true)
+  if unsupported then
+   add("KI","Die direkte Überarbeitung markierter Noten unterstützt bisher ausschließlich Tonhöhen und Anschlagstärken. Rhythmus, Noten einfügen oder löschen ist hier noch nicht freigegeben.")
+   busy=false;return
+  end
+  local key=get_key()
+  if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar.");busy=false;return end
+  local guard=workflow_adapter.guard()
+  local context=notation_patch_prompt(request,notationItems)
+  diag_set("composition_prompt",context)
+  launch("notation_patch",context,key,{request=request,full=notationItems,workflow_guard=guard})
+  return
+ end
+ if reaper.CountSelectedMediaItems(0)==0 and select(2,notation_selection_items(false))==0 and
   (lower:find("^%s*komponier") or lower:find("^%s*erstelle%s+ein") or lower:find("^%s*schreibe%s+ein")) and
   (lower:find("stück",1,true) or lower:find("fuge",1,true) or lower:find("sonate",1,true) or lower:find("walzer",1,true) or lower:find("komposition",1,true)) then
   local key=get_key()
@@ -1713,7 +2006,9 @@ local function begin_process(request)
  end
 
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
- local items=selected_items(false); local tracks=selected_tracks(); diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); launch("controller",prompt,key,{request=request,items=items,tracks=tracks})
+ local items=selected_items(false); local tracks=selected_tracks(); if #tracks==0 then for _,it in ipairs(items) do if it.selection_source then tracks[#tracks+1]={track=it.track,guid=it.track_guid,name=it.track_name,index=math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))} end end end; diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); local snapshot=selected_items(true); local hasSelection=false
+ for _,it in ipairs(snapshot) do if it.selection_source and #it.selection_source>0 then hasSelection=true;break end end
+ launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=snapshot,workflow_guard=hasSelection and workflow_adapter.guard() or nil})
 end
 
 local function title_prompt()
@@ -1735,7 +2030,7 @@ local function poll_job()
  log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
  log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
  if not text then add("KI",e); busy=false; return end; text=trim(text)
- if stage=="engine_json" or stage=="lily_continuation" or stage=="lily_composition" or stage=="composition" or stage=="swam_translation" then
+ if stage=="notation_patch" or stage=="engine_json" or stage=="lily_continuation" or stage=="lily_composition" or stage=="composition" or stage=="swam_translation" then
   local ok,why=pcall(workflow_adapter.offer,stage,text,data)
   if not ok then add("KI",tostring(why)); busy=false end
   return
@@ -1765,8 +2060,8 @@ local function poll_job()
   if cb then begin_continuation(data.request,tonumber(cb),tonumber(ct));return end
   if text:match("^NEED_REVISE|") then busy=false;workflow_adapter.review(data.request);return end
   if text:match("^NEED_SWAM|") then busy=false;begin_swam_interpretation();return end
-  local awhy=text:match("^NEED_ANALYSIS|(.*)$"); if awhy then local full=selected_items(true); if #full==0 and #data.tracks>0 then full=track_context_items(data.tracks) end; if #full==0 then add("KI","Für die Analyse ist kein MIDI-Material ausgewählt."); busy=false; return end; data.full=full; data.music_tracks=data.tracks; launch("analysis",analysis_prompt(data.request,full,data.tracks),key,data); return end
-  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or selected_items(true); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil); diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; local ext=why and continuation_bars(data.request) or nil
+  local awhy=text:match("^NEED_ANALYSIS|(.*)$"); if awhy then local full=data.notation_snapshot or selected_items(true); if #full==0 and #data.tracks>0 then full=track_context_items(data.tracks) end; if #full==0 then add("KI","Für die Analyse ist kein MIDI-Material ausgewählt."); busy=false; return end; data.full=full; data.music_tracks=data.tracks; launch("analysis",analysis_prompt(data.request,full,data.tracks),key,data); return end
+  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or (data.notation_snapshot or selected_items(true)); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil); diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; local ext=why and continuation_bars(data.request) or nil
   if ext then
    local tail,tail_error=request_transition(data.request)
    if tail==nil then add("KI",tail_error);busy=false;return end
@@ -1774,7 +2069,13 @@ local function poll_job()
   elseif newwhy then
     launch_new_json(data.request,key,data)
    else launch(newwhy and "composition_music" or "composition",cp,key,data) end; return end
-  if text:match("^ACTION|") then local a,pe=parse_action(text,data.items); if not a then add("KI","Ich führe nichts aus: "..pe); busy=false; return end; local ok,ae=execute_action(a); if not ok then add("KI","Die Aktion wurde nicht ausgeführt: "..tostring(ae)); else add("KI",trim(a.desc).." – erledigt. REAPER Undo kann die Änderung rückgängig machen.") end; busy=false; return end
+  if text:match("^ACTION|") then
+   for _,it in ipairs(data.notation_snapshot or {}) do
+    if it.selection_source and #it.selection_source>0 then
+     add("KI","Sofortaktionen auf ganze MIDI-Items sind bei Notenauswahl gesperrt. Bitte eine gezielte Transposition oder Vorschlagsvariante verwenden.");busy=false;return
+    end
+   end
+   local a,pe=parse_action(text,data.items); if not a then add("KI","Ich führe nichts aus: "..pe); busy=false; return end; local ok,ae=execute_action(a); if not ok then add("KI","Die Aktion wurde nicht ausgeführt: "..tostring(ae)); else add("KI",trim(a.desc).." – erledigt. REAPER Undo kann die Änderung rückgängig machen.") end; busy=false; return end
   add("KI","Ich konnte den Auftrag nicht eindeutig einem sicheren Vorgang zuordnen und habe nichts verändert."); busy=false; return
  elseif stage=="swam_interpretation" then
   data.swam_performance=text; update_status="SWAM-Interpret wird technisch übersetzt …"; launch("swam_translation",swam_translation_prompt(data.swam_source,text),key,data); return
@@ -1893,7 +2194,7 @@ local function draw_history()
  if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project); workflow_adapter.history_error=false; workflow_adapter.load() end end
-local function loop() workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); reaper.ImGui_SetNextWindowSizeConstraints(ctx,360,480,10000,10000); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio"); reaper.ImGui_SameLine(ctx)
+local function loop() focused_or_last_notation_editor(); workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); reaper.ImGui_SetNextWindowSizeConstraints(ctx,360,480,10000,10000); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio"); reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end

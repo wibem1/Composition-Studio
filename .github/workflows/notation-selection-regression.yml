@@ -1,0 +1,23 @@
+name: Composition Studio notation selection regression
+on:
+  push:
+    branches:
+      - feat/notation-selection-integration-20261103
+  pull_request:
+    paths:
+      - 'Composition Studio.lua'
+      - 'tests/test_notation_selection_integration.lua'
+      - '.github/workflows/notation-selection-regression.yml'
+jobs:
+  lua-notation-selection:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Lua
+        run: sudo apt-get update -qq && sudo apt-get install -y lua5.4
+      - name: Parse production script and new regression test
+        run: |
+          luac5.4 -p 'Composition Studio.lua'
+          luac5.4 -p tests/test_notation_selection_integration.lua
+      - name: Run production-function notation selection tests
+        run: lua5.4 tests/test_notation_selection_integration.lua
