@@ -53,6 +53,14 @@ assert(items[1].score_context and items[2].score_context,"score context must be 
 assert(items[1].notes[1].pitch==60 and items[2].notes[1].pitch==48,"actual score data")
 local rows=env.notation_visible_items(false)
 assert(#rows==2 and #rows[1].notes==0,"without notes only scope metadata is collected")
+compile("local function editor_reference_excerpt","local function score_request_intent",env)
+local selection={{notes={{start_qn=0,duration_qn=2,pitch=60}}}}
+local reference=env.editor_reference_excerpt(selection)
+assert(reference:find("REFERENZSTIMMEN NUR ZUR HARMONISCHEN",1,true),"read-only context disclaimer")
+assert(reference:find("REFERENZSPUR tr1",1,true) and reference:find("REFERENZSPUR tr2",1,true),
+ "reference includes both visible MIDI tracks, including harmony from noneditable context")
+assert(reference:find("REF ",1,true),"reference contains actual note data")
+assert(env.editor_reference_excerpt({})=="","no selected notes must not trigger reference acquisition")
 local originalCount=api.MIDI_CountEvts
 api.MIDI_CountEvts=function(tk)
  if tk=="tk1" then return true,2501 end
@@ -70,6 +78,7 @@ local commands={}
 local labels={
  {100,"View: Mode: musical notation"},
  {200,"Script: REAPER Notation - 4 Takte und Instrumentenschluessel.lua"},
+ {300,"View: Mode: piano roll"},
 }
 local action= {
  CountSelectedMediaItems=function() return 1 end,
@@ -91,6 +100,10 @@ compile("local function open_score_workspace","local function begin_process",ave
 local ok,msg=avenv.open_score_workspace()
 assert(ok and edits==2 and commands[1]==100 and commands[2]==200,"notation mode then original shortcut")
 assert(msg:find("vorbereitet"),"positive status")
+edits=0;commands={}
+ok,msg=avenv.open_score_workspace("pianoroll")
+assert(ok and edits==1 and commands[1]==300,"Piano Roll uses its native view switch and never launches notation shortcut")
+assert(msg:find("Piano%-Roll"),"Piano-Roll confirmation")
 opened=nil;edits=0;commands={}
 action.CountSelectedMediaItems=function() return 0 end
 assert(avenv.open_score_workspace()==false,"must not open MIDI editor without any MIDI item selection")
@@ -102,7 +115,15 @@ labels={{100,"View: Mode: musical notation"}}
 opened=101
 ok,msg=avenv.open_score_workspace()
 assert(not ok and msg:find("Vier%-Takte"),"missing companion action reported, never silently claimed")
-assert(source:find('if explicitScore then',1,true),"explicit score request mode in central command router")
+assert(source:find('if explicitScore then',1,true),"explicit shared MIDI editor request mode in central command router")
+assert(source:find('lower:find("piano-roll",1,true)',1,true),
+ "Piano-Roll mentioned in explicit editor context")
+assert(source:find('local reference=hasSelection and editor_reference_excerpt(snapshot) or ""',1,true),
+ "selected-note AI route gets separate read-only harmonic reference")
+assert(source:find('local reference=editor_reference_excerpt(items)',1,true),
+ "selected-note patch prompt receives surrounding reference voices")
+assert(source:find('open_score_workspace("pianoroll")',1,true),
+ "Studio supports explicit Piano-Roll view requests")
 assert(source:find('local explicitScore=score_request_intent(lower) and not mentionsSelectedNotes',1,true),
  "individual selected notes must never be replaced with full-score context")
 assert(source:find('local items=scoreItems or selected_items(false)',1,true),
