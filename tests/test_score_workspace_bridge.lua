@@ -111,4 +111,8 @@ assert(source:find('r.score_scope or #(r.notation_selection or {})>0',1,true),
  "score modifications must reject original-track replacement")
 assert(source:find('score_context_tracks(scoreItems)',1,true),
  "score-only analysis and composition inherit visible track bindings")
+assert(source:find('if score_request_intent(request:lower()) then',1,true),
+ "explicit score continuation has a dedicated source-scope switch")
+assert(source:find('context=visible; tracks=score_context_tracks(context)',1,true),
+ "score continuation derives track bindings from notation editor, not arrangement")
 print("OK: actual production score-context and notation bridge functions pass multi-track, no-mutation, limit and fallback tests")
