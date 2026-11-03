@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 03.11.2026 – Anwenderfreigabe: Composition Studio 1.1.7 über bestehende Updatefunktion
+
+**Ausdrückliche Nutzerentscheidung:** Trotz noch ausstehender grafischer REAPER-Praxistests soll die neue Notenauswahl-Integration über **Studio-Menü → Update** bereitstehen. Diese Freigabe wird klar als **Testfreigabe** bezeichnet, nicht als nachgewiesen stabile Produktionsversion. Vor Umsetzung wurden die globalen Entwicklungsstandards und das Repo-`AGENTS.md`, `PROJECT_STATE.md`, aktueller Quellcode, README und bestehender Updatecode von GitHub eingelesen.
+
+**Veröffentlichungsweg:** Der reguläre Updater bezieht `Composition Studio.lua` aus `wibem1/Composition-Studio/main` per `UPDATE_URL`. Seine `version_is_newer`-Prüfung akzeptiert `1.1.7` als neuer als `1.1.6`. Im Quellcode des PR #8 wurden Header `-- @version` und `local VERSION` einheitlich auf **1.1.7** gesetzt. Keine Änderung der Updater-Routine, Konfiguration oder Datenmigration; ihre bestehende Sicherungsfunktion bleibt erhalten. Nach abgeschlossener CI-Prüfung erfolgt Merge von [PR #8](https://github.com/wibem1/Composition-Studio/pull/8) nach `main`; erst dieser Schritt macht den neuen Stand für die reguläre Updatefunktion verfügbar.
+
+**Funktionsumfang:** Markierte MIDI-Noten mehrerer editierbarer Takes als Analyse-/KI-Auftragskontext, gesicherte Transposition mit Benutzerbestätigung und Undo, eingeschränkte direkte KI-Überarbeitung **nur von Tonhöhe und Velocity** mit exakter Notenreferenzierung, Kollisions-/Originalprüfung sowie separate Varianten bzw. neue Spuren aus bestehendem Kompositionspfad. Keine neuen Oberflächen oder Änderung an `Notation Studio.lua`.
+
+**Grenzen:** Echte REAPER-Notationsoberfläche, Fokuswechsel und Live-KI-Integration weiterhin nicht praktisch bestätigt. Ersttest ausschließlich mit gesicherter REAPER-Projektkopie und wenigen markierten Noten. Keine Behauptung einer vollumfänglich geprüften stabilen Version.
+
 ## 03.11.2026 – Eingeschränkte direkte KI-Überarbeitung markierter Noten implementiert (Draft-PR #8)
 
 **Anlass:** Auf Nutzerauftrag „weiter“ nach dem dokumentierten Auswahl-/Transpositions-Prototyp. Verbindliche globale `DEVELOPMENT_STANDARDS.md` und `AGENTS.md`, projektspezifische `AGENTS.md`/`PROJECT_STATE.md`, aktuelle Produktionsdatei und zugehörige Tests erneut aus GitHub eingelesen.
