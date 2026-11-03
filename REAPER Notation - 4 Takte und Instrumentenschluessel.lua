@@ -16,11 +16,9 @@ local SCORE_CLEF = {
   tenor = 4,
 }
 
-local function note(msg)
-  if reaper.ShowConsoleMsg then
-    reaper.ShowConsoleMsg("[REAPER Notation] " .. tostring(msg) .. "\n")
-  end
-end
+-- The shortcut must never open REAPER's console. Keep diagnostics silent.
+-- A dedicated diagnostic script can be added separately if ever needed.
+local function note(_) end
 
 -- Determine a staff from actual MIDI pitches, never track/item names.
 -- Candidate single staves use diatonic distances to staff boundaries.
