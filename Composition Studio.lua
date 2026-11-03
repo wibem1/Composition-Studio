@@ -613,11 +613,64 @@ local function notation_visible_items(with_notes)
  return result,nil
 end
 
+-- A selected phrase is the ONLY edit target. Nearby visible voices, in
+-- notation OR piano roll, are separate READ-ONLY harmonic/contrapuntal context.
+-- Bound the excerpt before calling any paid AI model.
+local function editor_reference_excerpt(selection)
+ local first,last=math.huge,-math.huge
+ for _,it in ipairs(selection or {}) do
+  for _,n in ipairs(it.notes or {}) do
+   local start=n.start_qn or 0
+   first=math.min(first,start)
+   last=math.max(last,start+(n.duration_qn or 0))
+  end
+ end
+ if first==math.huge then return "" end
+ local visible,problem=notation_visible_items(true)
+ if not visible then
+  return "REFERENZSTIMMEN: nicht verfügbar ("..tostring(problem).."); keine Annahmen über ungehörte Stimmen."
+ end
+ local lo,hi=first-2,last+2
+ local lines={
+  "REFERENZSTIMMEN NUR ZUR HARMONISCHEN/KONTRAPUNKTISCHEN ORIENTIERUNG;",
+  "diese Töne sind NICHT zur Bearbeitung freigegeben. Originale außer der expliziten Notenauswahl nicht verändern.",
+  string.format("REFERENZFENSTER QN %.4f..%.4f",lo,hi),
+ }
+ local total,limit=0,160
+ for _,it in ipairs(visible) do
+  local entries={}
+  for _,n in ipairs(it.notes or {}) do
+   local st=n.start_qn or 0
+   local ending=st+(n.duration_qn or 0)
+   if st<hi and ending>lo then
+    total=total+1
+    if total<=limit then
+     entries[#entries+1]=string.format("REF %.5f %.5f %d %d %d",
+      st,n.duration_qn or 0,n.pitch or 0,n.velocity or 0,n.channel or 0)
+    end
+   end
+  end
+  if #entries>0 then
+   lines[#lines+1]="REFERENZSPUR "..tostring(it.track_name).." item="..tostring(it.guid)
+   for _,line in ipairs(entries) do lines[#lines+1]=line end
+  end
+ end
+ if total>limit then
+  lines[#lines+1]="REFERENZDATEN gekürzt auf "..limit.." von "..total..
+    " Noten; die vollständige Begleitung ist nicht enthalten."
+ end
+ if total==0 then lines[#lines+1]="Keine weiteren Noten innerhalb des Referenzfensters." end
+ return table.concat(lines,"\n")
+end
+
 local function score_request_intent(lower)
  lower=lower or ""
  return lower:find("partitur",1,true) or lower:find("notenansicht",1,true)
   or lower:find("notensicht",1,true) or lower:find("noteneditor",1,true)
-  or lower:find("sichtbaren noten",1,true) or lower:find("angezeigten noten",1,true)
+  or lower:find("pianoroll",1,true) or lower:find("piano-roll",1,true)
+  or lower:find("piano roll",1,true) or lower:find("midi-editor",1,true)
+  or lower:find("midi editor",1,true) or lower:find("sichtbaren noten",1,true)
+  or lower:find("angezeigten noten",1,true)
 end
 
 local function score_context_tracks(items)
