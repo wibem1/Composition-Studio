@@ -39,8 +39,16 @@ Besonders zu beachten:
 - Neu: Der explizite Auftrag **„Transponiere die markierten Noten um 2 Halbtöne“** erzeugt ohne zusätzlichen KI-Aufruf einen *Vorschlag*. Erst nach „Änderungen anwenden“ wird transponiert. Vorher kontrolliert das Skript Projektstand, alle Quellnoten/-indizes und MIDI-Grenzen. Ausgeführt wird in einem Undo-Block mit `MIDI_SetNote` nur für die ursprünglich markierten Noten; alle anderen Noten, Zeitpositionen, Notenlängen und Velocity bleiben unverändert.
 - Keine neue UI, keine Änderung an `main`, keine Versionsnummererhöhung, keine automatische Installation.
 
+## Fokuswechsel und Performance (nachträglich geprüft)
+
+Die offizielle REAPER-API beschreibt `MIDIEditor_GetActive()` ausdrücklich als **fokussiertes** MIDI-Editor-Fenster. Deshalb merkt sich der laufende Composition-Studio-`defer`-Loop nun den zuletzt fokussierten MIDI-Editor. Wenn der Nutzer zum Studio-Eingabefeld wechselt, wird der zwischengespeicherte Editor nur nach erfolgreicher `MIDIEditor_GetTake`-/`ValidatePtr2`-Prüfung erneut benutzt; bei geschlossenem Editor fällt die Auswahl sicher auf „nicht verfügbar“ zurück. In REAPER noch nicht grafisch bestätigt.
+
+Weil die Studio-Oberfläche laufend aktualisiert wird, verwendet die Auswahlfunktion bevorzugt das native `MIDI_EnumSelNotes(take, lastIndex)`, um **nur markierte Events** zu lesen; ein vollständiger Note-Scan dient nur als Fallback. Dieser Performance-Fix ist ebenfalls im Offline-Produktionsfunktionstest enthalten.
+
+Bei Aufträgen, die ausdrücklich „markierte Noten“ verlangen, aber **keine** editierbaren markierten Noten im MIDI-Editor erkennen lassen, erfolgt eine klare Fehlermeldung statt einer gefährlichen Interpretation als Gesamt-Item-Auftrag.
+
 ## Nachweise
-- GitHub Actions `Composition Studio notation selection regression` Run [41592719282](https://github.com/wibem1/Composition-Studio/actions/runs/41592719282) erfolgreich: `luac5.4 -p` für vollständige Produktionsdatei und neuen Test; isolierte Tests des **echten Produktions-Funktionsquellcodes** für mehrere editierbare Takes, nur markierte Noten, stummgeschaltete und nicht markierte Noten, gespeicherte PPQ-Identitäten, genehmigte Transposition, unveränderte Begleitnoten, Undo, stale selection und Grenzprüfung.
+- GitHub Actions `Composition Studio notation selection regression` Run [41593334412](https://github.com/wibem1/Composition-Studio/actions/runs/41593334412) erfolgreich: `luac5.4 -p` für vollständige Produktionsdatei und neuen Test; isolierte Tests des **echten Produktions-Funktionsquellcodes** für mehrere editierbare Takes, nur markierte Noten, stummgeschaltete und nicht markierte Noten, gespeicherte PPQ-Identitäten, genehmigte Transposition, unveränderte Begleitnoten, Undo, stale selection, Grenzprüfung, Fokuswechsel bei weiterhin geöffnetem Editor sowie native Enumeration ausschließlich ausgewählter Events.
 - **Nicht belegt:** Im echten REAPER wurde diese Änderung weder grafisch noch mit realen API-Anbietern oder mehrspuriger Partitur getestet. Das ist ein Entwicklungskandidat, keine fertige Releaseversion.
 
 ## Offene Aufgaben und reale Prüfung
