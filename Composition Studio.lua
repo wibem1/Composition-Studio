@@ -1981,7 +1981,9 @@ local function begin_continuation(request,bars,tail)
  end
  local tracks=selected_tracks()
  local context=selected_items(true,"items")
- if #context==0 and score_request_intent(request:lower()) then
+ -- An explicit score-workspace command must not silently fall back to the
+ -- current arrangement item selection, even when items are selected there.
+ if score_request_intent(request:lower()) then
   local visible,why=notation_visible_items(true)
   if not visible then add("KI",why);busy=false;return end
   context=visible; tracks=score_context_tracks(context)
