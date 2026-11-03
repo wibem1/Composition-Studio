@@ -476,10 +476,29 @@ load_history(current_project)
 local function item_guid(item) local ok,g=reaper.GetSetMediaItemInfo_String(item,"GUID","",false); return ok and g or "" end
 local function track_guid(track) return reaper.GetTrackGUID(track) or "" end
 local function selected_tracks() local a={}; for i=0,reaper.CountSelectedTracks(0)-1 do local tr=reaper.GetSelectedTrack(0,i); local _,n=reaper.GetTrackName(tr); a[#a+1]={track=tr,guid=track_guid(tr),name=n~="" and n or "Unbenannte Spur",index=math.floor(reaper.GetMediaTrackInfo_Value(tr,"IP_TRACKNUMBER"))} end; return a end
+-- MIDIEditor_GetActive returns the FOCUSED MIDI editor. Cache that handle
+-- during the deferred UI loop, before Composition Studio takes keyboard focus.
+-- Revalidate its active take before using the previously focused editor.
+local last_notation_editor=nil
+local function focused_or_last_notation_editor()
+ local focused=reaper.MIDIEditor_GetActive and reaper.MIDIEditor_GetActive()
+ if focused then
+  last_notation_editor=focused
+  return focused
+ end
+ if not last_notation_editor or not reaper.MIDIEditor_GetTake then return nil end
+ local ok,take=pcall(reaper.MIDIEditor_GetTake,last_notation_editor)
+ if ok and take and (not reaper.ValidatePtr2 or reaper.ValidatePtr2(0,take,"MediaItem_Take*")) then
+  return last_notation_editor
+ end
+ last_notation_editor=nil
+ return nil
+end
+
 -- REAPER notation and piano roll expose the same selected MIDI notes.
 -- Use only editable takes; read-only and never touch unselected notes.
 local function notation_selection_items(with_notes)
- local ed=reaper.MIDIEditor_GetActive and reaper.MIDIEditor_GetActive()
+ local ed=focused_or_last_notation_editor()
  if not ed then return {},0 end
  local takes={}
  if reaper.MIDIEditor_EnumTakes then
@@ -2019,7 +2038,7 @@ local function draw_history()
  if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project); workflow_adapter.history_error=false; workflow_adapter.load() end end
-local function loop() workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); reaper.ImGui_SetNextWindowSizeConstraints(ctx,360,480,10000,10000); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio"); reaper.ImGui_SameLine(ctx)
+local function loop() focused_or_last_notation_editor(); workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); reaper.ImGui_SetNextWindowSizeConstraints(ctx,360,480,10000,10000); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio"); reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
