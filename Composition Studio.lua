@@ -1602,7 +1602,7 @@ end
 -- Timing, length, channel, note count, CC, metadata and unselected notes remain unchanged.
 local function apply_notation_patch(r)
  local items=workflow_adapter.bindings(r)
- local byGuid={}, expected={}, edits={}, seen={}
+ local byGuid,expected,edits,seen={},{},{},{}
  for _,it in ipairs(items) do byGuid[it.guid]=it end
  local total=0
  for _,scope in ipairs(r.notation_selection or {}) do
@@ -1964,7 +1964,7 @@ local function begin_process(request)
    and lower:find("noten",1,true)
  local editRequested=lower:find("verbesser",1,true) or lower:find("überarbeit",1,true)
    or lower:find("variier",1,true) or lower:find("veränder",1,true)
-   or lower:find("ändere",1,true) or lower:find("ändere",1,true)
+   or lower:find("ändere",1,true)
  if notationCount>0 and explicitNotes and editRequested then
   local key=get_key()
   if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar.");busy=false;return end
