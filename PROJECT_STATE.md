@@ -12,7 +12,7 @@
 
 **Evidenzgrenze:** ausschließlich automatisierte Tests; kein laufendes REAPER, kein Live-KI-Test, keine native Windows-/macOS-Abnahme und kein Menü-/Netzwerk-/Neustart-End-to-End-Nachweis. **Testfreigabe, nicht SAFE / nicht vollständig praxiserprobt.** Nächster Schritt: ein gebündelter Praxisvergleich an Projektkopie (beide Editoren, markierte Melodie plus Referenzstimmen, bestätigte Änderung und Undo).
 
-**Veröffentlichung:** Finaler CI-/Merge-Nachweis folgt nach erfolgreicher GitHub-Prüfung.
+**Veröffentlicht:** [PR #9](https://github.com/wibem1/Composition-Studio/pull/9) ist nach `main` gemergt, Merge-Commit `9277c72649ec7314e9e9d7724ae8f559539a0cbd`. Alle vier automatischen Runs für den getesteten Quellcommit `793167c41c7a5144dc6686e7bec1ba38941261f8` sind `success`: [Lua-Syntax/JSON (Linux und macOS)](https://github.com/wibem1/Composition-Studio/actions/runs/41651628072), [Notenauswahl](https://github.com/wibem1/Composition-Studio/actions/runs/41651641082), [Editor-Brücke PR](https://github.com/wibem1/Composition-Studio/actions/runs/41651640951), [Editor-Brücke Push](https://github.com/wibem1/Composition-Studio/actions/runs/41651628480). Nach Merge aus GitHub `main` neu eingelesen: Header und Laufzeitversion jeweils **1.1.8**, Quellbytes identisch mit der lokal getesteten Fassung (Git-Blob `a103b2438b7684eaf509c475cf9b3188e7d42dec`). Die vorhandene Updatefunktion lädt weiterhin genau diese Datei aus `main`. Branch `recovery/v1.1.7` wurde auf den unveränderten 1.1.7-Commit geprüft. Keine Behauptung eines realen REAPER-Update-/Neustarttests.
 
 
 ## 03.11.2026 – Piano-Roll und Notationseditor gleichberechtigt, harmonischer Referenzkontext (Draft-PR #9)
