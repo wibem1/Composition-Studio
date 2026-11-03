@@ -126,4 +126,77 @@ assert(src:find('r.stage=="composition" and #(r.notation_selection or {})>0',1,t
 assert(src:find('workflow_guard=hasSelection and workflow_adapter.guard() or nil',1,true),"guard captured at request time")
 assert(src:find("Sofortaktionen auf ganze MIDI-Items",1,true),"no immediate whole item action from note selection")
 assert(src:find("Keine editierbaren Einzelnoten",1,true) or src:find("keine editierbaren Einzelnoten",1,true),"must block selected-note requests with empty note selection")
+
+-- Exercise the actual new AI note-patch function, not a rewritten test copy.
+local patchCode,penv=extract("local function apply_notation_patch","-- Approval-only transposition")
+local pnotes={
+ a={{sel=true,p=60,v=90,s=0,e=480},{sel=false,p=61,v=90,s=480,e=960},{sel=true,p=64,v=90,s=960,e=1440}},
+ b={{sel=true,p=48,v=90,s=0,e=480},{sel=true,p=49,v=90,s=480,e=960},{sel=true,mut=true,p=50,v=90,s=960,e=1440}},
+}
+local patchWrites,patchUndos,patchSorts=0,0,0
+penv.reaper={
+ TakeIsMIDI=function(t) return pnotes[t]~=nil end,
+ MIDI_CountEvts=function(t) return true,#pnotes[t] end,
+ MIDI_GetNote=function(t,i)
+  local n=pnotes[t][i+1]
+  if not n then return false end
+  return true,n.sel,n.mut or false,n.s,n.e,0,n.p,n.v
+ end,
+ MIDI_SetNote=function(t,i,selected,muted,s,e,ch,p,v)
+  local n=pnotes[t][i+1]
+  assert(n.sel==selected and n.s==s and n.e==e and ch==0 and not muted)
+  n.p=p;n.v=v;patchWrites=patchWrites+1;return true
+ end,
+ MIDI_Sort=function() patchSorts=patchSorts+1 end,
+ Undo_BeginBlock2=function() patchUndos=patchUndos+1 end,
+ Undo_EndBlock2=function() end,
+ Undo_DoUndo2=function() error("rollback only on exceptional failure") end,
+ UpdateArrange=function() end,
+ MIDI_SetAllEvts=function() error("must never replace entire MIDI stream") end,
+ MIDI_DeleteNote=function() error("must never delete notes") end,
+ MIDI_InsertNote=function() error("must never insert notes") end,
+ MIDI_SetCC=function() error("must never edit CC") end,
+}
+penv.workflow_adapter={bindings=function() return {{guid="itemA",take="a"},{guid="itemB",take="b"}} end}
+assert(load(patchCode,"apply_notation_patch","t",penv))()
+local originalPatchRefs={
+ {guid="itemA",notes={
+  {index=0,start_ppq=0,end_ppq=480,channel=0,pitch=60,velocity=90},
+  {index=2,start_ppq=960,end_ppq=1440,channel=0,pitch=64,velocity=90}}},
+ {guid="itemB",notes={
+  {index=0,start_ppq=0,end_ppq=480,channel=0,pitch=48,velocity=90},
+  {index=1,start_ppq=480,end_ppq=960,channel=0,pitch=49,velocity=90}}},
+}
+local payload="CSNOTE|itemA|0|63|82\nCSNOTE|itemA|2|67|91\nCSNOTE|itemB|0|50|86\nCSNOTE|itemB|1|51|96"
+local patchRecord={payload=payload,notation_selection=originalPatchRefs}
+local function rejected(payloadText,ref,reason)
+ local before=patchWrites
+ local ok,err=penv.apply_notation_patch({payload=payloadText,notation_selection=ref or originalPatchRefs})
+ assert(not ok and type(err)=="string",reason or "malformed patch should be rejected")
+ assert(patchWrites==before,"rejection must not partially modify any note")
+end
+rejected("CSNOTE|itemA|0|63|82","", "incomplete patch rejected")
+rejected(payload.."\nCSNOTE|itemA|0|63|82",nil,"duplicate rejected")
+rejected(payload.."\nCSNOTE|unknown|1|63|82",nil,"foreign note rejected")
+rejected(payload:gsub("CSNOTE|itemB|0|50|86","CSNOTE|itemB|0|128|86"),nil,"pitch bounds rejected")
+rejected(payload:gsub("CSNOTE|itemB|0|50|86","CSNOTE|itemB|0|50|0"),nil,"velocity bounds rejected")
+rejected(payload:gsub("CSNOTE|itemB|0|50|86","hello"),nil,"extra text rejected")
+-- Existing same-channel note collision: a changed note must not be made to
+-- overlap another MIDI note of equal pitch on that same take.
+pnotes.a[2].s=200;pnotes.a[2].e=700
+rejected(payload:gsub("CSNOTE|itemA|0|63|82","CSNOTE|itemA|0|61|82"),nil,"collision rejected")
+pnotes.a[2].s=480;pnotes.a[2].e=960
+assert(penv.apply_notation_patch(patchRecord)==true,"valid two-take note patch must apply")
+assert(patchWrites==4 and patchUndos==1 and patchSorts==2,"one Undo group and sort each modified take")
+assert(pnotes.a[1].p==63 and pnotes.a[1].v==82 and pnotes.a[2].p==61 and pnotes.a[2].v==90 and pnotes.a[3].p==67,
+ "marked notes changed, unmarked note untouched")
+assert(pnotes.b[1].p==50 and pnotes.b[2].p==51 and pnotes.b[3].p==50,
+ "other take selected notes changed, muted note untouched")
+rejected(payload,nil,"stale source note check blocks second application")
+assert(src:find('stage=="notation_patch" or stage=="engine_json"',1,true),
+ "AI patch responses enter the existing workflow proposal handler")
+assert(src:find('launch("notation_patch",context,key,',1,true),
+ "explicit note improvement enters dedicated AI protocol")
+print("OK: AI note patch production-function mock checks, strict count/IDs, stale source, collisions, untouched notes and CC")
+
 print("OK: selected-notation source functions tested, multi-take read, targeted Undo edit, stale guard, note isolation")
