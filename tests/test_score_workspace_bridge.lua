@@ -103,6 +103,8 @@ opened=101
 ok,msg=avenv.open_score_workspace()
 assert(not ok and msg:find("Vier%-Takte"),"missing companion action reported, never silently claimed")
 assert(source:find('if explicitScore then',1,true),"explicit score request mode in central command router")
+assert(source:find('local explicitScore=score_request_intent(lower) and not mentionsSelectedNotes',1,true),
+ "individual selected notes must never be replaced with full-score context")
 assert(source:find('local items=scoreItems or selected_items(false)',1,true),
  "explicit score context takes precedence over arrangement selection")
 assert(source:find('r.score_scope or #(r.notation_selection or {})>0',1,true),
