@@ -2079,6 +2079,8 @@ local function notation_patch_prompt(request,items)
     it.guid,ref.index,ref.pitch,ref.velocity,ref.channel,n.start_qn or 0,n.duration_qn or 0)
   end
  end
+ local reference=editor_reference_excerpt(items)
+ if reference~="" then lines[#lines+1]=reference end
  return table.concat(lines,"\n")
 end
 
@@ -2235,7 +2237,9 @@ local function begin_process(request)
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
  local items=scoreItems or selected_items(false); local tracks=scoreItems and score_context_tracks(scoreItems) or selected_tracks(); if #tracks==0 then for _,it in ipairs(items) do if it.selection_source then tracks[#tracks+1]={track=it.track,guid=it.track_guid,name=it.track_name,index=math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))} end end end; diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); local snapshot=scoreItems or selected_items(true); local hasSelection=false
  for _,it in ipairs(snapshot) do if it.selection_source and #it.selection_source>0 then hasSelection=true;break end end
- launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=snapshot,workflow_guard=(hasSelection or scoreItems) and workflow_adapter.guard() or nil})
+ local reference=hasSelection and editor_reference_excerpt(snapshot) or ""
+ if reference~="" then prompt=prompt.."\n\n"..reference; diag_set("controller_prompt",prompt) end
+ launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=snapshot,reference_context=reference,workflow_guard=(hasSelection or scoreItems) and workflow_adapter.guard() or nil})
 end
 
 local function title_prompt()
@@ -2287,8 +2291,12 @@ local function poll_job()
   if cb then begin_continuation(data.request,tonumber(cb),tonumber(ct));return end
   if text:match("^NEED_REVISE|") then busy=false;workflow_adapter.review(data.request);return end
   if text:match("^NEED_SWAM|") then busy=false;begin_swam_interpretation();return end
-  local awhy=text:match("^NEED_ANALYSIS|(.*)$"); if awhy then local full=data.notation_snapshot or selected_items(true); if #full==0 and #data.tracks>0 then full=track_context_items(data.tracks) end; if #full==0 then add("KI","Für die Analyse ist kein MIDI-Material ausgewählt."); busy=false; return end; data.full=full; data.music_tracks=data.tracks; launch("analysis",analysis_prompt(data.request,full,data.tracks),key,data); return end
-  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or (data.notation_snapshot or selected_items(true)); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil); diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; local ext=why and continuation_bars(data.request) or nil
+  local awhy=text:match("^NEED_ANALYSIS|(.*)$"); if awhy then local full=data.notation_snapshot or selected_items(true); if #full==0 and #data.tracks>0 then full=track_context_items(data.tracks) end; if #full==0 then add("KI","Für die Analyse ist kein MIDI-Material ausgewählt."); busy=false; return end; data.full=full; data.music_tracks=data.tracks; local prompt=analysis_prompt(data.request,full,data.tracks)
+   if data.reference_context and data.reference_context~="" then prompt=prompt.."\n\n"..data.reference_context end
+   launch("analysis",prompt,key,data); return end
+  local newwhy=text:match("^NEED_NEW|(.*)$"); local why=text:match("^NEED_MUSIC|(.*)$"); if newwhy or why then local full=newwhy and {} or (data.notation_snapshot or selected_items(true)); local tracks=newwhy and {} or data.tracks; if #full==0 and #tracks>0 then full=track_context_items(tracks) end; local cp=composition_prompt(data.request,full,tracks,newwhy~=nil)
+   if data.reference_context and data.reference_context~="" and not newwhy then cp=cp.."\n\n"..data.reference_context end
+   diag_set("composition_prompt",cp); data.full=full; data.music_tracks=tracks; data.is_new=newwhy~=nil; local ext=why and continuation_bars(data.request) or nil
   if ext then
    local tail,tail_error=request_transition(data.request)
    if tail==nil then add("KI",tail_error);busy=false;return end
