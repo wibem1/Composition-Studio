@@ -510,8 +510,20 @@ local function notation_selection_items(with_notes)
    local item=reaper.GetMediaItemTake_Item(tk)
    local track=item and reaper.GetMediaItem_Track(item)
    if track then
-    local _,nc=reaper.MIDI_CountEvts(tk)
-    for i=0,(nc or 0)-1 do
+    -- Native enumeration avoids scanning every MIDI note on each Studio UI frame.
+    local nextIndex=-1
+    local _,fallbackCount
+    if not reaper.MIDI_EnumSelNotes then _,fallbackCount=reaper.MIDI_CountEvts(tk) end
+    while true do
+     local i
+     if reaper.MIDI_EnumSelNotes then
+      i=reaper.MIDI_EnumSelNotes(tk,nextIndex)
+      if not i or i<0 then break end
+     else
+      i=nextIndex+1
+      if i>=(fallbackCount or 0) then break end
+     end
+     nextIndex=i
      local ok,sel,mut,s,e,ch,p,v=reaper.MIDI_GetNote(tk,i)
      if ok and sel and not mut then
       local guid=item_guid(item)
