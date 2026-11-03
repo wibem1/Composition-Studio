@@ -175,7 +175,7 @@ local function rejected(payloadText,ref,reason)
  assert(not ok and type(err)=="string",reason or "malformed patch should be rejected")
  assert(patchWrites==before,"rejection must not partially modify any note")
 end
-rejected("CSNOTE|itemA|0|63|82","", "incomplete patch rejected")
+rejected("CSNOTE|itemA|0|63|82",nil, "incomplete patch rejected")
 rejected(payload.."\nCSNOTE|itemA|0|63|82",nil,"duplicate rejected")
 rejected(payload.."\nCSNOTE|unknown|1|63|82",nil,"foreign note rejected")
 rejected(payload:gsub("CSNOTE|itemB|0|50|86","CSNOTE|itemB|0|128|86"),nil,"pitch bounds rejected")
