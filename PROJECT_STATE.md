@@ -1,3 +1,9 @@
+# 03.11.2026 – Eigenständiger Mausrad-Zoom-Testkandidat
+
+Auf separatem Branch `feat/independent-wheel-zoom-20261103`: zwei unabhängige Arrangement-ReaScripts unter `tools/wheel-zoom/`, horizontales weiches Zoomen und Höhe der Spur unter Mauszeiger. Keine Integration in Composition Studio, kein Updater-Release, main unverändert. Anregung SmoothWheelScroll (Windows-C++-Extension), kein Upstream-Code kopiert, keine vollständige Portierung. Nur native REAPER-7.83-APIs, keine Erweiterungsabhängigkeiten. Anleitung und reproduzierbare Tests beigefügt.
+
+Nachweis: 15 Lua-5.4-Mockprüfungen über lokale liblua5.4 bestanden (Richtung, schnelle Wiederholung, Gegenrichtung, falscher Kontext, Projektwechsel, Höhensperre). Keine echten REAPER-/Mac-/Windows-Tests. Nächster Schritt: ein Praxischeck beider Achsen und Richtungswechsel; insbesondere Wheel-Delta, Neustart laufender Aktionen und Theme-Höhengrenzen real bestätigen. Keine Scrollbalkenerkennung, MIDI-Editor-Unterstützung oder automatische Geräteerkennung.
+
 # Projektstand – Composition-Studio
 
 ## 03.11.2026 – Abschlussprüfung und beauftragte Testfreigabe 1.1.8 (PR #9)

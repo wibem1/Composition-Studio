@@ -1,0 +1,41 @@
+REAPER Mausrad-Zoom – Testfassung, 03.11.2026
+
+Installation (REAPER 7.83 oder neuer, Mac / Windows):
+1. Die beiden Lua-Dateien in einen dauerhaften Ordner entpacken.
+2. In REAPER: Actions > Show action list. Section: Main.
+3. ReaScript > Load: beide Lua-Dateien laden.
+4. Horizontal-Zoom markieren > Shortcuts for selected action > Add.
+   Im Eingabefenster Alt/Option halten und das Mausrad bewegen.
+5. Vertikal-Zoom markieren > Add: Alt/Option + Shift + Mausrad.
+   Bereits belegte Kombinationen nur ersetzen, wenn gewünscht.
+6. Aktionsliste schließen, Maus über eine Spur im Arrangement bewegen.
+   Alt/Option + Rad: Zeitachse zoomen.
+   Alt/Option + Shift + Rad: Höhe dieser Spur ändern.
+
+Keine dauerhaft zu startende Hintergrundaktion, keine zusätzlichen Plugins.
+Bei korrekter Mausradbedienung erscheint kein Fenster. Ein Start per Run
+zeigt lediglich einen Hinweis zur erforderlichen Mausradzuweisung.
+
+Grenzen:
+- Nur Arrangement (Main), kein MIDI-/Notationseditor oder Mixer.
+- Vertikal verändert die Höhe der Spur unter der Maus, nicht aller Spuren.
+- Gesperrte Spurhöhen werden respektiert. Bereich 24–1200 Pixel;
+  Theme/Faltung können die sichtbare Mindesthöhe beeinflussen.
+- Keine automatische Erkennung der Scrollbalken.
+- Horizontal verwendet REAPERs eingestellten Zoom-Mittelpunkt.
+- Betriebssystembelegung von Alt/Option kann eine andere Kombination erfordern.
+- FACTOR und REVERSE oben in jeder Lua-Datei ändern Geschwindigkeit/Richtung.
+- Die Skripte ändern Ansichts-/Spurhöhenwerte; MIDI-/Audiodaten bleiben unberührt.
+- Entfernen: Mausradzuweisungen in der Aktionsliste löschen; vorherige Belegung
+  anschließend wieder zuweisen. Geänderte Spurhöhen manuell zurückstellen.
+
+Prüfung: 15 automatisierte Lua-5.4-Mockprüfungen bestanden.
+Kein echter REAPER-/Mac-/Windows-Bedientest; keine Stabilitätsfreigabe.
+Bitte einmal beide Achsen und einen schnellen Richtungswechsel ausprobieren.
+
+Herkunft: unabhängige Implementierung nach öffentlicher ReaScript-API.
+Anregung: https://github.com/bobo198504/SmoothWheelScroll
+Das Original ist eine Windows-C++-Erweiterung zur Glättung vorhandener
+Mausradaktionen. Es wurde kein Originalcode übernommen; dies ist keine
+vollständige Portierung der Erweiterung und keine Geräteklassifizierung.
+API: https://www.reaper.fm/sdk/reascript/reascripthelp.html
