@@ -197,6 +197,10 @@ assert(src:find('stage=="notation_patch" or stage=="engine_json"',1,true),
  "AI patch responses enter the existing workflow proposal handler")
 assert(src:find('launch("notation_patch",context,key,',1,true),
  "explicit note improvement enters dedicated AI protocol")
+assert(src:find("Die direkte Überarbeitung markierter Noten unterstützt bisher",1,true),
+ "unsupported rhythmic requests explicitly rejected")
+assert(src:find('r.stage=="notation_patch"',1,true),
+ "explicit approval path handles AI notation patch")
 print("OK: AI note patch production-function mock checks, strict count/IDs, stale source, collisions, untouched notes and CC")
 
 print("OK: selected-notation source functions tested, multi-take read, targeted Undo edit, stale guard, note isolation")
