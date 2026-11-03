@@ -1966,6 +1966,16 @@ local function begin_process(request)
    or lower:find("variier",1,true) or lower:find("veränder",1,true)
    or lower:find("ändere",1,true)
  if notationCount>0 and explicitNotes and editRequested then
+  -- This first direct-in-place protocol is pitch/velocity only. Do not
+  -- silently pretend to honor a rhythmic or structural edit request.
+  local unsupported=lower:find("rhythm",1,true) or lower:find("notenläng",1,true)
+    or lower:find("notendauer",1,true) or lower:find("einsatzzeit",1,true)
+    or lower:find("einfüg",1,true) or lower:find("hinzufüg",1,true)
+    or lower:find("lösche",1,true) or lower:find("entfern",1,true)
+  if unsupported then
+   add("KI","Die direkte Überarbeitung markierter Noten unterstützt bisher ausschließlich Tonhöhen und Anschlagstärken. Rhythmus, Noten einfügen oder löschen ist hier noch nicht freigegeben.")
+   busy=false;return
+  end
   local key=get_key()
   if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar.");busy=false;return end
   local guard=workflow_adapter.guard()
