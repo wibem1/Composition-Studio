@@ -142,3 +142,59 @@ assert(source:find('if score_request_intent(request:lower()) then',1,true),
 assert(source:find('context=visible; tracks=score_context_tracks(context)',1,true),
  "score continuation derives track bindings from notation editor, not arrangement")
 print("OK: actual production score-context and notation bridge functions pass multi-track, no-mutation, limit and fallback tests")
+
+-- Saved analysis -> revision must preserve its scope, including after reload.
+local base={
+ {guid="it1",take="tk1",track="tr1",track_guid="tr1",track_name="Melody",notes={{pitch=60},{pitch=62}},start_qn=0,end_qn=8},
+ {guid="hidden",take="tk3",track="tr1",track_guid="tr1",notes={{pitch=99}},start_qn=8,end_qn=16},
+ {guid="it2",take="tk2",track="tr2",track_guid="tr2",notes={{pitch=48}},start_qn=0,end_qn=8},
+}
+local launched
+local rev={reaper=api,busy=false,input="",trim=function(x)return x end,
+ track_context_items=function() local rows={};for _,it in ipairs(base) do local row={};for k,v in pairs(it) do row[k]=v end;rows[#rows+1]=row end;return rows end,
+ get_key=function()return "offline-test" end,
+ workflow_core={prompt=function()return "revise" end},
+ composition_prompt=function(_,rows)
+  return rows[1].score_context and "READ ONLY SCORE" or rows[1].selection_source and "SELECTED NOTES ONLY" or "UNSCOPED"
+ end,
+ launch=function(stage,prompt,key,data)launched={stage=stage,prompt=prompt,data=data}end,
+ workflow_adapter={guard=function()return "guard" end,bindings=function()return {},{{track="tr1",guid="tr1",name="Melody"}}end},
+}
+compile("function workflow_adapter.review","workflow_adapter_guard=",rev)
+local saved={stage="analysis",source_guard="guard",raw_response="analysis",bindings={"it1"},score_scope=true}
+rev.workflow_adapter.analysis=saved
+rev.workflow_adapter.review("Revise")
+assert(launched and #launched.data.full==1 and launched.data.full[1].guid=="it1")
+assert(launched.data.full[1].score_context and launched.prompt:find("READ ONLY SCORE",1,true),"score read-only survives analysis follow-up")
+local ref={index=1,start_ppq=480,end_ppq=960,pitch=62,velocity=90,channel=0}
+saved.score_scope=false;saved.notation_selection={{guid="it1",notes={ref}}};saved.reference_context="READ ONLY HARMONY"
+launched=nil;rev.busy=false
+rev.workflow_adapter.review("Revise")
+local only=assert(launched).data.full[1]
+assert(#launched.data.full==1 and #only.notes==1 and only.notes[1].pitch==62 and only.notes[1].start_qn==1)
+assert(only.selection_source[1]==ref and launched.prompt:find("READ ONLY HARMONY",1,true),"selected-note identity and reference retained")
+assert(launched.data.reference_context==saved.reference_context)
+saved.source_guard="changed";launched=nil;rev.busy=false
+rev.workflow_adapter.review("Revise")
+assert(not launched,"stale saved analysis never launches")
+
+-- Exercise the actual apply boundary with malicious whole-item AI output.
+local reported
+local blocked={busy=false,workflow_core={check=function()end},
+ workflow_adapter={pending={stage="composition",state="ready",score_scope=true,payload="CS|target|it1|bad"},
+ guard=function()return "guard"end,save=function()end},add=function(_,text)reported=text end}
+compile("function workflow_adapter.apply","function workflow_adapter.review",blocked)
+blocked.workflow_adapter.apply()
+assert(reported and reported:find("überschreiben",1,true),"score context cannot overwrite original item")
+blocked.workflow_adapter.pending.score_scope=false
+blocked.workflow_adapter.pending.notation_selection={{guid="it1",notes={ref}}}
+blocked.workflow_adapter.pending.payload="CS|track|tr1|bad";reported=nil
+blocked.workflow_adapter.apply()
+assert(reported and reported:find("bestehende Spuren",1,true),"selected-note revision cannot write to reference tracks")
+
+local stopped
+local continuation={add=function(_,message)stopped=message end,busy=true}
+compile("local function begin_continuation","local function notation_patch_prompt",continuation)
+continuation.begin_continuation("Verlängere die markierten Noten im Piano-Roll um 4 Takte",4,0)
+assert(stopped and not continuation.busy,"selected-note continuation never expands to complete items")
+print("OK: saved analysis scope, harmonic reference, stale guard, malicious apply and continuation isolation")

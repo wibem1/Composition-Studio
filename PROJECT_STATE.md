@@ -1,5 +1,20 @@
 # Projektstand – Composition-Studio
 
+## 03.11.2026 – Abschlussprüfung und beauftragte Testfreigabe 1.1.8 (PR #9)
+
+**Aktueller Auftrag:** Vorhandene Arrangement-/Notations-/Piano-Roll-Integration abschließen und über den bestehenden Updater veröffentlichen; fehlende Praxis ausdrücklich dokumentieren. Diese aktuelle Nutzerfreigabe ersetzt die früheren Merge-Sperren weiter unten. Globale Standards und aktuelle Repo-Anweisungen/Quellen von GitHub gelesen; keine Neuentwicklung.
+
+**Gezielte Korrekturen:** Analyse-Folgeauftrag bewahrt den gespeicherten Editor-/Einzelnotenscope und read-only Referenztext, statt unbemerkt alle Items der Spuren einzubeziehen. Einzelnoten-Fortsetzung wird nicht zu Vollitem-Fortsetzung erweitert. Editorbezogene Neuanlagen behalten ihren Kontext. Produktionsfunktions-Regressionen ergänzt; veraltete Testmocks und JSON-Quelltextassertionen an den bestehenden Adapter angepasst.
+
+**Nachweis lokal:** volle Lua-5.4-Syntax, alle drei Lua-Testdateien und alle neun Python-Testsuiten bestanden. Darunter 33 Start-/Import-/Updateprüfungen, 64 Dear-ImGui-Layouts, 32 Kostenprüfungen, 28 Denkmodusfixtures, Auswahl-/KI-Patch-/Quellschutz, gespeicherte Analyse → Revision, direkter Referenzschutz, Installation echter 1.1.7-Bytes mit bytegenauer Sicherung unter Unix-/Windows-Transportmocks. Echter LilyPond-Compiler ausgelassen. [Vollständige Testmatrix und Wiederherstellung](docs/RELEASE-1.1.8.md).
+
+**Versions-/Updateweg:** Header und Laufzeitversion 1.1.8, weiterhin `Studio-Menü → Update` aus `main`; bestehender Offline-Installer aus denselben Bytes regeneriert, bestehender Updater unverändert. Ausgangsstand 1.1.7: `9dfebaeb2b2cda7fc562aee693162b9aada7801b`, vor Merge zusätzlich als Branch `recovery/v1.1.7` gesichert. Keine Konfigurations- oder Projektdatenmigration.
+
+**Evidenzgrenze:** ausschließlich automatisierte Tests; kein laufendes REAPER, kein Live-KI-Test, keine native Windows-/macOS-Abnahme und kein Menü-/Netzwerk-/Neustart-End-to-End-Nachweis. **Testfreigabe, nicht SAFE / nicht vollständig praxiserprobt.** Nächster Schritt: ein gebündelter Praxisvergleich an Projektkopie (beide Editoren, markierte Melodie plus Referenzstimmen, bestätigte Änderung und Undo).
+
+**Veröffentlichung:** Finaler CI-/Merge-Nachweis folgt nach erfolgreicher GitHub-Prüfung.
+
+
 ## 03.11.2026 – Piano-Roll und Notationseditor gleichberechtigt, harmonischer Referenzkontext (Draft-PR #9)
 
 **Nutzerauftrag:** „weiter! Dasselbe sollte übrigens auch im Pianoroll Editor möglich sein.“ Auf Grundlage der erneut aus GitHub gelesenen Entwicklungsstandards sowie `AGENTS.md`, `PROJECT_STATE.md`, `Composition Studio.lua` und der Tests des aktuellen Branches `feat/score-workspace-bridge-20261103` (keine Annahme aus Chats) umgesetzt.

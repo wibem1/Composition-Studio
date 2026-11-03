@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.7
+-- @version 1.1.8
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.7"
+local VERSION="1.1.8"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -1695,6 +1695,7 @@ function workflow_adapter.offer(stage,text,data)
  for _,it in ipairs(data.full or {}) do r.bindings[#r.bindings+1]=it.guid end
  r.notation_selection={}
  for _,it in ipairs(data.full or {}) do if it.selection_source and #it.selection_source>0 then r.notation_selection[#r.notation_selection+1]={guid=it.guid,notes=it.selection_source} end end
+ r.reference_context=data.reference_context or ""
  r.score_scope=false
  for _,it in ipairs(data.full or {}) do if it.score_context then r.score_scope=true;break end end
  for _,tr in ipairs(data.music_tracks or data.tracks or {}) do r.track_bindings[#r.track_bindings+1]=tr.guid end
@@ -1919,13 +1920,39 @@ function workflow_adapter.review(task)
   if #tracks==0 then
    local seen={}; for _,it in ipairs(items) do local guid=track_guid(it.track); if not seen[guid] then seen[guid]=true; local _,name=reaper.GetTrackName(it.track); tracks[#tracks+1]={track=it.track,guid=guid,name=name} end end
   end
-  -- Capture fresh notes from the bound source tracks.
+  -- Preserve the analysed editor scope even after saving/reloading a result.
+  -- Track membership never authorizes extending a selected-note edit.
   local full=track_context_items(tracks)
+  if r.score_scope or #(r.notation_selection or {})>0 then
+   local allowed,selection={},{}
+   for _,guid in ipairs(r.bindings or {}) do allowed[guid]=true end
+   for _,scope in ipairs(r.notation_selection or {}) do selection[scope.guid]=scope.notes end
+   local scoped={}
+   for _,it in ipairs(full) do
+    if allowed[it.guid] then
+     if r.score_scope then it.score_context=true end
+     if selection[it.guid] then
+      it.notes={};it.selection_source=selection[it.guid]
+      for _,ref in ipairs(it.selection_source) do
+       local sq=reaper.TimeMap2_timeToQN(0,reaper.MIDI_GetProjTimeFromPPQPos(it.take,ref.start_ppq))
+       local eq=reaper.TimeMap2_timeToQN(0,reaper.MIDI_GetProjTimeFromPPQPos(it.take,ref.end_ppq))
+       it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=ref.pitch,velocity=ref.velocity,channel=ref.channel}
+      end
+      it.start_qn=it.notes[1] and it.notes[1].start_qn or it.start_qn
+      it.end_qn=it.start_qn
+      for _,n in ipairs(it.notes) do it.end_qn=math.max(it.end_qn,n.start_qn+n.duration_qn) end
+     end
+     scoped[#scoped+1]=it
+    end
+   end
+   full=scoped
+  end
   assert(#full>0,"Bitte die analysierten Spuren auswählen und erneut analysieren.")
   local key=get_key(); assert(key,"API-Key fehlt.")
   local task=task or (trim(input)~="" and trim(input) or "Setze die musikalisch sinnvollen Vorschläge aus der Analyse um.")
   local prompt=workflow_core.prompt("revise").."\nANALYSE:\n"..r.raw_response.."\n"..composition_prompt(task,full,tracks,false).."\nDie vorhandene Tempo- und Taktkarte erhalten. Keine CSMETA-Zeilen ausgeben. Ausdruck kann in CSCTRL stehen."
-  busy=true; launch("composition",prompt,key,{request=task,full=full,music_tracks=tracks,workflow_guard=r.source_guard})
+  if r.reference_context and r.reference_context~="" then prompt=prompt.."\n\n"..r.reference_context end
+  busy=true; launch("composition",prompt,key,{request=task,full=full,music_tracks=tracks,reference_context=r.reference_context,workflow_guard=r.source_guard})
  end)
  if not ok then update_status=tostring(err); busy=false end
 end
@@ -2031,6 +2058,10 @@ end
 local function begin_continuation(request,bars,tail)
  if type(bars)~="number" or bars~=math.floor(bars) or bars<1 or bars>128 or (tail~=0 and tail~=2 and tail~=3 and tail~=4) then
   add("KI","Bitte eine Verlängerung von 1 bis 128 Takten und gegebenenfalls 2, 3 oder 4 Übergangstakte angeben.");busy=false;return
+ end
+ local lower=request:lower()
+ if (lower:find("markiert",1,true) or lower:find("ausgewählt",1,true)) and lower:find("noten",1,true) then
+  add("KI","Fortsetzung einzelner markierter Noten ist noch nicht freigegeben. Bitte ausdrücklich die Partitur, den Piano-Roll oder Arrangement-Items als Quelle wählen.");busy=false;return
  end
  local tracks=selected_tracks()
  local context=selected_items(true,"items")
@@ -2236,7 +2267,7 @@ local function begin_process(request)
   launch("notation_patch",context,key,{request=request,full=notationItems,workflow_guard=guard})
   return
  end
- if reaper.CountSelectedMediaItems(0)==0 and select(2,notation_selection_items(false))==0 and
+ if not explicitScore and reaper.CountSelectedMediaItems(0)==0 and select(2,notation_selection_items(false))==0 and
   (lower:find("^%s*komponier") or lower:find("^%s*erstelle%s+ein") or lower:find("^%s*schreibe%s+ein")) and
   (lower:find("stück",1,true) or lower:find("fuge",1,true) or lower:find("sonate",1,true) or lower:find("walzer",1,true) or lower:find("komposition",1,true)) then
   local key=get_key()

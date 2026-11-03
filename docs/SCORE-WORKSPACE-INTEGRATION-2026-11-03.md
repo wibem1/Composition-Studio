@@ -1,6 +1,10 @@
 # Composition Studio – Notationseditor als zweiter Kompositionsarbeitsbereich
 
-**03.11.2026 · Entwicklungszweig `feat/score-workspace-bridge-20261103` · Draft-PR #9 · kein Release**
+**03.11.2026 · Version 1.1.8 · PR #9 · vom Nutzer beauftragte Testfreigabe**
+
+Der aktuelle Auftrag erlaubt ausdrücklich die Veröffentlichung mit dokumentiert fehlenden REAPER-Praxistests. Er ersetzt die nachstehenden historischen Freigabesperren; ältere Implementierungs- und Testabschnitte bleiben als Verlauf erhalten. Die Version ist kein praktisch bestätigter SAFE-Stand. Abschlussprüfung und Rückweg: [RELEASE-1.1.8.md](RELEASE-1.1.8.md).
+
+**Gezielte Abschlusskorrekturen:** Analyse → Überarbeitung bewahrt gespeicherte Item-/Einzelnotenbindung, read-only Partiturscope und harmonischen Referenztext. Ein Fortsetzungsauftrag für einzelne markierte Noten wird abgewiesen statt auf ganze Items erweitert. Eine ausdrücklich editorbezogene Komposition wird nicht versehentlich als kontextfreie Neuanlage behandelt. Bestehende UI, Updater und Übernahmemechanik bleiben bestehen.
 
 ## Erweiterung am 03.11.2026 – Piano-Roll gleichberechtigt
 
