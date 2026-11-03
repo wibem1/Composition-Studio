@@ -1627,7 +1627,7 @@ local function apply_notation_patch(r)
   edits[#edits+1]={guid=guid,index=index,pitch=pitch,velocity=velocity}
  end
  if #edits~=total then return nil,"KI-Antwort ist unvollständig." end
- local byTake={}, indexByTake={}
+ local byTake,indexByTake={},{}
  for _,change in ipairs(edits) do
   local it=byGuid[change.guid]
   local ref=expected[change.guid][change.index]
