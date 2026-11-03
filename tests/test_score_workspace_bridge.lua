@@ -1,0 +1,112 @@
+-- Tests for actual Composition Studio score-workspace production functions.
+local f=assert(io.open("Composition Studio.lua","rb"));local source=f:read("*a");f:close()
+local function compile(start,finish,env)
+ local a=assert(source:find(start,1,true),start.." missing")
+ local b=assert(source:find(finish,a+1,true),finish.." missing")
+ local body=source:sub(a,b-1):gsub("^local function ","function ",1)
+ setmetatable(env,{__index=_G})
+ local chunk,err=load(body,"production:"..start,"t",env)
+ assert(chunk,err);chunk()
+end
+local takes={tk1="it1",tk2="it2"}
+local tr={it1="tr1",it2="tr2"}
+local notes={
+ tk1={{s=0,e=480,p=60,mut=false},{s=480,e=960,p=62,mut=false}},
+ tk2={{s=0,e=480,p=48,mut=false},{s=480,e=960,p=50,mut=true}},
+}
+local active=101
+local noteReads=0
+local api={
+ MIDIEditor_GetActive=function() return active end,
+ MIDIEditor_GetTake=function() return "tk1" end,
+ MIDIEditor_EnumTakes=function(ed,i,editable)
+  assert(ed==101,"correct editor")
+  assert(editable==false,"visible score must enumerate all visible, not only editable, takes")
+  return ({"tk1","tk2"})[i+1]
+ end,
+ ValidatePtr2=function() return true end,
+ TakeIsMIDI=function(tk) return notes[tk]~=nil end,
+ GetMediaItemTake_Item=function(tk) return takes[tk] end,
+ GetMediaItem_Track=function(it) return tr[it] end,
+ GetTrackName=function(t) return true,t end,
+ GetSetMediaItemTakeInfo_String=function() return true,"Score" end,
+ GetMediaItemInfo_Value=function(_,key) return key=="D_POSITION" and 0 or 8 end,
+ TimeMap2_timeToQN=function(_,t) return t end,
+ MIDI_CountEvts=function(tk) return true,#notes[tk] end,
+ MIDI_GetNote=function(tk,i)
+  noteReads=noteReads+1
+  local n=notes[tk][i+1];if not n then return false end
+  return true,false,n.mut,n.s,n.e,0,n.p,90
+ end,
+ MIDI_GetProjTimeFromPPQPos=function(_,ppq) return ppq/480 end,
+ GetMediaTrackInfo_Value=function() return 1 end,
+ MIDI_SetNote=function() error("score context must be read-only") end,
+ SetMediaItemSelected=function() error("score context must preserve selection") end,
+}
+local env={reaper=api,focused_or_last_notation_editor=function() return active end,
+ item_guid=function(it) return it end,track_guid=function(track) return track end}
+compile("local function notation_visible_items","local function selected_items",env)
+local items,why=env.notation_visible_items(true)
+assert(why==nil and #items==2,"all visible items across different tracks")
+assert(#items[1].notes==2 and #items[2].notes==1,"read whole visible score but skip muted notes")
+assert(items[1].score_context and items[2].score_context,"score context must be marked read-only")
+assert(items[1].notes[1].pitch==60 and items[2].notes[1].pitch==48,"actual score data")
+local rows=env.notation_visible_items(false)
+assert(#rows==2 and #rows[1].notes==0,"without notes only scope metadata is collected")
+local originalCount=api.MIDI_CountEvts
+api.MIDI_CountEvts=function(tk)
+ if tk=="tk1" then return true,2501 end
+ return originalCount(tk)
+end
+local tooLarge,reason=env.notation_visible_items(true)
+assert(tooLarge==nil and reason:find("2500"),"must reject over-budget score rather than truncating")
+api.MIDI_CountEvts=originalCount
+env.focused_or_last_notation_editor=function() return nil end
+assert(env.notation_visible_items(true)==nil,"closed score editor cannot become global selection")
+
+local opened=101
+local edits=0
+local commands={}
+local labels={
+ {100,"View: Mode: musical notation"},
+ {200,"Script: REAPER Notation - 4 Takte und Instrumentenschluessel.lua"},
+}
+local action= {
+ CountSelectedMediaItems=function() return 1 end,
+ GetSelectedMediaItem=function() return "it1" end,
+ GetActiveTake=function() return "tk1" end,
+ TakeIsMIDI=api.TakeIsMIDI,
+ Main_OnCommand=function(id) assert(id==40153);opened=101 end,
+ kbd_enumerateActions=function(_,i)
+  local row=labels[i+1];if row then return table.unpack(row) end
+  return 0,""
+ end,
+ SectionFromUniqueID=function(sec) assert(sec==32060);return "section" end,
+ MIDIEditor_OnCommand=function(ed,id) assert(ed==101);edits=edits+1;commands[#commands+1]=id;return true end,
+ MIDI_SetNote=function() error("display action must not write MIDI") end,
+ SetMediaItemSelected=function() error("display action must not select items") end,
+}
+local avenv={reaper=action,focused_or_last_notation_editor=function() return opened end}
+compile("local function open_score_workspace","local function begin_process",avenv)
+local ok,msg=avenv.open_score_workspace()
+assert(ok and edits==2 and commands[1]==100 and commands[2]==200,"notation mode then original shortcut")
+assert(msg:find("vorbereitet"),"positive status")
+opened=nil;edits=0;commands={}
+action.CountSelectedMediaItems=function() return 0 end
+assert(avenv.open_score_workspace()==false,"must not open MIDI editor without any MIDI item selection")
+action.CountSelectedMediaItems=function() return 1 end
+opened=nil
+ok=avenv.open_score_workspace()
+assert(ok and opened==101,"open MIDI editor from selected arrangement items")
+labels={{100,"View: Mode: musical notation"}}
+opened=101
+ok,msg=avenv.open_score_workspace()
+assert(not ok and msg:find("Vier%-Takte"),"missing companion action reported, never silently claimed")
+assert(source:find('if explicitScore then',1,true),"explicit score request mode in central command router")
+assert(source:find('local items=scoreItems or selected_items(false)',1,true),
+ "explicit score context takes precedence over arrangement selection")
+assert(source:find('r.score_scope or #(r.notation_selection or {})>0',1,true),
+ "score modifications must reject original-track replacement")
+assert(source:find('score_context_tracks(scoreItems)',1,true),
+ "score-only analysis and composition inherit visible track bindings")
+print("OK: actual production score-context and notation bridge functions pass multi-track, no-mutation, limit and fallback tests")
