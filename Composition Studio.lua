@@ -1567,6 +1567,47 @@ function workflow_adapter.transition(items,endpoint,count)
  return start
 end
 
+-- Approval-only transposition of captured note indices; untouched notes remain intact.
+local function apply_notation_transpose(r)
+ local shift=tonumber((r.payload or ""):match("^TRANSPOSE_NOTATION|([%+%-]?%d+)$"))
+ if not shift or shift~=math.floor(shift) or shift==0 or math.abs(shift)>24 then return nil,"Ungültige Halbton-Transposition." end
+ local items=workflow_adapter.bindings(r)
+ local lookup={};for _,it in ipairs(items) do lookup[it.guid]=it end
+ local edits={}
+ for _,scope in ipairs(r.notation_selection or {}) do
+  local it=lookup[scope.guid]
+  if not it or not it.take or not reaper.TakeIsMIDI(it.take) then return nil,"Quell-Item nicht mehr vorhanden." end
+  local _,count=reaper.MIDI_CountEvts(it.take)
+  for _,ref in ipairs(scope.notes or {}) do
+   if type(ref.index)~="number" or ref.index<0 or ref.index>=(count or 0) then return nil,"Notenindex nicht mehr gültig." end
+   local ok,sel,mut,s,e,ch,p,v=reaper.MIDI_GetNote(it.take,ref.index)
+   if not ok or mut or s~=ref.start_ppq or e~=ref.end_ppq or ch~=ref.channel or p~=ref.pitch or v~=ref.velocity then
+    return nil,"Die markierten Noten wurden verändert. Auftrag neu erstellen."
+   end
+   if p+shift<0 or p+shift>127 then return nil,"Tonhöhe außerhalb MIDI-Bereich." end
+   edits[#edits+1]={take=it.take,index=ref.index,sel=sel,s=s,e=e,ch=ch,p=p+shift,v=v}
+  end
+ end
+ if #edits==0 then return nil,"Keine markierten Noten gesichert." end
+ reaper.Undo_BeginBlock2(0)
+ local ok,err=xpcall(function()
+  local takes={}
+  for _,n in ipairs(edits) do
+   assert(reaper.MIDI_SetNote(n.take,n.index,n.sel,false,n.s,n.e,n.ch,n.p,n.v,true)~=false,"MIDI_SetNote fehlgeschlagen")
+   takes[n.take]=true
+  end
+  for take in pairs(takes) do reaper.MIDI_Sort(take) end
+ end,debug.traceback)
+ if not ok then
+  reaper.Undo_EndBlock2(0,"Composition Studio – fehlgeschlagene Transposition",-1)
+  reaper.Undo_DoUndo2(0)
+  return nil,err
+ end
+ reaper.UpdateArrange()
+ reaper.Undo_EndBlock2(0,"Composition Studio – markierte Noten transponieren",-1)
+ return true
+end
+
 function workflow_adapter.apply()
  local r=workflow_adapter.pending; if not r or busy then return end
  local ok,err=pcall(function()
@@ -1578,7 +1619,9 @@ function workflow_adapter.apply()
    assert(not r.payload:find("CS|track|",1,true),"Notenauswahl darf nicht ungeprüft in bestehende Spuren schreiben.")
   end
   if #(r.bindings or {})>0 and r.stage=="composition" then assert(not r.payload:match("CSMETA|"),"Die vorhandene Tempo- und Taktkarte bleibt bei Varianten erhalten. Bitte ohne globale CSMETA-Angaben neu erzeugen.") end
-  if r.stage=="lily_continuation" or r.stage=="lily_composition" then local items=workflow_adapter.bindings(r)
+  if r.stage=="notation_transpose" then
+   result,why=apply_notation_transpose(r)
+  elseif r.stage=="lily_continuation" or r.stage=="lily_composition" then local items=workflow_adapter.bindings(r)
    result,why=lily_compile_import(r.payload,r.extension_start,r.extension_bars,r.transition_bars>0 and items or nil)
   else
    local text=r.payload
