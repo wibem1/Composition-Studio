@@ -1790,6 +1790,19 @@ end
 local function begin_process(request)
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
+ local notationItems,notationCount=notation_selection_items(true)
+ local semitones=lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbton")
+                 or lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbtön")
+ if notationCount>0 and semitones then
+  local shift=tonumber(semitones)
+  if lower:find("nach unten",1,true) and shift>0 then shift=-shift end
+  if lower:find("nach oben",1,true) and shift<0 then shift=-shift end
+  if shift==0 or math.abs(shift)>24 then add("KI","Markierte Noten um 1–24 Halbtöne transponieren.");busy=false;return end
+  local ok,why=pcall(workflow_adapter.offer,"notation_transpose","TRANSPOSE_NOTATION|"..shift,
+    {request=request,full=notationItems,workflow_guard=workflow_adapter.guard()})
+  if not ok then add("KI",tostring(why));busy=false end
+  return
+ end
  if reaper.CountSelectedMediaItems(0)==0 and select(2,notation_selection_items(false))==0 and
   (lower:find("^%s*komponier") or lower:find("^%s*erstelle%s+ein") or lower:find("^%s*schreibe%s+ein")) and
   (lower:find("stück",1,true) or lower:find("fuge",1,true) or lower:find("sonate",1,true) or lower:find("walzer",1,true) or lower:find("komposition",1,true)) then
@@ -1812,7 +1825,9 @@ local function begin_process(request)
  end
 
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
- local items=selected_items(false); local tracks=selected_tracks(); if #tracks==0 then for _,it in ipairs(items) do if it.selection_source then tracks[#tracks+1]={track=it.track,guid=it.track_guid,name=it.track_name,index=math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))} end end end; diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=selected_items(true)})
+ local items=selected_items(false); local tracks=selected_tracks(); if #tracks==0 then for _,it in ipairs(items) do if it.selection_source then tracks[#tracks+1]={track=it.track,guid=it.track_guid,name=it.track_name,index=math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))} end end end; diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); local snapshot=selected_items(true); local hasSelection=false
+ for _,it in ipairs(snapshot) do if it.selection_source and #it.selection_source>0 then hasSelection=true;break end end
+ launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=snapshot,workflow_guard=hasSelection and workflow_adapter.guard() or nil})
 end
 
 local function title_prompt()
@@ -1873,7 +1888,13 @@ local function poll_job()
   elseif newwhy then
     launch_new_json(data.request,key,data)
    else launch(newwhy and "composition_music" or "composition",cp,key,data) end; return end
-  if text:match("^ACTION|") then local a,pe=parse_action(text,data.items); if not a then add("KI","Ich führe nichts aus: "..pe); busy=false; return end; local ok,ae=execute_action(a); if not ok then add("KI","Die Aktion wurde nicht ausgeführt: "..tostring(ae)); else add("KI",trim(a.desc).." – erledigt. REAPER Undo kann die Änderung rückgängig machen.") end; busy=false; return end
+  if text:match("^ACTION|") then
+   for _,it in ipairs(data.notation_snapshot or {}) do
+    if it.selection_source and #it.selection_source>0 then
+     add("KI","Sofortaktionen auf ganze MIDI-Items sind bei Notenauswahl gesperrt. Bitte eine gezielte Transposition oder Vorschlagsvariante verwenden.");busy=false;return
+    end
+   end
+   local a,pe=parse_action(text,data.items); if not a then add("KI","Ich führe nichts aus: "..pe); busy=false; return end; local ok,ae=execute_action(a); if not ok then add("KI","Die Aktion wurde nicht ausgeführt: "..tostring(ae)); else add("KI",trim(a.desc).." – erledigt. REAPER Undo kann die Änderung rückgängig machen.") end; busy=false; return end
   add("KI","Ich konnte den Auftrag nicht eindeutig einem sicheren Vorgang zuordnen und habe nichts verändert."); busy=false; return
  elseif stage=="swam_interpretation" then
   data.swam_performance=text; update_status="SWAM-Interpret wird technisch übersetzt …"; launch("swam_translation",swam_translation_prompt(data.swam_source,text),key,data); return
