@@ -112,7 +112,7 @@ function reaper.MIDIEditor_OnCommand(editor,id)
  else error("unexpected action; quantization must never run") end
  return true
 end
-function reaper.ShowConsoleMsg(s) state.console[#state.console+1]=s end
+function reaper.ShowConsoleMsg(_) error("one-shot shortcut must never open REAPER console") end
 function reaper.MIDI_SetNote() error("MIDI event changed!") end
 function reaper.MIDI_SetAllEvts() error("MIDI event changed!") end
 function reaper.MIDI_InsertTextSysexEvt() error("MIDI metadata changed!") end
@@ -141,6 +141,7 @@ check(state.actions==1,"one native zoom to four bars")
 check(state.vertical==4 and state.verticalResets==1 and state.verticalIns==4,
  "eight bars over three tracks gets four vertical zoom steps from reset baseline")
 check(state.commands[#state.commands]==410,"horizontal four-bar zoom always runs AFTER vertical reset")
+check(#state.console==0,"ordinary shortcut execution has no console messages")
 
 check(state.spacing_calls==1 and state.spacing==1,"proportional spacing enabled once")
 check(state.time[1]==7 and state.time[2]==9 and state.loop[1]==10 and state.loop[2]==12,"loop and time selections restored")
