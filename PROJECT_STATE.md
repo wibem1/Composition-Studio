@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## 03.11.2026 – Reale Negativmeldung: Einmal-Notationsskript ohne Wirkung; Diagnose vor weiterer Änderung
+
+**Nutzerbefund:** Das angehängte `REAPER Notation - 4 Takte und Instrumentenschluessel.lua` tut im MIDI-Editor nach Nutzerangabe nichts. Start im MIDI-Editor wurde ausdrücklich bestätigt. Dies ist ein negativer Praxisbefund; die früheren Mocktests sind kein Gegenbeleg. Die angehängte Fassung enthält noch nicht die spätere Mehrfach-Item-Öffnung dieses Branches. Ob das den aktuellen Fehler betrifft, ist unbekannt.
+
+**Statisch belegt:** `note()` verwirft jede Meldung, einschließlich des äußeren `pcall(main)`-Fehlers. Die Anzeigeaktionen hängen von exakt englischen Aktionsnamen ab. Das Skript schaltet selbst nicht in den Notationsmodus um. Keine dieser Beobachtungen beweist allein die konkrete lokale Fehlerursache. API-Signaturen wurden mit der offiziellen ReaScript-Dokumentation für REAPER 7.83 abgeglichen (https://www.reaper.fm/sdk/reascript/reascripthelp.html).
+
+**Gezielter nächster Schritt:** `REAPER_Notation_Diagnose.lua` einmal im selben MIDI-Editor ausführen. Das neue Werkzeug liest Version/Plattform, Start-Aktionsbereich, Editor/Takes, Notenzahl, vorhandene SCORE-Zeilen, Taktgrenzen, benötigte API-Funktionen und die echten lokalen Zoom-/Modus-/Proportional-Aktionsnamen. Es führt KEINE Anzeigeaktionen, Schlüssel-/Chunk-/MIDI-Schreiboperationen oder Änderungen an Auswahl/Einstellungen aus. Es öffnet nur für diesen Diagnoseaufruf die Konsole. Der bisherige normale Shortcut bleibt unverändert und fensterlos.
+
+**Prüfung:** `tests/test_notation_diagnose.py`, Lua 5.4/lupa, vier erfolgreiche Ausführungsfälle: normal, anderssprachige Aktionsnamen, fehlender fokussierter Editor, fehlende Aktions-API. Strikter Mock weist jeden unerwarteten/mutierenden API-Aufruf zurück. Noch keine echte Ausführung der Diagnose im Nutzer-REAPER, keine Ursache bestätigt, keine Reparatur-/Releasebehauptung. Kein neuer Composition-Studio-Release und keine automatische CI gestartet.
+
+
 ## 03.11.2026 – Alle markierten MIDI-Items gemeinsam im Noteneditor öffnen (Testkandidat)
 
 **Nutzerwunsch:** Der Einmal-Shortcut soll nicht nur bereits sichtbare Notations-Takes optimieren, sondern auch **alle im Arrangement markierten MIDI-Items** gemeinsam als Notensysteme anzeigen. Vorhandene vier Takte Horizontalzoom, automatischer Vertikalzoom, MIDI-basierte Schlüsselwahl, Proportionalanzeige und Fensterfreiheit bleiben erhalten.
