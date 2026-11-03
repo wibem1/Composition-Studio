@@ -2087,7 +2087,8 @@ end
 -- Reuse the separately installed, standalone notation shortcut through
 -- REAPER's own MIDI action registry. No duplicate SCORE/zoom implementation.
 -- This first integration never changes media-item selection or MIDI events.
-local function open_score_workspace()
+local function open_score_workspace(mode)
+ mode=mode=="pianoroll" and "pianoroll" or "notation"
  local ed=focused_or_last_notation_editor()
  if not ed then
   local count=0
@@ -2107,7 +2108,7 @@ local function open_score_workspace()
  end
  local section=reaper.SectionFromUniqueID(32060)
  if not section then return false,"REAPER-MIDI-Aktionsbereich nicht verfügbar." end
- local notationMode,shortcut
+ local notationMode,pianoMode,shortcut
  for i=0,19999 do
   local id,label=reaper.kbd_enumerateActions(section,i)
   if not id or id==0 then break end
@@ -2115,9 +2116,18 @@ local function open_score_workspace()
   local lower=label:lower()
   if lower=="view: mode: musical notation" or lower=="view: mode: notation"
     or lower=="view: notation" then notationMode=id end
+  if lower=="view: mode: piano roll" or lower=="view: mode: pianoroll"
+    or lower=="view: piano roll" then pianoMode=id end
   if lower:find("reaper notation - 4 takte und instrumentenschluessel.lua",1,true) then
    shortcut=id
   end
+ end
+ if mode=="pianoroll" then
+  if not pianoMode then return false,"Piano-Roll-Modus nicht als REAPER-MIDI-Aktion gefunden. Bitte im MIDI-Editor Ansicht → Modus: Piano-Roll (Alt+1) wählen." end
+  if reaper.MIDIEditor_OnCommand(ed,pianoMode)==false then
+   return false,"REAPER konnte nicht in den Piano-Roll-Modus wechseln."
+  end
+  return true,"Piano-Roll-Editor aktiviert. Markierte Noten und sichtbare Instrumentalstimmen sind für Composition Studio verfügbar."
  end
  if notationMode and reaper.MIDIEditor_OnCommand(ed,notationMode)==false then
   return false,"REAPER konnte nicht in die Notenansicht wechseln."
@@ -2136,6 +2146,19 @@ end
 local function begin_process(request)
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
+ local pianoDisplay=(lower:find("pianoroll",1,true) or lower:find("piano-roll",1,true)
+  or lower:find("piano roll",1,true))
+ local viewRequest=(lower:find("zeig",1,true) or lower:find("öffne",1,true)
+  or lower:find("öffnen",1,true) or lower:find("aktualisier",1,true)
+  or lower:find("vorbereit",1,true) or lower:find("stelle",1,true))
+ local nonDisplay=(lower:find("analys",1,true) or lower:find("komponier",1,true)
+  or lower:find("verbesser",1,true) or lower:find("überarbeit",1,true)
+  or lower:find("ergänz",1,true) or lower:find("verlänger",1,true))
+ if pianoDisplay and viewRequest and not nonDisplay then
+  local ok,why=open_score_workspace("pianoroll")
+  add("KI",why)
+  busy=false;return
+ end
  -- Local, free display action; never route a view-only command to an AI model.
  if (lower:find("zeig",1,true) or lower:find("öffne",1,true)
     or lower:find("öffnen",1,true) or lower:find("aktualisier",1,true)
@@ -2439,7 +2462,7 @@ if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(compositi
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
-if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Notenansicht vorbereiten") then local ok,msg=open_score_workspace(); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if workflow_adapter.models.message and workflow_adapter.models.message~="" then reaper.ImGui_TextWrapped(ctx,workflow_adapter.models.message) end; if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Notenansicht vorbereiten") then local ok,msg=open_score_workspace(); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Piano-Roll öffnen") then local ok,msg=open_score_workspace("pianoroll"); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if workflow_adapter.models.message and workflow_adapter.models.message~="" then reaper.ImGui_TextWrapped(ctx,workflow_adapter.models.message) end; if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
 if reaper.ImGui_Button(ctx,"Denken: "..REASONING_LABELS[reasoning_mode].." v##reasoning",model_width) and not busy then reaper.ImGui_OpenPopup(ctx,"##reasoning_menu") end
 if reaper.ImGui_BeginPopup(ctx,"##reasoning_menu") then
  for _,choice in ipairs({"low","medium","high","auto"}) do
