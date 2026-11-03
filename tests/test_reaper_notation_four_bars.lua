@@ -31,7 +31,7 @@ local state={
 }
 local reaper={}
 _G.reaper=reaper
-function reaper.MIDIEditor_GetActive() return 100 end
+function reaper.MIDIEditor_GetActive() if state.noEditor then return nil end;return 100 end
 function reaper.MIDIEditor_EnumTakes(_,i,editable)
  assert(editable==false)
  return state.visibleTakes[i+1]
@@ -42,6 +42,7 @@ function reaper.GetSelectedMediaItem(_,i) return state.selected[i+1] end
 function reaper.GetActiveTake(item) return item end
 function reaper.Main_OnCommand(cmd,flag)
  assert(cmd==40153 and flag==0,"must open selected items in built-in editor")
+ state.noEditor=false
  state.multiOpenCalls=state.multiOpenCalls+1
  state.visibleTakes={table.unpack(state.selected)}
 end
@@ -86,36 +87,40 @@ function reaper.GetSet_LoopTimeRange2(_,isSet,isLoop,startTime,endTime)
 end
 function reaper.SectionFromUniqueID(id) assert(id==32060);return id end
 function reaper.kbd_enumerateActions(_,idx)
- local actions={{410,"View: Zoom to project loop selection"}}
+ local actions={{40726,state.german and "Ansicht: Auf Projekt-Loop zoomen" or "View: Zoom to project loop selection"},{40954,"Mode: Notation"}}
  if state.spacing_present then
-  actions[#actions+1]={411,"Notation: Proportional (musical) note spacing"}
+  actions[#actions+1]={41131,"Notation: Proportional (musical) note spacing"}
  end
  if state.content_present then
-  actions[#actions+1]={412,"View: Zoom to content"}
+  actions[#actions+1]={40466,state.german and "Ansicht: Auf Inhalt zoomen" or "View: Zoom to content"}
  end
  if state.vertical_present then
-  actions[#actions+1]={413,"View: Zoom in vertically"}
+  actions[#actions+1]={40111,state.german and "Ansicht: Vertikal einzoomen" or "View: Zoom in vertically"}
  end
  if not actions[idx+1] then return 0,"" end
  return table.unpack(actions[idx+1])
 end
 function reaper.GetToggleCommandStateEx(section,id)
- assert(section==32060 and id==411)
+ assert(section==32060 and id==41131)
+ if state.needNotationState then return -1 end
  return state.spacing
 end
 function reaper.MIDIEditor_OnCommand(editor,id)
  assert(editor==100)
  state.commands[#state.commands+1]=id
- if id==410 then
+ if id==40954 then
+  state.notationCalls=(state.notationCalls or 0)+1
+  state.needNotationState=false
+ elseif id==40726 then
   state.actions=state.actions+1
   assert(state.loop[1]==0 and state.loop[2]==16,"must zoom four bars")
- elseif id==411 then
+ elseif id==41131 then
   state.spacing_calls=state.spacing_calls+1
   if state.spacing_responds then state.spacing=1-state.spacing end
- elseif id==412 then
+ elseif id==40466 then
   state.verticalResets=state.verticalResets+1
   state.vertical=0
- elseif id==413 then
+ elseif id==40111 then
   state.verticalIns=state.verticalIns+1
   state.vertical=state.vertical+1
  elseif id==40896 then
@@ -130,7 +135,7 @@ function reaper.MIDI_SetNote() error("MIDI event changed!") end
 function reaper.MIDI_SetAllEvts() error("MIDI event changed!") end
 function reaper.MIDI_InsertTextSysexEvt() error("MIDI metadata changed!") end
 function reaper.ImGui_CreateContext() error("No UI needed") end
-function reaper.ShowMessageBox() error("No prompts allowed") end
+function reaper.ShowMessageBox(message) state.failure=message end
 
 local checks=0
 local function check(cond,label)
@@ -141,7 +146,9 @@ end
 local function run()
  local script,err=loadfile(source)
  assert(script,err)
+ state.failure=nil
  script()
+ if not state.expectFailure then assert(not state.failure,state.failure) end
 end
 local function has(track,clef)
  return state.chunks[track]:find("SCORE 0 "..clef.." 0 0",1,true)~=nil
@@ -153,7 +160,7 @@ check(has("c",2),"low-note track named 'Violine' gets bass")
 check(state.actions==1,"one native zoom to four bars")
 check(state.vertical==4 and state.verticalResets==1 and state.verticalIns==4,
  "eight bars over three tracks gets four vertical zoom steps from reset baseline")
-check(state.commands[#state.commands]==410,"horizontal four-bar zoom always runs AFTER vertical reset")
+check(state.commands[#state.commands]==40726,"horizontal four-bar zoom always runs AFTER vertical reset")
 check(#state.console==0,"ordinary shortcut execution has no console messages")
 
 check(state.spacing_calls==1 and state.spacing==1,"proportional spacing enabled once")
@@ -227,14 +234,14 @@ check(state.chunks.c:find("VU 2\nSCORE 0 2 0 0",1,true)~=nil,
 state.itemLength=128 -- 32 measures -> 8 four-bar systems
 run()
 check(state.vertical==2,"longer piece uses a more conservative vertical scale")
-check(state.commands[#state.commands]==410,"longer piece still ends on four-bar horizontal zoom")
+check(state.commands[#state.commands]==40726,"longer piece still ends on four-bar horizontal zoom")
 -- No reset action: do not blindly enlarge vertically.
 state.content_present=false
 local resetsBefore,insBefore=state.verticalResets,state.verticalIns
 run()
 check(state.verticalResets==resetsBefore and state.verticalIns==insBefore,
  "missing native reset leaves vertical scale unchanged")
-check(state.commands[#state.commands]==410,"missing vertical reset never blocks horizontal zoom")
+check(state.commands[#state.commands]==40726,"missing vertical reset never blocks horizontal zoom")
 -- Missing zoom-in action: similarly skip instead of distorting view.
 state.content_present=true
 state.vertical_present=false
@@ -251,7 +258,7 @@ check(table.concat(state.visibleTakes,",")=="a,b,c","missing selected MIDI items
 check(state.multiOpenCalls==1 and state.projectModeCalls==1 and state.selectedModeCalls==1,
  "native per-project editor mode and open-all-selected behavior used")
 check(table.concat(state.selected,",")==selections,"arrangement item selection remains unchanged")
-check(state.commands[#state.commands]==410,"four-bar zoom follows opening selected items")
+check(state.commands[#state.commands]==40726,"four-bar zoom follows opening selected items")
 local opens=state.multiOpenCalls
 run()
 check(state.multiOpenCalls==opens,"when all selected items are visible, do not reopen editor")
@@ -262,3 +269,20 @@ run()
 check(state.multiOpenCalls==opens and #state.visibleTakes==2,"no selected items leaves current multi-item editor intact")
 
 print("OK: "..checks.." real-script mock checks; REAPER GUI multi-item display and vertical reset remain unverified")
+
+
+state.german=true;state.vertical_present=true;state.content_present=true;state.spacing=0;state.needNotationState=true
+local zoomBefore=state.actions;local verticalBefore=state.verticalIns
+run()
+check(state.actions==zoomBefore+1 and state.verticalIns>verticalBefore,"German action names work via verified native IDs")
+check(state.spacing==1 and state.notationCalls>0,"notation mode is activated before requesting toggle status")
+state.noEditor=true;state.selected={"a","b"}
+local opensBefore=state.multiOpenCalls
+run()
+check(not state.noEditor and state.multiOpenCalls==opensBefore+1,"Main-section start without focused editor opens explicitly selected MIDI items")
+state.noEditor=true;state.selected={};state.expectFailure=true
+local commandsBefore=#state.commands;local writesBefore=state.writes
+run()
+check(state.failure and state.failure:find("Kein fokussierter MIDI-Editor",1,true),"missing editor and selection produces one actionable error")
+check(#state.commands==commandsBefore and state.writes==writesBefore,"failed prerequisite never changes view or clefs")
+print("OK: "..checks.." production-script checks, including user's German/focus failure; real GUI retest pending")

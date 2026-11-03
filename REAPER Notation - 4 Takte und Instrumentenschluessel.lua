@@ -1,6 +1,7 @@
 -- @description REAPER Notation - 4 Takte und Instrumentenschluessel
+-- @version 0.1.1
 -- @author Klangwerke
--- @about One shortcut: show selected MIDI items together, zoom four measures horizontally, adaptive vertical zoom, proportional spacing and MIDI-based clefs. No dialogs or MIDI note edits.
+-- @about One shortcut: show selected MIDI items together, zoom four measures horizontally, adaptive vertical zoom, proportional spacing and MIDI-based clefs. No success dialogs or MIDI note edits. Errors are reported.
 -- No ReaImGui, SWS, ReaPack, AI, or additional setup required after loading into MIDI Editor actions.
 
 local PROJECT = 0
@@ -259,18 +260,23 @@ local function four_bar_window()
          reaper.TimeMap2_QNToTime(PROJECT,last),nil
 end
 
-local function midi_action(editor, label)
-  if not reaper.kbd_enumerateActions or not reaper.SectionFromUniqueID then return false end
-  local section = reaper.SectionFromUniqueID(32060)
-  if not section then return false end
+-- Native IDs confirmed by the user's REAPER 7.83/OSX64 action inventory.
+-- Labels are localized; never depend on an English display name.
+local ACTION={notation=40954,loop_zoom=40726,content_zoom=40466,vertical_in=40111,spacing=41131}
+local function available_action(id)
+  if not reaper.kbd_enumerateActions or not reaper.SectionFromUniqueID then return nil end
+  local section=reaper.SectionFromUniqueID(32060)
+  if not section then return nil end
   for i=0,19999 do
-    local command,text = reaper.kbd_enumerateActions(section,i)
+    local command=reaper.kbd_enumerateActions(section,i)
     if not command or command==0 then break end
-    if text==label then
-      return reaper.MIDIEditor_OnCommand(editor,command) ~= false
-    end
+    if command==id then return command end
   end
-  return false
+  return nil
+end
+local function midi_action(editor,id)
+  local command=available_action(id)
+  return command and reaper.MIDIEditor_OnCommand(editor,command)~=false or false
 end
 
 -- A toggle must only be sent if proportional note spacing is currently OFF.
@@ -284,15 +290,7 @@ local function enable_proportional_spacing(editor)
   end
   local section = reaper.SectionFromUniqueID(32060)
   if not section then return false,"MIDI-Editor-Aktionsbereich fehlt" end
-  local command
-  for i=0,19999 do
-    local id,label = reaper.kbd_enumerateActions(section,i)
-    if not id or id==0 then break end
-    if label=="Notation: Proportional (musical) note spacing" then
-      command=id
-      break
-    end
-  end
+  local command=available_action(ACTION.spacing)
   if not command then return false,"Aktion für proportionale Notenabstände nicht gefunden" end
   local state = reaper.GetToggleCommandStateEx(32060,command)
   if state==1 then return true,"bereits aktiv" end
@@ -339,14 +337,8 @@ local function set_automatic_vertical_zoom(editor,trackCount,takes)
   end
   local section=reaper.SectionFromUniqueID(32060)
   if not section then return false,"MIDI-Aktionsbereich fehlt" end
-  local contentID,zoomInID
-  for i=0,19999 do
-    local id,label=reaper.kbd_enumerateActions(section,i)
-    if not id or id==0 then break end
-    if label=="View: Zoom to content" then contentID=id end
-    if label=="View: Zoom in vertically" then zoomInID=id end
-    if contentID and zoomInID then break end
-  end
+  local contentID=available_action(ACTION.content_zoom)
+  local zoomInID=available_action(ACTION.vertical_in)
   -- No '3 extra steps every run': that would grow without bound.
   if not contentID or not zoomInID then
     return false,"Zoom to content oder vertikale Zoom-Aktion nicht gefunden"
@@ -387,7 +379,7 @@ local function zoom_four_bars(editor)
   end
   local ok,done = pcall(function()
     reaper.GetSet_LoopTimeRange2(PROJECT,true,true,startTime,endTime,false)
-    return midi_action(editor,"View: Zoom to project loop selection")
+    return midi_action(editor,ACTION.loop_zoom)
   end)
   -- Always restore loop and time selection. No persistent project-time edits.
   reaper.GetSet_LoopTimeRange2(PROJECT,true,true,loopStart,loopEnd,false)
@@ -399,12 +391,26 @@ end
 
 local function main()
   local editor = reaper.MIDIEditor_GetActive()
-  if not editor then note("Kein aktiver MIDI-Editor. Shortcut im MIDI-Editor zuweisen.");return end
+  if not editor then
+    -- A Main-section invocation may have no focused editor. Open only an
+    -- explicitly selected MIDI item; never choose arbitrary project material.
+    local midi=false
+    for i=0,reaper.CountSelectedMediaItems(PROJECT)-1 do
+      local item=reaper.GetSelectedMediaItem(PROJECT,i)
+      local take=item and reaper.GetActiveTake(item)
+      if take and reaper.TakeIsMIDI(take) then midi=true;break end
+    end
+    assert(midi,"Kein fokussierter MIDI-Editor. Bitte MIDI-Items im Arrangement markieren oder das Skript aus der MIDI-Editor-Aktionsliste starten.")
+    reaper.Main_OnCommand(40153,0)
+    editor=reaper.MIDIEditor_GetActive()
+    assert(editor,"REAPER hat keinen MIDI-Editor zurückgegeben. Bitte den Editor anklicken und das Skript dort starten.")
+  end
   -- Only when the editor is missing selected items: reopen selection via
   -- REAPER's own multi-item editor; do not change project item selection.
   editor=open_selected_items_if_missing(editor)
+  assert(midi_action(editor,ACTION.notation),"REAPER-Notationsmodus (40954) konnte nicht aktiviert werden.")
   local tracks,takes,byTrack = visible_tracks(editor)
-  if #tracks==0 then note("Keine sichtbaren MIDI-Tracks gefunden.");return end
+  assert(#tracks>0,"Keine MIDI-Tracks im geöffneten Editor gefunden.")
 
   local plans = {}
   for index,track in ipairs(tracks) do
@@ -457,4 +463,7 @@ local function main()
 end
 
 local ok,problem=pcall(main)
-if not ok then note("Skriptfehler: "..tostring(problem)) end
+if not ok and reaper.ShowMessageBox then
+  reaper.ShowMessageBox(tostring(problem),"REAPER-Notation: Ausführung abgebrochen",0)
+end
+

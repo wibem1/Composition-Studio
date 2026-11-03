@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## 03.11.2026 – Reale Diagnose ausgewertet: deutscher Aktionsname und fehlender Editorfokus; gezielte Korrektur 0.1.1
+
+**Vom Nutzer geliefert, REAPER 7.83/OSX64:** Startbereich 0 (Hauptbereich), kein fokussierter MIDI-Editor. Die drei bisherigen englischen Zoomnamen fehlen; vorhanden sind 40726 `Ansicht: Auf Projekt-Loop zoomen`, 40466 `Ansicht: Auf Inhalt zoomen`, 40111 `Ansicht: Vertikal einzoomen`. Modus: 40954 `Mode: Notation`. Proportionalaktion 41131 vorhanden, Toggle-Status ohne Editor -1. Damit sind ein sicherer früher Abbruch und das Scheitern der englischen Aktionsnamensuche für diese Umgebung belegt.
+
+**Gezielte Änderung am bestehenden Shortcut, Version 0.1.1:** Native IDs aus genau dieser Diagnose werden in der MIDI-Aktionsliste auf Verfügbarkeit geprüft und unabhängig vom übersetzten Namen verwendet. Notationsmodus 40954 wird vor Schlüssel-/Zoom-/Toggleverarbeitung angefordert. Ohne fokussierten Editor werden ausschließlich im Arrangement ausdrücklich ausgewählte MIDI-Items über 40153 geöffnet; keine beliebige Quellwahl. Fehlen Auswahl und Editor oder scheitert das Öffnen, gibt es eine konkrete Fehlermeldung statt stummen Abbruchs. Keine normalen Erfolgsfenster/Console-Ausgaben. Unknown Toggle bleibt konservativ unverändert. Bestehende Mehrfach-Item-Öffnung, Vier-Takte-Bereich, Schlüsselverfahren und Undo erhalten.
+
+**Prüfung:** Vollständiger tatsächlicher Lua-Code mit 40/40 Offline-Regressionsprüfungen (Lua 5.4): bisherige 35 plus deutsche Aktionsnamen/native IDs, notwendiger Notationsmodus vor gültigem Toggle, Main-Aufruf mit ausgewählten MIDI-Items, verständlicher Abbruch ohne Quelle und keinerlei View-/Chunk-Schreibzugriff beim fehlenden Ausgangskontext. Mutationen an MIDI-Events sind im Test weiterhin verboten. Diese Tests bestätigen nicht den vertikalen Reset oder die grafische Wirkung im echten REAPER. Originaldatei bleibt über vorigen Commit `b595c6a1ec210218045d949ce33bf85e9f761b59` wiederherstellbar.
+
+**Nächster einzelner Schritt:** Nutzer ersetzt die registrierte lokale Shortcut-Datei durch den geprüften Korrekturkandidaten (Originaldateiname beibehalten), markiert MIDI-Items und ruft ihn erneut auf. Erwartung: Notationsmodus, Vier-Takte-Zoom, keine Erfolgsmeldung; bei fehlender Voraussetzung klare Fehlermeldung. Keine neue Composition-Studio-Version, kein Merge nach main vor diesem Praxisbefund.
+
+
 ## 03.11.2026 – Reale Negativmeldung: Einmal-Notationsskript ohne Wirkung; Diagnose vor weiterer Änderung
 
 **Nutzerbefund:** Das angehängte `REAPER Notation - 4 Takte und Instrumentenschluessel.lua` tut im MIDI-Editor nach Nutzerangabe nichts. Start im MIDI-Editor wurde ausdrücklich bestätigt. Dies ist ein negativer Praxisbefund; die früheren Mocktests sind kein Gegenbeleg. Die angehängte Fassung enthält noch nicht die spätere Mehrfach-Item-Öffnung dieses Branches. Ob das den aktuellen Fehler betrifft, ist unbekannt.
