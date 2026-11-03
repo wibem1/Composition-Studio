@@ -2194,8 +2194,8 @@ local function begin_process(request)
  end
  -- Never interpret "selected notes" as "entire selected item" when no
  -- editable note selection can be read from the native notation editor.
- if notationCount==0 and (lower:find("markierte noten",1,true) or lower:find("ausgewählte noten",1,true) or lower:find("ausgewählten noten",1,true)) then
-  add("KI","Im REAPER-Noteneditor sind keine editierbaren Einzelnoten markiert. Kein MIDI-Item wird ersatzweise bearbeitet.")
+ if notationCount==0 and mentionsSelectedNotes then
+  add("KI","Im REAPER-MIDI-Editor (Piano-Roll oder Notenansicht) sind keine editierbaren Einzelnoten markiert. Kein ganzes MIDI-Item wird ersatzweise bearbeitet.")
   busy=false;return
  end
  local semitones=lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbton")
@@ -2329,6 +2329,9 @@ local function poll_job()
    else launch(newwhy and "composition_music" or "composition",cp,key,data) end; return end
   if text:match("^ACTION|") then
    for _,it in ipairs(data.notation_snapshot or {}) do
+    if it.score_context then
+     add("KI","Alle sichtbaren MIDI-Spuren sind nur Referenzmaterial. Sofortaktionen auf komplette Items sind im Piano-Roll-/Partiturkontext gesperrt.");busy=false;return
+    end
     if it.selection_source and #it.selection_source>0 then
      add("KI","Sofortaktionen auf ganze MIDI-Items sind bei Notenauswahl gesperrt. Bitte eine gezielte Transposition oder Vorschlagsvariante verwenden.");busy=false;return
     end
