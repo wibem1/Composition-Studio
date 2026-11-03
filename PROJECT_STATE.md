@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 03.11.2026 – Shortcut ohne Fenster und Konsolenausgaben
+
+**Nutzerauftrag:** Das ReaScript soll bei jedem Shortcut-Aufruf ohne Popup, REAPER-Konsole, Bestätigungsfenster und Rückfrage laufen. Tatsächlich öffnete der vorherige `note()`-Logger per `reaper.ShowConsoleMsg` bei regulären Statusmeldungen die REAPER-Konsole; das widersprach dem Einmal-Shortcut-Konzept.
+
+**Änderung:** Auf `feat/reaper-notation-one-shot-20261102` ist `note()` nun eine absichtlich stumme Funktion und der Quelltext enthält **keine** `ShowConsoleMsg`-Aufrufe mehr. Auch im Fehlerfall wird keine Konsole durch das Skript geöffnet. Kein UI-Dialog hinzugefügt; Zoom- und Schlüsselalgorithmus unverändert. Explizite Diagnose wäre bei Bedarf über ein separates, erst dann einzurichtendes Werkzeug möglich; dieses ist kein Teil des Shortcuts.
+
+**Prüfung:** Die Regressionstests wurden so verschärft, dass jeder `reaper.ShowConsoleMsg`-Aufruf einen Testfehler auslöst. Der praktische REAPER-Test des vertikalen Zooms aus dem vorherigen Arbeitsschritt steht weiter aus; seine Wirkung wird durch die Entfernung der Ausgabe nicht als bestätigt gewertet. Keine Änderung an `Notation Studio.lua` auf `main`.
+
 ## 02.11.2026 – Automatischer vertikaler Zoom im Einmal-Skript (Testkandidat)
 
 **Anforderung und bestätigter Praxisstand:** Der Nutzer hat Vier-Takte-Zoom und MIDI-basierte Notenschlüsselwahl im echten REAPER grundsätzlich als funktionierend bestätigt. REAPERs Seitenansicht füllt den Bildschirm zusätzlich mit leeren Takten hinter dem tatsächlichen Stückende; PDF- und MusicXML-Export enthalten diese überflüssigen Takte nicht. Vertikaler Zoom verdeckt sie nur, entfernt sie nicht. Die Oktavlagen der älteren MIDI-Datei sind ein separat behobenes Problem der LilyPond-App und hier kein Entwicklungsziel.
