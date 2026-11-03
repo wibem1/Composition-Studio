@@ -43,6 +43,10 @@ function mock.GetMediaItemInfo_Value(_,key) return key=="D_POSITION" and 0 or 16
 env.reaper=mock
 env.item_guid=function(item) return item end
 env.track_guid=function(track) return track end
+mock.MIDIEditor_GetTake=function() return "a" end
+local focusSource=assert(src:match("(local last_notation_editor=nil.-)\n%-%- REAPER notation and piano roll"))
+focusSource=focusSource:gsub("local function focused_or_last_notation_editor","function focused_or_last_notation_editor",1)
+assert(load(focusSource,"focused_or_last_notation_editor","t",env))()
 assert(load(a,"notation_selection_items","t",env))()
 local rows,n=env.notation_selection_items(true)
 assert(#rows==2 and n==4,"four nonmuted selected notes across two editable tracks")
@@ -52,7 +56,11 @@ assert(rows[1].selection_source[1].index==0 and rows[1].selection_source[2].inde
 local readonly,rc=env.notation_selection_items(false)
 assert(rc==4 and #readonly[1].notes==0,"count-only API does not collect all notes")
 mock.MIDIEditor_GetActive=function() return nil end
-assert(select(2,env.notation_selection_items(true))==0,"no active editor is harmless")
+assert(select(2,env.notation_selection_items(true))==4,
+ "note selection remains accessible after keyboard focus moves from notation editor to Studio")
+mock.MIDIEditor_GetTake=function() return nil end
+assert(select(2,env.notation_selection_items(true))==0,
+ "closed or invalidated cached MIDI editor is not reused")
 
 local b,nenv=extract("local function apply_notation_transpose","function workflow_adapter.apply")
 local writes,undos,sorts=0,0,0
