@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 03.11.2026 – Alle markierten MIDI-Items gemeinsam im Noteneditor öffnen (Testkandidat)
+
+**Nutzerwunsch:** Der Einmal-Shortcut soll nicht nur bereits sichtbare Notations-Takes optimieren, sondern auch **alle im Arrangement markierten MIDI-Items** gemeinsam als Notensysteme anzeigen. Vorhandene vier Takte Horizontalzoom, automatischer Vertikalzoom, MIDI-basierte Schlüsselwahl, Proportionalanzeige und Fensterfreiheit bleiben erhalten.
+
+**Implementiert** auf `feat/reaper-notation-one-shot-20261102`, Draft-PR #7: `open_selected_items_if_missing(editor)` prüft `CountSelectedMediaItems`, `GetSelectedMediaItem`, `GetActiveTake` sowie `MIDIEditor_EnumTakes`; fehlen markierte MIDI-Items im geöffneten Editor, werden die nativen REAPER-Aktionen `40896` (ein MIDI-Editor pro Projekt), `40898` (alle ausgewählten MIDI-Items) und `40153` (Open in built-in MIDI editor) ausgeführt. Danach wird `MIDIEditor_GetActive` neu gelesen und das vorhandene Layoutskript auf die tatsächlich offenen Takes angewandt. Sind alle markierten MIDI-Items bereits sichtbar, erfolgt kein Neuöffnen; ohne markierte Items bleibt die bisherige Editoransicht erhalten. Arrangement-Item-Auswahl, MIDI-Noten, CC, Anzeigequantisierung und Schlüsselwahlverfahren werden nicht geändert; keine Popups oder Konsolenausgaben.
+
+**Beleg:** [GitHub Actions Run 41590754707](https://github.com/wibem1/Composition-Studio/actions/runs/41590754707), `success`, Lua-Syntax und **35/35 vollständige Offline-Mocktests**. Neue Fälle: fehlende markierte Takes werden gesammelt geöffnet, REAPER-native Editoroptionen verwendet, Item-Auswahl unverändert, erneuter Aufruf öffnet nichts doppelt, ohne Markierung wird die Editoransicht nicht umgestellt; anschließender Vier-Takte-Zoom bleibt erhalten. **Echter grafischer REAPER-Multitrack-Test noch nicht durchgeführt**. Das Öffnen per REAPER-Aktion hängt von lokalen Einstellungen und der konkreten Notations-Trackliste ab. Ohne diesen Echtbeleg keine endgültige Funktionsfreigabe.
+
+**Nächster einzelner Schritt:** Mehrere MIDI-Items auf unterschiedlichen Tracks im Arrangement markieren, den Shortcut im geöffneten MIDI-Noteneditor einmal ausführen und prüfen, ob alle markierten Items untereinander angezeigt werden, ohne eine zweite Editor-Instanz oder ein Popup. Wenn eine Auswahl nicht sichtbar wird, reale Editor-/Tracklisten-Einstellungen gezielt diagnostizieren; keine unbelegten direkten Chunk-Manipulationen. `Notation Studio.lua` auf `main` bleibt unverändert.
+
 ## 03.11.2026 – Shortcut ohne Fenster und Konsolenausgaben
 
 **Nutzerauftrag:** Das ReaScript soll bei jedem Shortcut-Aufruf ohne Popup, REAPER-Konsole, Bestätigungsfenster und Rückfrage laufen. Tatsächlich öffnete der vorherige `note()`-Logger per `reaper.ShowConsoleMsg` bei regulären Statusmeldungen die REAPER-Konsole; das widersprach dem Einmal-Shortcut-Konzept.
