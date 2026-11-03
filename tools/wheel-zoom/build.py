@@ -13,13 +13,23 @@ if not r.set_action_options then
   return
 end
 r.set_action_options(3) -- terminate old instance and relaunch without a question
-local _, path, section, _, _, _, value, context = r.get_action_context()
-if section ~= 0 then return end -- arrangement only
-if not context or not (context:match("^wheel:") or context:match("^hwheel:")) then
-  r.MB("Bitte dieses Skript in der Aktionsliste (Main) mit einer Mausrad-Kombination verbinden.\\nEs wird danach durch das Mausrad ausgeloest.", "Wheel Zoom", 0)
-  return
-end
-if not value or value == 0 then return end
+local fresh, path, section, command, mode, resolution, value, context = r.get_action_context()
+local rawcontext = context
+context = type(context) == "string" and context or ""
+local explicit_wheel = context:match("^wheel") or context:match("^hwheel")
+-- Some input paths supply a value without the optional descriptive context.
+local legacy_wheel = context == "" and fresh and type(value) == "number"
+  and (value ~= -1 or (type(mode) == "number" and mode >= 0))
+local accepted = section == 0 and (explicit_wheel or legacy_wheel)
+  and type(value) == "number" and value == value and value ~= 0
+  and math.abs(value) < math.huge
+r.SetExtState("IndependentWheelZoom", "last_input", table.concat({
+  "axis="..AXIS, "new="..tostring(fresh), "section="..tostring(section),
+  "mode="..tostring(mode), "resolution="..tostring(resolution),
+  "value="..tostring(value), "context="..tostring(rawcontext),
+  "accepted="..tostring(not not accepted)}, " | "), false)
+-- No pop-up: a non-wheel invocation exits quietly.
+if not accepted then r.defer(function() end); return end
 local project = r.EnumProjects(-1, "")
 local track
 if AXIS == "vertical" then
@@ -44,7 +54,7 @@ local cached = r.GetExtState(ns, key)
 local oldtime, oldtarget = cached:match("^([^|]+)|([^|]+)$")
 oldtime, oldtarget = tonumber(oldtime), tonumber(oldtarget)
 local base = (oldtime and now >= oldtime and now-oldtime < 0.4 and oldtarget) or initial
-local steps = math.max(-8, math.min(8, value / 120))
+local steps = (value > 0 and 1 or -1) * math.max(1, math.min(8, math.abs(value) / 120))
 if REVERSE then steps = -steps end
 local target = base * FACTOR ^ steps
 if track then target = math.max(24, math.min(1200, target))

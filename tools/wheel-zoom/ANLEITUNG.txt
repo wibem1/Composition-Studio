@@ -1,3 +1,23 @@
+KORREKTUR DER EINGABEERKENNUNG – 03.11.2026
+
+Die alte Fassung konnte Mausrad-Aufrufe wegen einer strengen Kontexttext-
+Prüfung ablehnen. Der genaue Rückgabewert auf deinem Mac ist noch unbekannt.
+Diese Korrektur akzeptiert auch fehlenden/leeren Kontext bei neuem Eingabewert
+sowie wheel/hwheel ohne Doppelpunkt. Kleine Radwerte ergeben einen sichtbaren
+Zoomschritt. Keine Hinweisfenster bei gewöhnlichem Aufruf.
+
+UPDATE: Beide Lua-Dateien im BISHERIGEN Installationsordner ersetzen.
+Die Dateinamen bleiben gleich; vorhandene Mausradzuweisungen bleiben erhalten.
+Nicht erneut über Run starten, sondern wie zugewiesen das Mausrad benutzen.
+
+Falls weiterhin keine Wirkung: direkt danach die beigefügte Aktion
+REAPER_Mausrad_Eingabe_Diagnose.lua über Main laden und einmal mit Run starten.
+Sie zeigt die tatsächlich empfangenen Eingabewerte in REAPERs Konsole.
+Den ausgegebenen Text kopieren. Die Diagnose ändert keine Projekteinstellungen.
+
+Prüfstand der Korrektur: 27 Lua-5.4-Mockprüfungen bestanden.
+Noch kein erfolgreicher realer REAPER-Test; die erste Fassung scheiterte beim Nutzer.
+
 REAPER Mausrad-Zoom – Testfassung, 03.11.2026
 
 Installation (REAPER 7.83 oder neuer, Mac / Windows):
@@ -13,8 +33,7 @@ Installation (REAPER 7.83 oder neuer, Mac / Windows):
    Alt/Option + Shift + Rad: Höhe dieser Spur ändern.
 
 Keine dauerhaft zu startende Hintergrundaktion, keine zusätzlichen Plugins.
-Bei korrekter Mausradbedienung erscheint kein Fenster. Ein Start per Run
-zeigt lediglich einen Hinweis zur erforderlichen Mausradzuweisung.
+Bei korrekter Mausradbedienung erscheint kein Fenster. Ein Start per Run beendet sich ohne Hinweis und ohne Zoom.
 
 Grenzen:
 - Nur Arrangement (Main), kein MIDI-/Notationseditor oder Mixer.

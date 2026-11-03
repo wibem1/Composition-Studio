@@ -1,3 +1,7 @@
+# 03.11.2026 – Mausrad-Eingabe: erste Korrektur nach fehlgeschlagenem Praxistest
+
+Nutzer hat Mausradzuweisung vorgenommen; beide Skripte zeigen dennoch den Zuweisungshinweis und zoomen nicht. Vorherige Behauptung, das Fenster bedeute einen Start per Run, war unbelegt. Exakter API-Rückgabewert auf dem Mac noch unbekannt. Strikte `wheel:`/`hwheel:`-Textprüfung erweitert: optionale Kontextbeschreibung, neue numerische Eingabewerte und bare wheel/hwheel. Kleine Radwerte auf sichtbaren Schritt normalisiert, Meldung entfernt; letzte Eingabe mit Diagnoseaktion auslesbar. 27 automatisierte Lua-5.4-Mockprüfungen bestanden, darunter leere/fehlende Kontexttexte, +/-1-Deltas und leiser manueller Start. Dies ist eine gezielte Kompatibilitätskorrektur, keine belegte Mac-Fehlerursache und kein erfolgreicher Realtest. Nächster Schritt: einmal Korrektur an vorhandener Zuweisung testen; wenn erfolglos, tatsächliche Eingabewerte aus Diagnose auswerten, keine weitere blinde Paketserie. Main/Updater unangetastet.
+
 # 03.11.2026 – Eigenständiger Mausrad-Zoom-Testkandidat
 
 Auf separatem Branch `feat/independent-wheel-zoom-20261103`: zwei unabhängige Arrangement-ReaScripts unter `tools/wheel-zoom/`, horizontales weiches Zoomen und Höhe der Spur unter Mauszeiger. Keine Integration in Composition Studio, kein Updater-Release, main unverändert. Anregung SmoothWheelScroll (Windows-C++-Extension), kein Upstream-Code kopiert, keine vollständige Portierung. Nur native REAPER-7.83-APIs, keine Erweiterungsabhängigkeiten. Anleitung und reproduzierbare Tests beigefügt.
