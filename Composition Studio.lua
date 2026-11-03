@@ -1435,7 +1435,7 @@ AUFTRAG:
 ]]..request
 end
 -- Host adapter: source binding and durable, reloadable proposals. No AI keys in records.
-local workflow_adapter={labels={engine_json="Komposition",composition="Überarbeitung",analysis="Analyse",lily_continuation="Fortsetzung",lily_composition="Komposition",swam_translation="SWAM-Interpretation"},states={ready="Vorschlag",applied="Übernommen",draft="Analyse",invalid="Fehlerhafte Antwort"},records={},pending=nil,committing=false,analysis=nil}
+local workflow_adapter={labels={engine_json="Komposition",composition="Überarbeitung",analysis="Analyse",notation_transpose="Markierte Noten transponieren",lily_continuation="Fortsetzung",lily_composition="Komposition",swam_translation="SWAM-Interpretation"},states={ready="Vorschlag",applied="Übernommen",draft="Analyse",invalid="Fehlerhafte Antwort"},records={},pending=nil,committing=false,analysis=nil}
 function workflow_adapter.encode(v)
  local kind=type(v)
  if kind=="nil" then return "null" elseif kind=="boolean" or kind=="number" then return tostring(v)
@@ -1791,6 +1791,12 @@ local function begin_process(request)
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
  local notationItems,notationCount=notation_selection_items(true)
+ -- Never interpret "selected notes" as "entire selected item" when no
+ -- editable note selection can be read from the native notation editor.
+ if notationCount==0 and (lower:find("markierte noten",1,true) or lower:find("ausgewählte noten",1,true) or lower:find("ausgewählten noten",1,true)) then
+  add("KI","Im REAPER-Noteneditor sind keine editierbaren Einzelnoten markiert. Kein MIDI-Item wird ersatzweise bearbeitet.")
+  busy=false;return
+ end
  local semitones=lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbton")
                  or lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbtön")
  if notationCount>0 and semitones then
