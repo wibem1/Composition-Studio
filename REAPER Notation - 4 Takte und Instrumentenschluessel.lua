@@ -1,5 +1,5 @@
 -- @description REAPER Notation - 4 Takte und Instrumentenschluessel
--- @version 0.1.1
+-- @version 0.1.2
 -- @author Klangwerke
 -- @about One shortcut: show selected MIDI items together, zoom four measures horizontally, adaptive vertical zoom, proportional spacing and MIDI-based clefs. No success dialogs or MIDI note edits. Errors are reported.
 -- No ReaImGui, SWS, ReaPack, AI, or additional setup required after loading into MIDI Editor actions.
@@ -7,9 +7,9 @@
 local PROJECT = 0
 local BARS = 4
 
--- Exact default-clef SCORE values restored from the existing, user-tested
--- Notation Studio v0.1.17 and retained in v0.1.24. Do not shift by one.
--- Its previous implementation did NOT offer a numeric grand-staff value.
+-- Default-clef values confirmed against the actual REAPER 7.83 native
+-- Default clef menu and rendered alto clef. Alto is 3; do not renumber.
+-- A close alto/tenor score is not by itself evidence for a grand staff.
 local SCORE_CLEF = {
   treble = 1,
   bass = 2,
@@ -83,6 +83,16 @@ local function note_analysis(takes)
     if score<best then second=best;best=score;chosen=clef
     elseif score<second then second=score end
   end
+  -- Several neighbouring single clefs may be equally readable. When the
+  -- whole phrase fits on the chosen staff and spans at least a fifth,
+  -- a small alto/tenor margin must not preserve an unrelated grand staff.
+  local onStaff,minStep,maxStep=true,math.huge,-math.huge
+  for _,pitch in ipairs(notes) do
+    local d=diatonic_step(pitch)
+    minStep=math.min(minStep,d);maxStep=math.max(maxStep,d)
+    if d<STAVES[chosen].lo or d>STAVES[chosen].hi then onStaff=false end
+  end
+  local clearSingleStaff=onStaff and maxStep-minStep>=4
   -- Score only the clef quality, not the track name or MIDI program.
   local lowFraction=#low/#notes
   local highFraction=#high/#notes
@@ -101,7 +111,7 @@ local function note_analysis(takes)
       return {clef="grand",notes=#notes,score=best,margin=second-best,polyphony=true},nil
     end
   end
-  return {clef=chosen,notes=#notes,score=best,margin=second-best,polyphony=false},nil
+  return {clef=chosen,notes=#notes,score=best,margin=second-best,polyphony=false,clear_single_staff=clearSingleStaff},nil
 end
 
 local function visible_tracks(editor)
@@ -415,7 +425,7 @@ local function main()
   local plans = {}
   for index,track in ipairs(tracks) do
     local result,reason=note_analysis(byTrack[tostring(track)])
-    if result and SCORE_CLEF[result.clef] and result.margin>=0.20 then
+    if result and SCORE_CLEF[result.clef] and (result.margin>=0.20 or result.clear_single_staff) then
       plans[#plans+1]={track=track,clef=result.clef,name="System "..index}
       note(string.format("System %d: %d MIDI-Noten → %s (Hilfslinienanalyse)",
         index,result.notes,result.clef))

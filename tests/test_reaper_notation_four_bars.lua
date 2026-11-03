@@ -286,3 +286,18 @@ run()
 check(state.failure and state.failure:find("Kein fokussierter MIDI-Editor",1,true),"missing editor and selection produces one actionable error")
 check(#state.commands==commandsBefore and state.writes==writesBefore,"failed prerequisite never changes view or clefs")
 print("OK: "..checks.." production-script checks, including user's German/focus failure; real GUI retest pending")
+
+-- The actual 8-bar fixture: alto and tenor both fit, but alto is the
+-- best single staff. The old 0.20 margin wrongly left the default grand.
+state.noEditor=false;state.selected={};state.visibleTakes={"a","b","c"};state.expectFailure=false
+state.notes.a=fixture({66,67,69,70,72,74,75,77,79})
+state.notes.b=fixture({62,60,58,60,63,62,60,58,62,60,58,60,63,62,60,58,62,60,58,58,60,62,62,60,58,60,62,63,62,60,64,62,55,58,60,58})
+state.notes.c=fixture({41,43,46,48,50})
+state.chunks.b="<TRACK\nSCORE 0 0 0 0\n>\n"
+run()
+check(has("b",3),"real viola fixture replaces default grand with alto despite close tenor score")
+local rewritten=state.writes
+run()
+check(state.writes==rewritten,"real viola correction is idempotent")
+
+print("OK: "..checks.." complete one-shot regression checks")

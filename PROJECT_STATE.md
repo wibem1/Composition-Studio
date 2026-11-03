@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## 03.11.2026 – Bratschen-Doppelsystem korrigiert: Notationsskript 0.1.2, realer REAPER-7.83-Test
+
+**Neuer Befund und Ursache:** Nutzer-Screenshot der 8-Takt-Testdatei zeigt vier statt drei Systeme. Die native REAPER-7.83-Prüfung widerlegt die zwischenzeitliche Vermutung falscher SCORE-Zahlen: Alt ist korrekt 3. Stattdessen erkennt die Analyse die tatsächliche Bratschen-Tonfolge als Alt, verwirft sie aber wegen Abstand 0.05333 < 0.20 zum ebenfalls lesbaren Tenorschlüssel. Deshalb bleibt das voreingestellte Violin-/Bass-Doppelsystem bestehen.
+
+**Korrektur 0.1.2:** Ein vollständig auf dem gewählten System liegender Tonumfang von mindestens einer diatonischen Quinte reicht jetzt zusätzlich als eindeutige Einzelsystem-Eignung. Kein bloßer Zahlenwechsel, keine Spurnamenheuristik. Vorhandener Grand-Staff-Schutz, kurze/monotone Fragmente, MIDI-Ereignisse, Zoom und Öffnungsroutine bleiben geschützt.
+
+**Nachweis:** 42 vollständige Produktionsskript-Mocktests und Lua-5.4-Syntax bestanden. Zusätzlich echte portable REAPER 7.83/linux-x86_64-GUI: Altschlüssel per nativem Menü eingestellt und gespeichert/grafisch geprüft; 117 Noten der Referenz auf drei Test-Takes rekonstruiert, 0.1.2 ausgeführt, visuell genau drei Systeme (Violin/Alt/Bass) bestätigt. MIDI_GetAllEvts vor/nach in allen drei Spuren byte-identisch. Kein vollständiger Meta-MIDI-Importtest, kein Audio-/Musikqualitätstest, noch kein erneuter macOS-Test. **Der konkrete Fehler ist in realem REAPER unter Linux behoben; keine pauschale Praxiserprobtheit aller Funktionen behauptet.**
+
+[Details, Messwerte, Testgrenzen und Wiederherstellung](docs/NOTATION-CLEF-FIX-2026-11-03.md). Korrigierte bisherige Download-Datei bereitgestellt, Composition Studio bleibt 1.1.8. Nächster Schritt: derselbe einfache Drei-Instrumente-Test in Nutzer-REAPER; erst danach komplexe Notation beurteilen.
+
+
 ## 03.11.2026 – Nutzer bestätigt Ausführung 0.1.1, lehnt Notenbild ab; MIDI-Ursachenanalyse „Der Panther“
 
 **Realer Befund:** Nutzer: „es funktioniert, aber das Notenbild ist einfach nur schaurig“. Screenshot zeigt dichte überlagerte Notation. Damit ist die Ausführbarkeit des reparierten Shortcuts praktisch bestätigt, die Lesbarkeit ausdrücklich NICHT. Keine vollständige Funktions-/Stabilitätsfreigabe und kein Merge allein aus Mocktests.
