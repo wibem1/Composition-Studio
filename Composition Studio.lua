@@ -705,6 +705,12 @@ local function composition_prompt(request,items,tracks,is_new)
  local has_note_selection=false
  for _,it in ipairs(items) do if it.selection_source and #it.selection_source>0 then has_note_selection=true; break end end
  if has_note_selection then request=request.."\nNOTATIONSAUSWAHL: Nur markierte Noten sind das Material. Nicht markierte Noten müssen unverändert bleiben. Ausschließlich CS|revised-Variante auf neuer Spur oder CS|new-Stimme erzeugen, niemals CS|target oder CS|track." end
+ for _,it in ipairs(items) do
+  if it.score_context then
+   request=request.."\nPARTITURKONTEXT: Alle sichtbaren MIDI-Items sind Kontext. Vorhandene Spuren nicht verändern. Nur CS|unchanged, CS|revised auf separater Spur oder CS|new für zusätzliche Stimme. CS|target und CS|track sind untersagt."
+   break
+  end
+ end
  return [[Du komponierst Musik in Composition Studio. Nutze das konkret übergebene vorhandene Material als musikalischen Kontext und erfülle den freien Auftrag eigenständig; füge keine unnötigen Regeln hinzu. Bei einer reinen Ergänzung einer weiteren Stimme bleiben alle vorhandenen Stimmen unverändert: erzeuge die zusätzliche Stimme mit CS|new und kennzeichne vorhandene Items mit CS|unchanged. TIME_SELECTION ist nur bei ausdrücklichem Bezug auf den markierten Bereich ein Zielbereich. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item direkt Ziel sein. Jedes neu erzeugte MIDI-Item MUSS einen passenden General-MIDI-Program-Change (0-127) erhalten.
 Antworte ausschließlich:
 CS|unchanged|SOURCE_GUID
@@ -1636,6 +1642,8 @@ function workflow_adapter.offer(stage,text,data)
  for _,it in ipairs(data.full or {}) do r.bindings[#r.bindings+1]=it.guid end
  r.notation_selection={}
  for _,it in ipairs(data.full or {}) do if it.selection_source and #it.selection_source>0 then r.notation_selection[#r.notation_selection+1]={guid=it.guid,notes=it.selection_source} end end
+ r.score_scope=false
+ for _,it in ipairs(data.full or {}) do if it.score_context then r.score_scope=true;break end end
  for _,tr in ipairs(data.music_tracks or data.tracks or {}) do r.track_bindings[#r.track_bindings+1]=tr.guid end
  workflow_adapter.records[#workflow_adapter.records+1]=r
  workflow_adapter.save()
@@ -1813,7 +1821,7 @@ function workflow_adapter.apply()
   workflow_core.check("apply",{state=r.state,source_guard=r.source_guard,current_guard=workflow_adapter.guard()})
   workflow_adapter.save()
   local result,why
-  if r.stage=="composition" and #(r.notation_selection or {})>0 then
+  if r.stage=="composition" and (r.score_scope or #(r.notation_selection or {})>0) then
    assert(not r.payload:find("CS|target|",1,true),"Notenauswahl darf Original-Item nicht überschreiben.")
    assert(not r.payload:find("CS|track|",1,true),"Notenauswahl darf nicht ungeprüft in bestehende Spuren schreiben.")
   end
@@ -1973,6 +1981,11 @@ local function begin_continuation(request,bars,tail)
  end
  local tracks=selected_tracks()
  local context=selected_items(true,"items")
+ if #context==0 and score_request_intent(request:lower()) then
+  local visible,why=notation_visible_items(true)
+  if not visible then add("KI",why);busy=false;return end
+  context=visible; tracks=score_context_tracks(context)
+ end
  if #context==0 and #tracks>0 then context=track_context_items(tracks) end
  if #context==0 then add("KI","Bitte die MIDI-Items oder Spuren des vorhandenen Stücks auswählen.");busy=false;return end
  local endpoint=0;for _,it in ipairs(context) do endpoint=math.max(endpoint,it.end_qn or 0) end
@@ -2079,6 +2092,24 @@ local function begin_process(request)
   busy=false;return
  end
  local notationItems,notationCount=notation_selection_items(true)
+ local explicitScore=score_request_intent(lower) and not lower:find("markierte noten",1,true)
+ local scoreItems=nil
+ if explicitScore then
+  local visible,why=notation_visible_items(true)
+  if not visible then add("KI",why);busy=false;return end
+  scoreItems=visible
+  -- An explicit score analysis uses all VISIBLE MIDI takes, not the
+  -- arrangement selection or the currently selected individual notes.
+  if lower:find("analys",1,true) or lower:find("untersuch",1,true) then
+   local key=get_key()
+   if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar.");busy=false;return end
+   local tracks=score_context_tracks(scoreItems)
+   local prompt=analysis_prompt(request,scoreItems,tracks)
+   diag_set("context",music_context(scoreItems,tracks,false))
+   launch("analysis",prompt,key,{request=request,full=scoreItems,music_tracks=tracks,workflow_guard=workflow_adapter.guard()})
+   return
+  end
+ end
  -- Never interpret "selected notes" as "entire selected item" when no
  -- editable note selection can be read from the native notation editor.
  if notationCount==0 and (lower:find("markierte noten",1,true) or lower:find("ausgewählte noten",1,true) or lower:find("ausgewählten noten",1,true)) then
@@ -2145,9 +2176,9 @@ local function begin_process(request)
  end
 
  last_diag={version=VERSION,composition_engine=COMPOSITION_ENGINE_NAME.." "..COMPOSITION_ENGINE_VERSION,composition_engine_build=tostring(COMPOSITION_ENGINE_BUILD),provider=provider,model=model,request=request}; persist_diag(); write_file(DIAG_CACHE_PATH,diag_json()); local key=get_key(); if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar."); busy=false; return end
- local items=selected_items(false); local tracks=selected_tracks(); if #tracks==0 then for _,it in ipairs(items) do if it.selection_source then tracks[#tracks+1]={track=it.track,guid=it.track_guid,name=it.track_name,index=math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))} end end end; diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); local snapshot=selected_items(true); local hasSelection=false
+ local items=scoreItems or selected_items(false); local tracks=scoreItems and score_context_tracks(scoreItems) or selected_tracks(); if #tracks==0 then for _,it in ipairs(items) do if it.selection_source then tracks[#tracks+1]={track=it.track,guid=it.track_guid,name=it.track_name,index=math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))} end end end; diag_set("context",compact_context(items,tracks,false)); local prompt=CONTROLLER.."\n\nBISHERIGER DIALOG:\n"..recent_dialog().."\n\nAKTUELLER AUFTRAG:\n"..request.."\n\nKOMPAKTER REAPER-KONTEXT:\n"..compact_context(items,tracks,false); diag_set("controller_prompt",prompt); local snapshot=scoreItems or selected_items(true); local hasSelection=false
  for _,it in ipairs(snapshot) do if it.selection_source and #it.selection_source>0 then hasSelection=true;break end end
- launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=snapshot,workflow_guard=hasSelection and workflow_adapter.guard() or nil})
+ launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=snapshot,workflow_guard=(hasSelection or scoreItems) and workflow_adapter.guard() or nil})
 end
 
 local function title_prompt()
