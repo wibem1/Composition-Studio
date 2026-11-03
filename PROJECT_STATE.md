@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## 03.11.2026 – Nutzer bestätigt Ausführung 0.1.1, lehnt Notenbild ab; MIDI-Ursachenanalyse „Der Panther“
+
+**Realer Befund:** Nutzer: „es funktioniert, aber das Notenbild ist einfach nur schaurig“. Screenshot zeigt dichte überlagerte Notation. Damit ist die Ausführbarkeit des reparierten Shortcuts praktisch bestätigt, die Lesbarkeit ausdrücklich NICHT. Keine vollständige Funktions-/Stabilitätsfreigabe und kein Merge allein aus Mocktests.
+
+**Anschließend bereitgestellte Originaldatei** `Der_Panther_Rilke_Klavierstueck(1).mid`, unverändert binär mit eigenem SMF-Parser untersucht: Format 1, 480 PPQ, 3 Tracks (Meta + rechte Hand + linke Hand), 6/8, c-Moll, 46 Takte ab Dateianfang. Rechte Hand: 265 Note-on/off-Paare auf MIDI-Kanal 1 (intern 0), G2–D6. Linke Hand: 200 auf Kanal 2 (intern 1), C1–As3. Keine fehlenden Note-offs. Alle Einsätze liegen exakt auf dem 1/16-Raster; keine pauschale Einsatzquantisierung begründbar.
+
+**Belegte Darstellungsrisiken:** sehr viele artikulatorisch verkürzte Längen (z.B. 220 statt 240 Ticks für ein Achtel; 633 statt 720 für eine punktierte Viertel); in Dateitakt 33–34 zehn nacheinander beginnende rechte-Hand-Noten mit gemeinsamem Ende bei QN 101.958333, also absichtliche Akkordaufschichtung. Linke Hand hält dazu zwei Töne über sechs QN. In Takt 39–40 vier rechte-Hand-Töne über fast zwei Takte plus 24 Sechzehntel im Oberregister. Quelle besitzt beide Hände bereits getrennt; Notenbild darf nicht mit einer vermeintlich erforderlichen neuen Handtrennung erklärt werden. Vorhandene Pedal-CC64-Daten bleiben erhalten. Vier exakte doppelte rechte-Hand-Ereignisse: Takt 13 Es4, Takt 14 zweite Zählgruppe G3, Takt 15 C4, Takt 16 G3; keine darüber hinausgehenden gleichen Tonhöhenüberschneidungen in dieser Spur. Das allein erklärt das schlechte Bild nicht.
+
+**Schlussfolgerung, kein neuer Code:** Zoom-/Schlüsselmaßnahmen sind nicht ausreichend. Nächste Prüfung müsste getrennte Darstellung beider Quellspuren und reine Anzeigequantisierung/Notationsstimmen für gehaltene Akkordschichten gegenüber bewegten Stimmen betreffen. Nicht pauschal MIDI-Längen verlängern oder gehaltene Töne kürzen; das würde Artikulation ändern. Taktangaben sind relativ zum Dateianfang, REAPER-Itemposition/Projektmetrum wurden nicht mitgeliefert. Keine weiteren erratenen Zoomversionen und keine Behauptung, REAPER könne das musikalische Problem allein durch einen Anzeigeschalter lösen. Originaldatei nicht verändert, keine neue Version, keine Actions/API-Kosten.
+
+
 ## 03.11.2026 – Reale Diagnose ausgewertet: deutscher Aktionsname und fehlender Editorfokus; gezielte Korrektur 0.1.1
 
 **Vom Nutzer geliefert, REAPER 7.83/OSX64:** Startbereich 0 (Hauptbereich), kein fokussierter MIDI-Editor. Die drei bisherigen englischen Zoomnamen fehlen; vorhanden sind 40726 `Ansicht: Auf Projekt-Loop zoomen`, 40466 `Ansicht: Auf Inhalt zoomen`, 40111 `Ansicht: Vertikal einzoomen`. Modus: 40954 `Mode: Notation`. Proportionalaktion 41131 vorhanden, Toggle-Status ohne Editor -1. Damit sind ein sicherer früher Abbruch und das Scheitern der englischen Aktionsnamensuche für diese Umgebung belegt.
