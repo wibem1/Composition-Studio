@@ -1912,6 +1912,30 @@ local function begin_continuation(request,bars,tail)
  launch("lily_continuation",prompt,key,{request=request,extension_start=start,extension_bars=total,transition_bars=tail,full=context,music_tracks=tracks})
 end
 
+-- A narrow, deterministic AI protocol for the explicitly selected notes.
+-- No musical advice is interpreted as executable MIDI until fully validated.
+local function notation_patch_prompt(request,items)
+ local lines={
+  "Du bearbeitest ausschließlich die folgenden explizit ausgewählten MIDI-Noten musikalisch.",
+  "Erlaubt sind NUR Tonhöhe und Anschlagstärke. Rhythmus, Notenzahl, Notenlängen, ",
+  "Kanal, Ausdrucks-/CC-Daten, andere Stimmen und alle unmarkierten Noten bleiben unverändert.",
+  "Antworte mit GENAU einer Zeile pro Quellnote, ohne Markdown/Kommentare:",
+  "CSNOTE|ITEM_GUID|NOTE_INDEX|PITCH_0_BIS_127|VELOCITY_1_BIS_127",
+  "Übernimm jede Quellnotennummer und GUID exakt; auch unveränderte Noten vollständig aufführen.",
+  "Erfinde keine Quellnoten, lass keine aus. Erhalte die musikalische Idee des Originals.",
+  "AUFTRAG: "..request,
+ }
+ for _,it in ipairs(items or {}) do
+  lines[#lines+1]="SPUR: "..tostring(it.track_name).." ITEM_GUID: "..tostring(it.guid)
+  for j,ref in ipairs(it.selection_source or {}) do
+   local n=it.notes and it.notes[j] or {}
+   lines[#lines+1]=string.format("NOTE guid=%s index=%d pitch=%d velocity=%d kanal=%d startQN=%.6f dauerQN=%.6f",
+    it.guid,ref.index,ref.pitch,ref.velocity,ref.channel,n.start_qn or 0,n.duration_qn or 0)
+  end
+ end
+ return table.concat(lines,"\n")
+end
+
 local function begin_process(request)
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
@@ -1932,6 +1956,22 @@ local function begin_process(request)
   local ok,why=pcall(workflow_adapter.offer,"notation_transpose","TRANSPOSE_NOTATION|"..shift,
     {request=request,full=notationItems,workflow_guard=workflow_adapter.guard()})
   if not ok then add("KI",tostring(why));busy=false end
+  return
+ end
+ -- Explicit note editing is routed directly, avoiding an unnecessary
+ -- controller call and prohibiting full-item replacement by a loose AI reply.
+ local explicitNotes=(lower:find("markiert",1,true) or lower:find("ausgewählt",1,true))
+   and lower:find("noten",1,true)
+ local editRequested=lower:find("verbesser",1,true) or lower:find("überarbeit",1,true)
+   or lower:find("variier",1,true) or lower:find("veränder",1,true)
+   or lower:find("ändere",1,true) or lower:find("ändere",1,true)
+ if notationCount>0 and explicitNotes and editRequested then
+  local key=get_key()
+  if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar.");busy=false;return end
+  local guard=workflow_adapter.guard()
+  local context=notation_patch_prompt(request,notationItems)
+  diag_set("composition_prompt",context)
+  launch("notation_patch",context,key,{request=request,full=notationItems,workflow_guard=guard})
   return
  end
  if reaper.CountSelectedMediaItems(0)==0 and select(2,notation_selection_items(false))==0 and
@@ -1980,7 +2020,7 @@ local function poll_job()
  log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
  log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
  if not text then add("KI",e); busy=false; return end; text=trim(text)
- if stage=="engine_json" or stage=="lily_continuation" or stage=="lily_composition" or stage=="composition" or stage=="swam_translation" then
+ if stage=="notation_patch" or stage=="engine_json" or stage=="lily_continuation" or stage=="lily_composition" or stage=="composition" or stage=="swam_translation" then
   local ok,why=pcall(workflow_adapter.offer,stage,text,data)
   if not ok then add("KI",tostring(why)); busy=false end
   return
