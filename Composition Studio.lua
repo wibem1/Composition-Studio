@@ -1669,7 +1669,9 @@ function workflow_adapter.apply()
   end
   assert(result,why or "Vorschlag konnte nicht angewendet werden.")
   r.state=workflow_core.advance(r.state,"apply"); workflow_adapter.pending=nil; workflow_adapter.save()
-  add("KI","Änderungen angewendet. Das Original bleibt erhalten. Rückgängig über REAPER Undo.")
+  add("KI",r.stage=="notation_transpose"
+   and "Die markierten Noten wurden transponiert. Alle unmarkierten Noten blieben unverändert. Rückgängig über REAPER Undo."
+   or "Änderungen angewendet. Das Original bleibt erhalten. Rückgängig über REAPER Undo.")
  end)
  if not ok then update_status=tostring(err); add("KI",update_status) end
 end
