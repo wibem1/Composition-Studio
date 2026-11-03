@@ -1466,7 +1466,7 @@ AUFTRAG:
 ]]..request
 end
 -- Host adapter: source binding and durable, reloadable proposals. No AI keys in records.
-local workflow_adapter={labels={engine_json="Komposition",composition="Überarbeitung",analysis="Analyse",notation_transpose="Markierte Noten transponieren",lily_continuation="Fortsetzung",lily_composition="Komposition",swam_translation="SWAM-Interpretation"},states={ready="Vorschlag",applied="Übernommen",draft="Analyse",invalid="Fehlerhafte Antwort"},records={},pending=nil,committing=false,analysis=nil}
+local workflow_adapter={labels={engine_json="Komposition",composition="Überarbeitung",analysis="Analyse",notation_patch="Markierte Noten KI-Überarbeitung",notation_transpose="Markierte Noten transponieren",lily_continuation="Fortsetzung",lily_composition="Komposition",swam_translation="SWAM-Interpretation"},states={ready="Vorschlag",applied="Übernommen",draft="Analyse",invalid="Fehlerhafte Antwort"},records={},pending=nil,committing=false,analysis=nil}
 function workflow_adapter.encode(v)
  local kind=type(v)
  if kind=="nil" then return "null" elseif kind=="boolean" or kind=="number" then return tostring(v)
@@ -1598,6 +1598,96 @@ function workflow_adapter.transition(items,endpoint,count)
  return start
 end
 
+-- Restrained KI in-place changes: exactly one result per selected MIDI note.
+-- Timing, length, channel, note count, CC, metadata and unselected notes remain unchanged.
+local function apply_notation_patch(r)
+ local items=workflow_adapter.bindings(r)
+ local byGuid={}, expected={}, edits={}, seen={}
+ for _,it in ipairs(items) do byGuid[it.guid]=it end
+ local total=0
+ for _,scope in ipairs(r.notation_selection or {}) do
+  if expected[scope.guid] then return nil,"Doppeltes Quell-Item." end
+  expected[scope.guid]={}
+  for _,ref in ipairs(scope.notes or {}) do
+   if expected[scope.guid][ref.index] then return nil,"Doppelte Quellnote." end
+   expected[scope.guid][ref.index]=ref
+   total=total+1
+  end
+ end
+ if total==0 then return nil,"Keine ausgewählten Noten." end
+ for line in (r.payload or ""):gmatch("[^\r\n]+") do
+  local guid,index,pitch,velocity=line:match("^CSNOTE|([^|]+)|(%d+)|(%d+)|(%d+)$")
+  if not guid then return nil,"KI-Antwort enthält eine unzulässige Zeile." end
+  index,pitch,velocity=tonumber(index),tonumber(pitch),tonumber(velocity)
+  if not expected[guid] or not expected[guid][index] or
+     pitch>127 or velocity<1 or velocity>127 or seen[guid..":"..index] then
+   return nil,"KI-Antwort hat fremde/doppelte Noten oder ungültige Werte."
+  end
+  seen[guid..":"..index]=true
+  edits[#edits+1]={guid=guid,index=index,pitch=pitch,velocity=velocity}
+ end
+ if #edits~=total then return nil,"KI-Antwort ist unvollständig." end
+ local byTake={}, indexByTake={}
+ for _,change in ipairs(edits) do
+  local it=byGuid[change.guid]
+  local ref=expected[change.guid][change.index]
+  if not it or not it.take or not reaper.TakeIsMIDI(it.take) then return nil,"Quell-Item fehlt." end
+  local _,count=reaper.MIDI_CountEvts(it.take)
+  if change.index>=(count or 0) then return nil,"Notenindex ist nicht mehr gültig." end
+  local ok,sel,mut,s,e,ch,p,v=reaper.MIDI_GetNote(it.take,change.index)
+  if not ok or mut or s~=ref.start_ppq or e~=ref.end_ppq or
+     ch~=ref.channel or p~=ref.pitch or v~=ref.velocity then
+   return nil,"Originalnote verändert. Bitte Auftrag erneut ausführen."
+  end
+  change.take=it.take;change.sel=sel;change.s=s;change.e=e;change.ch=ch;change.previous=p
+  byTake[it.take]=byTake[it.take] or {}
+  byTake[it.take][#byTake[it.take]+1]=change
+  indexByTake[it.take]=indexByTake[it.take] or {}
+  indexByTake[it.take][change.index]=true
+ end
+ -- No new overlapping same-pitch/same-channel MIDI pairs in modified notes.
+ for take,changes in pairs(byTake) do
+  local others={}
+  local _,count=reaper.MIDI_CountEvts(take)
+  for i=0,(count or 0)-1 do
+   if not indexByTake[take][i] then
+    local ok,_,mut,s,e,ch,p=reaper.MIDI_GetNote(take,i)
+    if ok and not mut then others[#others+1]={s=s,e=e,ch=ch,pitch=p} end
+   end
+  end
+  for i,n in ipairs(changes) do
+   if n.pitch~=n.previous then
+    for _,other in ipairs(others) do
+     if n.ch==other.ch and n.pitch==other.pitch and n.s<other.e and other.s<n.e then
+      return nil,"Gleichzeitige identische MIDI-Tonhöhen würden kollidieren."
+     end
+    end
+    for j,other in ipairs(changes) do
+     if i~=j and n.ch==other.ch and n.pitch==other.pitch and n.s<other.e and other.s<n.e then
+      return nil,"Gleichzeitige identische MIDI-Tonhöhen würden kollidieren."
+     end
+    end
+   end
+  end
+ end
+ reaper.Undo_BeginBlock2(0)
+ local ok,err=xpcall(function()
+  for _,n in ipairs(edits) do
+   assert(reaper.MIDI_SetNote(n.take,n.index,n.sel,false,n.s,n.e,n.ch,n.pitch,n.velocity,true)~=false,
+    "MIDI_SetNote fehlgeschlagen.")
+  end
+  for take in pairs(byTake) do reaper.MIDI_Sort(take) end
+ end,debug.traceback)
+ if not ok then
+  reaper.Undo_EndBlock2(0,"Composition Studio – KI-Notenänderung fehlgeschlagen",-1)
+  reaper.Undo_DoUndo2(0)
+  return nil,err
+ end
+ reaper.UpdateArrange()
+ reaper.Undo_EndBlock2(0,"Composition Studio – markierte Noten KI-Überarbeitung",-1)
+ return true
+end
+
 -- Approval-only transposition of captured note indices; untouched notes remain intact.
 local function apply_notation_transpose(r)
  local shift=tonumber((r.payload or ""):match("^TRANSPOSE_NOTATION|([%+%-]?%d+)$"))
@@ -1650,7 +1740,9 @@ function workflow_adapter.apply()
    assert(not r.payload:find("CS|track|",1,true),"Notenauswahl darf nicht ungeprüft in bestehende Spuren schreiben.")
   end
   if #(r.bindings or {})>0 and r.stage=="composition" then assert(not r.payload:match("CSMETA|"),"Die vorhandene Tempo- und Taktkarte bleibt bei Varianten erhalten. Bitte ohne globale CSMETA-Angaben neu erzeugen.") end
-  if r.stage=="notation_transpose" then
+  if r.stage=="notation_patch" then
+   result,why=apply_notation_patch(r)
+  elseif r.stage=="notation_transpose" then
    result,why=apply_notation_transpose(r)
   elseif r.stage=="lily_continuation" or r.stage=="lily_composition" then local items=workflow_adapter.bindings(r)
    result,why=lily_compile_import(r.payload,r.extension_start,r.extension_bars,r.transition_bars>0 and items or nil)
@@ -1669,8 +1761,8 @@ function workflow_adapter.apply()
   end
   assert(result,why or "Vorschlag konnte nicht angewendet werden.")
   r.state=workflow_core.advance(r.state,"apply"); workflow_adapter.pending=nil; workflow_adapter.save()
-  add("KI",r.stage=="notation_transpose"
-   and "Die markierten Noten wurden transponiert. Alle unmarkierten Noten blieben unverändert. Rückgängig über REAPER Undo."
+  add("KI",(r.stage=="notation_transpose" or r.stage=="notation_patch")
+   and "Nur markierte MIDI-Noten bearbeitet; unmarkierte Noten und Steuerdaten bleiben erhalten. Rückgängig über REAPER Undo."
    or "Änderungen angewendet. Das Original bleibt erhalten. Rückgängig über REAPER Undo.")
  end)
  if not ok then update_status=tostring(err); add("KI",update_status) end
