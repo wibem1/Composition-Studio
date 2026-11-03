@@ -2092,7 +2092,9 @@ local function begin_process(request)
   busy=false;return
  end
  local notationItems,notationCount=notation_selection_items(true)
- local explicitScore=score_request_intent(lower) and not lower:find("markierte noten",1,true)
+ local mentionsSelectedNotes=(lower:find("markiert",1,true) or lower:find("ausgewählt",1,true))
+   and lower:find("noten",1,true)
+ local explicitScore=score_request_intent(lower) and not mentionsSelectedNotes
  local scoreItems=nil
  if explicitScore then
   local visible,why=notation_visible_items(true)
