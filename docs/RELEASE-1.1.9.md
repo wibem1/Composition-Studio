@@ -1,6 +1,6 @@
-# Composition Studio 1.1.9 – vorbereiteter Update-Kandidat
+# Composition Studio 1.1.9 – Testfreigabe
 
-Stand: 04.11.2026. Noch nicht über `main` veröffentlicht.
+Stand: 04.11.2026. Nutzerfreigabe zur Veröffentlichung über den bestehenden Updater; Merge und abschließender Byteabgleich werden in `PROJECT_STATE.md` dokumentiert.
 
 ## Fehler und Korrektur
 
@@ -66,7 +66,7 @@ dieselben Quellbytes. Der reguläre Updater bleibt unverändert und lädt weiter
 aus `main`. Solange der vorbereitete PR nicht gemergt ist, liefert er 1.1.8.
 Keine Änderung der installierten Benutzerfassung durch diese Vorbereitung.
 
-Ausgangsstand: `e9d8572` (main, Version 1.1.8). Der Updater sichert die vorherige
+Ausgangsstand: `e9d857267be47dfab9bb3bb78aa154e1614508ca` (Version 1.1.8). Der Updater sichert die vorherige
 Datei als `.backup`; vorhandene Repair-Funktion und Wiederherstellung bleiben
-erhalten. Nächster Schritt: PR-Prüfungen auswerten und anschließend die
-Veröffentlichung über den bestehenden Updateweg freigeben.
+erhalten. Alle drei PR-Prüfungen sind erfolgreich; die Veröffentlichung über den bestehenden
+Updateweg wurde vom Nutzer beauftragt. Nach Merge `main`-Quellbytes abgleichen.

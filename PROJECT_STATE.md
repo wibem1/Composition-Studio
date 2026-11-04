@@ -1,6 +1,6 @@
 # Projektstand – Composition-Studio
 
-## 04.11.2026 – Modellauswahl korrigiert, Update-Kandidat 1.1.9 vorbereitet
+## 04.11.2026 – Modellauswahl korrigiert, Testfreigabe 1.1.9 beauftragt
 
 **Auftrag und Ursache:** Globale Standards, AGENTS, Projektstand, README und Produktionscode gelesen; TODO.md existiert nicht. `main`/installierter Header 1.1.8. Im echten REAPER 7.83 beobachtet: 86 OpenAI-Modelle in einer überlangen Liste, Google und Anthropic erst darunter; automatischer Katalogabruf bei jedem Öffnen. Nutzer wünscht kompakte Hauptmodellauswahl, keine starre Dreiergrenze und keine 20 Einträge.
 
@@ -10,7 +10,7 @@
 
 **GitHub-Nachweis:** [Draft-PR #10](https://github.com/wibem1/Composition-Studio/pull/10), getesteter Quellcommit `eb9f34ab9744312d5a7ee1bcd916a352a9846013`. Alle drei PR-Runs erfolgreich: [Modellauswahl](https://github.com/wibem1/Composition-Studio/actions/runs/41823481960), [Editor-Brücke](https://github.com/wibem1/Composition-Studio/actions/runs/41823481948), [Notenauswahl](https://github.com/wibem1/Composition-Studio/actions/runs/41823482009). GitHub-Blob-SHAs mit lokalen getesteten Bytes abgeglichen: Skript `99a15280235daf3ce8d2d781dacf71117b0bac0a`, Offline-Installer `5650d110290aea5168c8da5d643612249381eebb`. Keine Veröffentlichung auf main.
 
-**Bereitstellung:** Branch `fix/model-picker-20261104`, Header/Laufzeit 1.1.9, Offline-Installer regeneriert. Update nur vorbereitet; `main`, reguläre Downloadfreigabe und installierte Benutzerfassung bleiben 1.1.8. Bestehender Updater/Backup/Repair unverändert. Keine vollständige App-/Neustart-/Live-KI-Abnahme. Nächster Schritt: Updateveröffentlichung über den bestehenden Weg freigeben; PR-Prüfungen sind erfolgreich abgeschlossen.
+**Aktuelle Nutzerfreigabe:** Nach Meldung des fertig geprüften, noch nicht veröffentlichten Updates beauftragt der Nutzer mit „weiter“ die Veröffentlichung über den bestehenden Updateweg. Header/Laufzeit 1.1.9 und Offline-Installer sind geprüft. PR #10 wird kontrolliert nach `main` übernommen; anschließend Quellbytes/Versionsnummer aus `main` abgleichen und tatsächlichen Merge hier dokumentieren. Bestehender Updater/Backup/Repair unverändert. Keine vollständige App-/Neustart-/Live-KI-Abnahme. Die installierte Benutzerfassung wird durch den GitHub-Merge nicht automatisch ersetzt.
 
 ## 03.11.2026 – Abschlussprüfung und beauftragte Testfreigabe 1.1.8 (PR #9)
 
