@@ -1,0 +1,25 @@
+name: Model picker regression
+on:
+  pull_request:
+    paths:
+      - 'Composition Studio.lua'
+      - 'Composition-Studio-Offline-Install.lua'
+      - 'tools/test_model_picker.py'
+      - 'tools/test_layout.py'
+      - 'tools/test_offline_installer.py'
+      - 'tools/build_offline_installer.py'
+      - '.github/workflows/model-picker-regression.yml'
+jobs:
+  model-picker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install lupa==2.8 imgui-bundle==1.93.0
+      - run: python tools/test_model_picker.py
+      - run: python tools/test_layout.py
+      - run: python tools/test_offline_installer.py

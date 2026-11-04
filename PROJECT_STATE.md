@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Modellauswahl korrigiert, Update-Kandidat 1.1.9 vorbereitet
+
+**Auftrag und Ursache:** Globale Standards, AGENTS, Projektstand, README und Produktionscode gelesen; TODO.md existiert nicht. `main`/installierter Header 1.1.8. Im echten REAPER 7.83 beobachtet: 86 OpenAI-Modelle in einer überlangen Liste, Google und Anthropic erst darunter; automatischer Katalogabruf bei jedem Öffnen. Nutzer wünscht kompakte Hauptmodellauswahl, keine starre Dreiergrenze und keine 20 Einträge.
+
+**Implementiert:** Anbieter fest oberhalb der scrollbaren Liste, kurze bestehende Projekt-Vorauswahl plus abweichendes gespeichertes Modell, vollständiger Katalog nur optional mit Suche. Stabile Modell-IDs unabhängig vom Anzeigenamen. Öffnen/Anbieter ansehen ohne Netzwerk oder Persistenzänderung; manuelle Aktualisierung des angesehenen Anbieters ohne Wechsel der aktiven Auswahl. Modellauswahl während laufender Aufträge gesperrt. Keine Migration, kein Zurücksetzen von Einstellungen, Katalogen, Schlüsseln, Verlauf oder Projektdaten.
+
+**Nachweise:** Gesamtsyntax Lua 5.4, sechs echte Dear-ImGui-Interaktionsfälle plus gezielte Katalogabfrageprüfung, 64 Layouts, beide Lua-Editor-/Notenauswahltests, 34 Start-/Import-/Updateprüfungen inklusive echtem LilyPond, Updatehelfer und Offline-Installation aus 1.1.8 sowie fünf älteren Ständen mit exakter Sicherung/Fehlererhalt bestanden. Direkter REAPER-7.83-Test der unveränderten Produktions-Auswahlfunktion im isolierten Fenster: Anthropic/Google sichtbar und Claude-/Gemini-Auswahl korrekt. Keine Einstellungen oder MIDI dabei geschrieben. Vollständige Abgrenzung und Windows-lupa-Testgrenzen: [docs/RELEASE-1.1.9.md](docs/RELEASE-1.1.9.md).
+
+**Bereitstellung:** Branch `fix/model-picker-20261104`, Header/Laufzeit 1.1.9, Offline-Installer regeneriert. Update nur vorbereitet; `main`, reguläre Downloadfreigabe und installierte Benutzerfassung bleiben 1.1.8. Bestehender Updater/Backup/Repair unverändert. Keine vollständige App-/Neustart-/Live-KI-Abnahme. Nächster Schritt: PR-Prüfungen auswerten und Updateveröffentlichung über den bestehenden Weg freigeben.
+
 ## 03.11.2026 – Abschlussprüfung und beauftragte Testfreigabe 1.1.8 (PR #9)
 
 **Aktueller Auftrag:** Vorhandene Arrangement-/Notations-/Piano-Roll-Integration abschließen und über den bestehenden Updater veröffentlichen; fehlende Praxis ausdrücklich dokumentieren. Diese aktuelle Nutzerfreigabe ersetzt die früheren Merge-Sperren weiter unten. Globale Standards und aktuelle Repo-Anweisungen/Quellen von GitHub gelesen; keine Neuentwicklung.

@@ -12,6 +12,8 @@ Die langfristige Zielsetzung des Notationsmoduls ist in [NOTATION-MODULE.md](NOT
 
 Die bestehende Updatefunktion bleibt der normale Installationsweg: **Studio-Menü → Update**.
 
+**Vorbereitet auf PR-Branch: 1.1.9 – kompakte Modellauswahl.** OpenAI, Anthropic und Google stehen fest oberhalb der Modellliste. Standardmäßig erscheinen die bisherigen Hauptmodelle sowie ein gegebenenfalls abweichendes gespeichertes Modell. Der vollständige Katalog mit Suche ist optional; Öffnen startet keine Netzwerkabfrage. Bestehende Einstellungen bleiben erhalten. Noch nicht auf `main` veröffentlicht. [Prüfungen und Grenzen](docs/RELEASE-1.1.9.md).
+
 ### Testfreigabe v1.1.8 – Arrangement, Notenansicht und Piano-Roll
 
 **Studio-Menü → Update** lädt Version **1.1.8** aus `main`. Die bereits vorhandene Integration aus PR #9 verbindet die drei Arbeitsbereiche mit demselben Composition Studio. Beispiele: `Analysiere die sichtbare Partitur`, `Analysiere den Piano-Roll`, `Verbessere die markierten Noten`, `Ergänze eine neue Cellostimme zur Partitur`.

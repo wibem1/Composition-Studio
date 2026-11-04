@@ -1,16 +1,18 @@
 """Install the bundled Lua source with only native state/message APIs; no network or shell."""
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import subprocess,re
+import subprocess,re,os
 from lupa.lua54 import LuaRuntime
 root=Path(__file__).resolve().parents[1]
 installer=(root/'Composition-Studio-Offline-Install.lua').read_text()
 expected=(root/'Composition Studio.lua').read_bytes()
 version=re.search(rb'-- @version ([^\s]+)',expected).group(1).decode()
-for ref in ('9dfebaeb2b2cda7fc562aee693162b9aada7801b','d307d19','340291c','3443e83','87fa72c'):
+for ref in ('e9d8572','9dfebaeb2b2cda7fc562aee693162b9aada7801b','d307d19','340291c','3443e83','87fa72c'):
  previous=subprocess.check_output(['git','show',ref+':Composition Studio.lua'],cwd=root)
  with TemporaryDirectory() as d:
-  target=Path(d)/"Wilhelm's Studio ä.lua";target.write_bytes(previous)
+  # Stock Windows lupa uses narrow CRT paths; REAPER supplies its own UTF-8 IO.
+  # Retain spaces/apostrophe coverage here; native REAPER Unicode IO is separate.
+  target=Path(d)/("Wilhelm's Studio.lua" if os.name=='nt' else "Wilhelm's Studio ä.lua");target.write_bytes(previous)
   messages=[];r=LuaRuntime(unpack_returned_tuples=True)
   # Providing no ExecProcess, HTTP, gfx or ImGui APIs proves none can be used.
   r.globals().reaper=r.table_from({'GetExtState':lambda *_:str(target),'SetExtState':lambda *_:None,'ShowMessageBox':lambda text,*_:messages.append(text)})

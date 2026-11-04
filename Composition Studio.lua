@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.8
+-- @version 1.1.9
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.8"
+local VERSION="1.1.9"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -1959,7 +1959,8 @@ end
 workflow_adapter_guard=workflow_adapter.guard
 workflow_adapter.load()
 -- Dynamic provider catalog; cached IDs are data, never executable code.
-workflow_adapter.models={job=nil,message=""}
+workflow_adapter.models={job=nil,message="",filter="",view_provider=provider,show_all=false,
+ featured={openai=MODELS.openai,anthropic=MODELS.anthropic,google=MODELS.google}}
 function workflow_adapter.models.report(text,notify)
  workflow_adapter.models.message=text;update_status=text
  if notify then reaper.ShowMessageBox(text,SCRIPT_NAME.." – Modelle",0) end
@@ -1998,20 +1999,23 @@ function workflow_adapter.models.page(j,token)
  end
  workflow_adapter.models.job=j
 end
-function workflow_adapter.models.refresh(quiet)
+function workflow_adapter.models.refresh(quiet,catalog_provider)
+ local pv=catalog_provider or provider
+ if not MODELS[pv] then return end
+ local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"
  if busy then
   if not quiet then workflow_adapter.models.report("Bitte den laufenden Auftrag abwarten.",true) end
   return
  end
  if workflow_adapter.models.job then return end
- local key=quiet and trim(reaper.GetExtState(EXT_SECTION,KEY_NAMES[provider])) or get_key()
+ local key=trim(reaper.GetExtState(EXT_SECTION,KEY_NAMES[pv]))
  if not key or key=="" then
-  workflow_adapter.models.report("Für "..provider_name().." fehlt der API-Key. Im Studio-Menü hinterlegen.",false)
+  workflow_adapter.models.report("Für "..title.." fehlt der API-Key. Im Studio-Menü hinterlegen.",false)
   return
  end
- local j={provider=provider,key=key,rows={},seen={},quiet=quiet}
+ local j={provider=pv,key=key,rows={},seen={},quiet=quiet}
  local ok,err=pcall(workflow_adapter.models.page,j)
- if ok then workflow_adapter.models.report("Verfügbare Modelle für "..provider_name().." werden eingelesen …",false)
+ if ok then workflow_adapter.models.report("Verfügbare Modelle für "..title.." werden eingelesen …",false)
  else
   if j.config then os.remove(j.config) end
   if j.script then os.remove(j.script) end
@@ -2463,6 +2467,62 @@ local function fit_label(text,width)
  while #chars>0 and measured(table.concat(chars).."…")>width do table.remove(chars) end
  return table.concat(chars).."…"
 end
+local function draw_model_picker(width)
+ -- Opening the picker is local: a network refresh must be an explicit action.
+ if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,width-36)).." v###model",width) and not busy then
+  workflow_adapter.models.filter=""
+  workflow_adapter.models.view_provider=provider
+  workflow_adapter.models.show_all=false
+  reaper.ImGui_OpenPopup(ctx,"##model_menu")
+ end
+ local popup_width=math.max(260,math.min(480,width))
+ reaper.ImGui_SetNextWindowSizeConstraints(ctx,popup_width,0,popup_width,600)
+ if not reaper.ImGui_BeginPopup(ctx,"##model_menu") then return end
+ reaper.ImGui_TextWrapped(ctx,"Aktuell: "..provider.." / "..model)
+ -- Provider controls stay outside the scrolling catalog: OpenAI must never
+ -- push Anthropic and Google below the screen.
+ for _,pv in ipairs({"openai","anthropic","google"}) do
+  local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"
+  if reaper.ImGui_Button(ctx,title..(workflow_adapter.models.view_provider==pv and " *" or "").."###provider_"..pv,-1) then
+   workflow_adapter.models.view_provider=pv;workflow_adapter.models.filter=""
+  end
+ end
+ if reaper.ImGui_Button(ctx,workflow_adapter.models.show_all and "Nur Hauptmodelle" or "Alle verfügbaren Modelle",-1) then
+  workflow_adapter.models.show_all=not workflow_adapter.models.show_all;workflow_adapter.models.filter=""
+ end
+ if workflow_adapter.models.show_all then
+  if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren",nil,false,not busy and not workflow_adapter.models.job) then workflow_adapter.models.refresh(false,workflow_adapter.models.view_provider) end
+  local changed,value=reaper.ImGui_InputText(ctx,"Suche",workflow_adapter.models.filter)
+  if changed then workflow_adapter.models.filter=value end
+ end
+ local query=workflow_adapter.models.filter:lower()
+ -- Keep all providers reachable even with hundreds of cached models.
+ if reaper.ImGui_BeginChild(ctx,"##model_list",0,math.min(200,reaper.ImGui_GetFrameHeight(ctx)*6),reaper.ImGui_ChildFlags_Borders()) then
+  local count=0
+  for _,pv in ipairs({"openai","anthropic","google"}) do
+   if pv==workflow_adapter.models.view_provider then
+   local rows={};local has_current=false
+   for _,m in ipairs(workflow_adapter.models.show_all and MODELS[pv] or workflow_adapter.models.featured[pv]) do
+    rows[#rows+1]=m;if pv==provider and m[2]==model then has_current=true end
+   end
+   if pv==provider and not has_current then table.insert(rows,1,{model.." (gespeichert)",model}) end
+   for _,m in ipairs(rows) do
+    if query=="" or (pv.." "..m[1].." "..m[2]):lower():find(query,1,true) then
+     count=count+1
+     local available=reaper.ImGui_GetContentRegionAvail(ctx)
+     -- Identity uses provider + model ID, independent of shortened/duplicate names.
+     local label=fit_label(m[1],math.max(1,available-30)).."###model_"..pv.."/"..m[2]
+     if reaper.ImGui_MenuItem(ctx,label,nil,provider==pv and model==m[2],not busy) then select_model(pv,m[2]) end
+    end
+   end
+   end
+  end
+  if count==0 then reaper.ImGui_TextWrapped(ctx,"Keine passenden Modelle. Suche ändern oder Liste aktualisieren.") end
+  reaper.ImGui_EndChild(ctx)
+ end
+ if workflow_adapter.models.message~="" then reaper.ImGui_TextWrapped(ctx,workflow_adapter.models.message) end
+ reaper.ImGui_EndPopup(ctx)
+end
 local function draw_workflow_status()
  local width=reaper.ImGui_GetContentRegionAvail(ctx)
  if workflow_adapter.pending then
@@ -2496,7 +2556,7 @@ if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(compositi
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
-if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Notenansicht vorbereiten") then local ok,msg=open_score_workspace(); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Piano-Roll öffnen") then local ok,msg=open_score_workspace("pianoroll"); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); if reaper.ImGui_Button(ctx,fit_label(model_label(),math.max(1,model_width-36)).." v##model",model_width) then workflow_adapter.models.refresh(true); reaper.ImGui_OpenPopup(ctx,"##model_menu") end; if reaper.ImGui_BeginPopup(ctx,"##model_menu") then if workflow_adapter.models.message and workflow_adapter.models.message~="" then reaper.ImGui_TextWrapped(ctx,workflow_adapter.models.message) end; if reaper.ImGui_MenuItem(ctx,"Verfügbare Modelle aktualisieren") then workflow_adapter.models.refresh(false) end; for _,pv in ipairs({"openai","anthropic","google"}) do local title=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; reaper.ImGui_Text(ctx,title); for _,m in ipairs(MODELS[pv]) do if reaper.ImGui_MenuItem(ctx,m[1],nil,provider==pv and model==m[2]) then select_model(pv,m[2]) end end; if pv~="google" then reaper.ImGui_Separator(ctx) end end; reaper.ImGui_EndPopup(ctx) end
+if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Notenansicht vorbereiten") then local ok,msg=open_score_workspace(); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Piano-Roll öffnen") then local ok,msg=open_score_workspace("pianoroll"); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); draw_model_picker(model_width)
 if reaper.ImGui_Button(ctx,"Denken: "..REASONING_LABELS[reasoning_mode].." v##reasoning",model_width) and not busy then reaper.ImGui_OpenPopup(ctx,"##reasoning_menu") end
 if reaper.ImGui_BeginPopup(ctx,"##reasoning_menu") then
  for _,choice in ipairs({"low","medium","high","auto"}) do
