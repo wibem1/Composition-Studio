@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Lua-Parser-Funktionstests (lokal)
+
+Die in `Composition Studio.lua` vorhandene `parse_semnotes`-Funktion wurde in einem isolierten Lua-5.4-Harness ueber `liblua5.4.so.0` ausgefuehrt. Sechs Tests erfolgreich: gueltiger Notenbezug, doppelte SEMNOTE-Zeile, abweichende Tonhoehe, Sicherheitsstufe UNSICHER, ungueltiger Zahlenwert und doppelte Originalnotenidentitaet. **Pruefgrenze:** Der Funktionskoerper wurde fuer den isolierten Test aus dem zuvor gelesenen GitHub-Stand uebernommen; es wurde nicht die vollstaendige 189-kB-REAPER-Datei kompiliert oder ausgefuehrt. Keine echte KI-Antwort und keine REAPER-Laufzeit. Der abschliessende REAPER-Vier-Takte-Test bleibt beim Nutzer; keine Freigabe/kein Merge vor diesem Test.
+
+
 ## 04.11.2026 – Parser-Haertung fuer Vier-Takte-Test
 
 Im Draft-PR #12 wurde die SEMNOTE-Eingangspruefung verschaerft: MIDI-Tonhoehe und Velocity muessen ganzzahlig und im MIDI-Wertebereich liegen; Start und Dauer muessen endlich sein, Start nicht negativ, Dauer positiv; Kanal muss ganzzahlig im tolerierten Bereich liegen. Ungueltige Identitaeten werden nicht als musikalische Notenzuordnung gespeichert. Commit `9b67377481ab2a948ce7e6a604e87fe2f57a7c6b`. **Statisch kontrolliert:** Codeaenderung von GitHub bestaetigt. **Weiterhin offen:** Lua-Laufzeittest, Parser-Grenzfalltests, reale KI-Antwort und REAPER-End-to-End-Test. Keine Freigabe und kein Merge.
