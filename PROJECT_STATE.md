@@ -1,5 +1,14 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Gemini 4 Argon als Google-Hauptmodell (Entwurf, nicht freigegeben)
+
+**Anlass:** Nutzer meldet, dass Google Argon in der Modellauswahl fehlt. Aktueller Stand 1.1.9 auf `main` geprüft; Argon fehlt in `MODELS.google`, während die dynamische Modellabfrage zusätzliche IDs grundsätzlich unterstützt.
+
+**Änderung im isolierten Branch `fix/google-argon-featured-20261104`:** `gemini-4-argon` als erstes Google-Hauptmodell ergänzt. Die vorhandene Google-API-Aufruflogik und Steuerung `thinkingLevel` (low/medium/high) bleiben erhalten. Tarifschätzung: bis 30.11.2026 2/10 USD pro Million Input-/Output-Tokens, danach 4/20 USD; Cached-Input mit 95 % Rabatt. Basis: offizielle Google-Ankündigung und Entwicklerdokumentation vom 13.10.2026. Keine Änderung an API-Schlüsseln, gespeicherter Modellauswahl, MIDI oder Projektdateien.
+
+**Prüfstatus:** gezielte statische Quellprüfung der drei eindeutigen Änderungen; **noch keine Lua-Syntax-, REAPER-UI-, API- oder Regressionstests**. Kein Versionswechsel, kein Merge nach `main`, kein veröffentlichtes Update. Nächster Schritt: Tests des tatsächlichen Produktionscodes (Modellauswahl/Reasoning/Kosten, Lua-Syntax) und gegebenenfalls REAPER-Praxistest, bevor eine Freigabe erfolgt.
+
+
 ## 04.11.2026 – Modellauswahl korrigiert, Testfreigabe 1.1.9 veröffentlicht
 
 **Auftrag und Ursache:** Globale Standards, AGENTS, Projektstand, README und Produktionscode gelesen; TODO.md existiert nicht. `main`/installierter Header 1.1.8. Im echten REAPER 7.83 beobachtet: 86 OpenAI-Modelle in einer überlangen Liste, Google und Anthropic erst darunter; automatischer Katalogabruf bei jedem Öffnen. Nutzer wünscht kompakte Hauptmodellauswahl, keine starre Dreiergrenze und keine 20 Einträge.
