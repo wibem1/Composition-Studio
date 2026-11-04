@@ -24,6 +24,17 @@ Bitte als ein Ergebnis zurückmelden: **Start erfolgreich/Fehler; Analyse musika
 - Weitere Regressionen: 64 Dear-ImGui-Layouts, Modellauswahl, Kosten/Denkmodus, echter curl-Transport gegen lokalen HTTP-Server, bestehende Update-/Backup-/Offline-Installationspfade, Notenauswahl und Editorintegration.
 - **Ausgelassen:** echter LilyPond-Compiler (hier nicht installiert; diese Analyse verwendet ihn nicht). Kein laufendes REAPER, keine native macOS-/Windows-Abnahme und kein echter Anbieteraufruf. Keine kostenpflichtigen KI-Anfragen für die Entwicklung. Modellantworten sind bewusst Fixtures; musikalische Qualität einer echten Antwort und reale REAPER-Integration bleiben dem oben beschriebenen einen Praxistest vorbehalten.
 
+**GitHub-Nachweis am unveränderten getesteten Quellcommit `7a1a586bac4b8a3b9ea6e9d088efadf424a7d4e1`:**
+
+| Prüfung | Tatsächliches Ergebnis |
+| --- | --- |
+| [Semantische Gesamtprüfung einschließlich reproduzierbarer Installer](https://github.com/wibem1/Composition-Studio/actions/runs/41918164902) | success |
+| [Modellauswahl, Layout, Offline-Installation](https://github.com/wibem1/Composition-Studio/actions/runs/41918164858) | success |
+| [Notenauswahl](https://github.com/wibem1/Composition-Studio/actions/runs/41918164815) | success |
+| [Score-Workspace-Brücke](https://github.com/wibem1/Composition-Studio/actions/runs/41918164796) | success |
+
+Nach dem Sichern wurden Skript, beide Installer, Projektstand und Testanleitung erneut über GitHub gelesen und ihre Git-Blob-SHAs gegen die lokal geprüften Dateien abgeglichen: identisch. `main` blieb bei `cefc7e78a64b5bb2f0c0fc3b7f8e06c450c699db`; PR #12 blieb ungemergter Draft. Der anschließende Dokumentationscommit ändert die geprüften Programmbytes nicht.
+
 Vollständiges lokales Prüfprotokoll: [SEMANTIC-ANALYSIS-TEST-RESULTS.txt](SEMANTIC-ANALYSIS-TEST-RESULTS.txt). GitHub Actions wiederholt den Gesamtbefehl bei Änderungen am PR. Der Python-Helfer `tools/semantic_notation.py` ist ein unabhängig getesteter Offline-Planprüfer; die REAPER-Analyse verwendet den eingebauten Lua-Parser und benötigt kein Python.
 
 ## Behobene Fehler und Status
