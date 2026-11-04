@@ -1,13 +1,14 @@
 # Projektstand – Composition-Studio
 
-## 04.11.2026 – Gemini 4 Argon als Google-Hauptmodell (Entwurf, nicht freigegeben)
+## 04.11.2026 – Gemini 4 Argon, Testkandidat 1.1.10 (PR #11)
 
-**Anlass:** Nutzer meldet, dass Google Argon in der Modellauswahl fehlt. Aktueller Stand 1.1.9 auf `main` geprüft; Argon fehlt in `MODELS.google`, während die dynamische Modellabfrage zusätzliche IDs grundsätzlich unterstützt.
+**Ausgangslage:** `main` v1.1.9, Gemini 4 Argon fehlte in `MODELS.google`. Verbindliche Standards, Projektanweisungen, Projektstand und betroffenen Code erneut von GitHub gelesen. Separater Branch `fix/google-argon-featured-20261104` und [PR #11](https://github.com/wibem1/Composition-Studio/pull/11).
 
-**Änderung im isolierten Branch `fix/google-argon-featured-20261104`:** `gemini-4-argon` als erstes Google-Hauptmodell ergänzt. Die vorhandene Google-API-Aufruflogik und Steuerung `thinkingLevel` (low/medium/high) bleiben erhalten. Tarifschätzung: bis 30.11.2026 2/10 USD pro Million Input-/Output-Tokens, danach 4/20 USD; Cached-Input mit 95 % Rabatt. Basis: offizielle Google-Ankündigung und Entwicklerdokumentation vom 13.10.2026. Keine Änderung an API-Schlüsseln, gespeicherter Modellauswahl, MIDI oder Projektdateien.
+**Änderung:** Gemini 4 Argon als erstes Google-Hauptmodell mit der offiziellen Kennung `gemini-4-argon` ergänzt. Die bestehende Google-API-Route, `thinkingLevel` (low, medium, high) und Modellkatalog-Abfrage bleiben unverändert. Kostenansatz aus Googles offiziellen Unterlagen: 2/10 USD je 1 Mio. Input-/Output-Tokens und 0,1 USD Cached Input bis 30.11.2026, danach 4/20/0,2 USD. **Kein Free-Tier-Zugang**; API-Abrechnung separat vom Google-Abonnement. Die bestehende Update-Versionsprüfung benötigt eine neue Version: Skript-Header und Laufzeit 1.1.10. Offline-Installer synchronisiert, identische vollständige Skript-Bytes im Payload geprüft. Keine Migration oder Änderung der gespeicherten Einstellungen, API-Schlüssel, MIDI-Daten oder Projekte.
 
-**Prüfstatus:** gezielte statische Quellprüfung der drei eindeutigen Änderungen; **noch keine Lua-Syntax-, REAPER-UI-, API- oder Regressionstests**. Kein Versionswechsel, kein Merge nach `main`, kein veröffentlichtes Update. Nächster Schritt: Tests des tatsächlichen Produktionscodes (Modellauswahl/Reasoning/Kosten, Lua-Syntax) und gegebenenfalls REAPER-Praxistest, bevor eine Freigabe erfolgt.
+**Prüfung:** Der erste PR-CI-Lauf deckte eine veraltete Offline-Installer-Payload auf, nach Synchronisierung behoben. Zusätzlicher Produktionscode-Test für Argon-Modell-ID, Vorauswahl, Denkmodus (low/medium/high/auto) und Kostensätze ergänzt. [Modellauswahl/64 Layouts/Offline-Installations-Regression (Run 41876804873)](https://github.com/wibem1/Composition-Studio/actions/runs/41876804873) **success**. [Score-Workspace (Run 41876804942)](https://github.com/wibem1/Composition-Studio/actions/runs/41876804942) **success**. [Notenauswahl (Run 41876804889)](https://github.com/wibem1/Composition-Studio/actions/runs/41876804889) zuletzt in Ausführung; vor Merge Abschlussstatus erneut kontrollieren. **Kein** Live-Google-API-Test, keine vollständige App-/Neustart-/REAPER-7.83-Prüfung. Nur Testfreigabe.
 
+**Nächster Schritt:** Nach erfolgreichen Prüfungen PR #11 nach `main` mergen und Update-Bytes verifizieren; dann beim Nutzer über Studio-Menü → Update installieren und Google → Gemini 4 Argon auswählen.
 
 ## 04.11.2026 – Modellauswahl korrigiert, Testfreigabe 1.1.9 veröffentlicht
 
