@@ -177,3 +177,30 @@ r.globals().workflow_adapter.models.refresh(False, 'google')
 assert r.globals().last_job is None and 'Google' in r.globals().last_message
 assert r.globals().provider == 'openai'
 print('PASS explicit catalog refresh targets the browsed provider; missing key preserves selection')
+
+# Argon-specific regression: use the actual shipped Lua model registry and
+# reasoning serialization, rather than the generic UI fixture's mock models.
+from datetime import date
+import re
+registry = re.search(r'local MODELS=(\{[^\n]+\})\nlocal provider=', source)
+assert registry, 'Production model registry not found'
+arg = LuaRuntime(unpack_returned_tuples=True)
+arg.execute('MODELS=' + registry.group(1))
+assert arg.globals().MODELS.google[1][1] == 'Gemini 4 Argon'
+assert arg.globals().MODELS.google[1][2] == 'gemini-4-argon'
+assert arg.globals().MODELS.google[2][2] == 'gemini-3.8-flash'
+reasoning = source[source.index('local function reasoning_parameters('):source.index('-- End thinking control.')]
+arg.execute("REASONING_LABELS={low=true,medium=true,high=true,auto=true}\n" +
+            reasoning + "\nCHECK_REASONING=reasoning_parameters")
+for effort in ('low', 'medium', 'high'):
+    body, requested = arg.globals().CHECK_REASONING('google', 'gemini-4-argon', effort)
+    assert '"thinkingLevel":"' + effort + '"' in body, (effort, body)
+    assert body == ',' + requested
+assert arg.globals().CHECK_REASONING('google', 'gemini-4-argon', 'auto')[1] == 'provider_default'
+rates = source[source.index('  local rates={'):source.index('  local function rate_values(')]
+arg.execute(rates + '\nCHECK_RATE=rates["google/gemini-4-argon"]')
+r = arg.globals().CHECK_RATE
+assert (r[1],r[2],r[3],r.expires)==(2,10,0.1,'2026-11-30')
+assert 'id=="gemini-4-argon" then return {4,20,0.2,0,0}' in source
+assert 'local VERSION="1.1.10"' in source and '-- @version 1.1.10' in source
+print('PASS real Google Argon model registry, model ID, reasoning levels and API cost estimates')
