@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Gemini 4 Argon, Testkandidat 1.1.10 (PR #11)
+
+**Ausgangslage:** `main` v1.1.9, Gemini 4 Argon fehlte in `MODELS.google`. Verbindliche Standards, Projektanweisungen, Projektstand und betroffenen Code erneut von GitHub gelesen. Separater Branch `fix/google-argon-featured-20261104` und [PR #11](https://github.com/wibem1/Composition-Studio/pull/11).
+
+**Änderung:** Gemini 4 Argon als erstes Google-Hauptmodell mit der offiziellen Kennung `gemini-4-argon` ergänzt. Die bestehende Google-API-Route, `thinkingLevel` (low, medium, high) und Modellkatalog-Abfrage bleiben unverändert. Kostenansatz aus Googles offiziellen Unterlagen: 2/10 USD je 1 Mio. Input-/Output-Tokens und 0,1 USD Cached Input bis 30.11.2026, danach 4/20/0,2 USD. **Kein Free-Tier-Zugang**; API-Abrechnung separat vom Google-Abonnement. Die bestehende Update-Versionsprüfung benötigt eine neue Version: Skript-Header und Laufzeit 1.1.10. Offline-Installer synchronisiert, identische vollständige Skript-Bytes im Payload geprüft. Keine Migration oder Änderung der gespeicherten Einstellungen, API-Schlüssel, MIDI-Daten oder Projekte.
+
+**Prüfung:** Der erste PR-CI-Lauf deckte eine veraltete Offline-Installer-Payload auf, nach Synchronisierung behoben. Zusätzlicher Produktionscode-Test für Argon-Modell-ID, Vorauswahl, Denkmodus (low/medium/high/auto) und Kostensätze ergänzt. [Modellauswahl/64 Layouts/Offline-Installations-Regression (Run 41876804873)](https://github.com/wibem1/Composition-Studio/actions/runs/41876804873) **success**. [Score-Workspace (Run 41876804942)](https://github.com/wibem1/Composition-Studio/actions/runs/41876804942) **success**. [Notenauswahl (Run 41876804889)](https://github.com/wibem1/Composition-Studio/actions/runs/41876804889) zuletzt in Ausführung; vor Merge Abschlussstatus erneut kontrollieren. **Kein** Live-Google-API-Test, keine vollständige App-/Neustart-/REAPER-7.83-Prüfung. Nur Testfreigabe.
+
+**Nächster Schritt:** Nach erfolgreichen Prüfungen PR #11 nach `main` mergen und Update-Bytes verifizieren; dann beim Nutzer über Studio-Menü → Update installieren und Google → Gemini 4 Argon auswählen.
+
 ## 04.11.2026 – Modellauswahl korrigiert, Testfreigabe 1.1.9 veröffentlicht
 
 **Auftrag und Ursache:** Globale Standards, AGENTS, Projektstand, README und Produktionscode gelesen; TODO.md existiert nicht. `main`/installierter Header 1.1.8. Im echten REAPER 7.83 beobachtet: 86 OpenAI-Modelle in einer überlangen Liste, Google und Anthropic erst darunter; automatischer Katalogabruf bei jedem Öffnen. Nutzer wünscht kompakte Hauptmodellauswahl, keine starre Dreiergrenze und keine 20 Einträge.

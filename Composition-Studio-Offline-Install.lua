@@ -30,7 +30,7 @@ end
 
 local fresh=[====[
 -- @description Composition Studio
--- @version 1.1.9
+-- @version 1.1.10
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -74,14 +74,14 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.9"
+local VERSION="1.1.10"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
 local COMPOSITION_ENGINE_BUILD=232
 local PROVIDER_KEY,MODEL_KEY="AIProvider","AIModel"
 local KEY_NAMES={openai="OpenAIAPIKey",anthropic="AnthropicAPIKey",google="GoogleAPIKey"}
-local MODELS={openai={{"GPT-5.6 Sol","gpt-5.6-sol"},{"GPT-5.6 Terra","gpt-5.6-terra"},{"GPT-5.6 Luna","gpt-5.6-luna"}},anthropic={{"Claude Fable 5","claude-fable-5"},{"Claude Sonnet 5","claude-sonnet-5"},{"Claude Opus 5","claude-opus-5"}},google={{"Gemini 3.8 Flash","gemini-3.8-flash"},{"Gemini 3.1 Pro","gemini-3.1-pro-preview"},{"Gemini 2.5 Pro · Altmodell (Zugang eingeschränkt)","gemini-2.5-pro"}}}
+local MODELS={openai={{"GPT-5.6 Sol","gpt-5.6-sol"},{"GPT-5.6 Terra","gpt-5.6-terra"},{"GPT-5.6 Luna","gpt-5.6-luna"}},anthropic={{"Claude Fable 5","claude-fable-5"},{"Claude Sonnet 5","claude-sonnet-5"},{"Claude Opus 5","claude-opus-5"}},google={{"Gemini 4 Argon","gemini-4-argon"},{"Gemini 3.8 Flash","gemini-3.8-flash"},{"Gemini 3.1 Pro","gemini-3.1-pro-preview"},{"Gemini 2.5 Pro · Altmodell (Zugang eingeschränkt)","gemini-2.5-pro"}}}
 local provider=reaper.GetExtState(EXT_SECTION,PROVIDER_KEY); if provider=="" or not MODELS[provider] then provider="openai" end
 local model=reaper.GetExtState(EXT_SECTION,MODEL_KEY); if model=="" then model=MODELS[provider][1][2] end
 local WINDOW_STATE_KEY,HISTORY_KEY="WindowOpen","HistoryV1"
@@ -951,6 +951,7 @@ do
   ["anthropic/claude-fable-5"]={10,50,1,12.5,20},
   ["anthropic/claude-sonnet-5"]={2,10,0.2,2.5,4},
   ["anthropic/claude-opus-5"]={5,25,0.5,6.25,10},
+  ["google/gemini-4-argon"]={2,10,0.1,0,0,expires="2026-11-30"},
   ["google/gemini-3.8-flash"]={0.75,3.75,0.075,0,0,expires="2026-12-31"},
  }
  local function rate_values(raw)
@@ -967,6 +968,7 @@ do
   if custom then return custom end
   local r=rates[pv.."/"..id]
   if not r or r.expires and os.date("%Y-%m-%d")>r.expires then
+   if pv=="google" and id=="gemini-4-argon" then return {4,20,0.2,0,0} end
    if pv=="google" and id=="gemini-3.8-flash" then return {1.5,7.5,0.15,0,0} end
    return nil
   end

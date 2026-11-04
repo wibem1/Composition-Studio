@@ -7,7 +7,7 @@ root=Path(__file__).resolve().parents[1]
 installer=(root/'Composition-Studio-Offline-Install.lua').read_text()
 expected=(root/'Composition Studio.lua').read_bytes()
 version=re.search(rb'-- @version ([^\s]+)',expected).group(1).decode()
-for ref in ('e9d8572','9dfebaeb2b2cda7fc562aee693162b9aada7801b','d307d19','340291c','3443e83','87fa72c'):
+for ref in ('dee9ec31a277d12584c94dab05e5a2fb591e56dc','e9d8572','9dfebaeb2b2cda7fc562aee693162b9aada7801b','d307d19','340291c','3443e83','87fa72c'):
  previous=subprocess.check_output(['git','show',ref+':Composition Studio.lua'],cwd=root)
  with TemporaryDirectory() as d:
   # Stock Windows lupa uses narrow CRT paths; REAPER supplies its own UTF-8 IO.
