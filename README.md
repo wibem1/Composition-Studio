@@ -2,7 +2,7 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
-Aktueller Stand: **v1.1.8 · 03.11.2026 · TESTFREIGABE (REAPER-Praxistest ausstehend)**.
+Aktueller Stand: **v1.1.9 · 04.11.2026 · TESTFREIGABE**. Modellauswahl in REAPER isoliert geprüft; vollständiger App-/Neustart-/Live-KI-Test ausstehend.
 
 Denkaufwand im Hauptfenster: **Kurz / Mittel / Hoch / Automatisch**, mit **Mittel** als Voreinstellung. Die Auswahl wird dauerhaft gespeichert und gilt für die KI-Aufrufe des Auftrags einschließlich Konzeption und Komposition. Während eines laufenden Auftrags ist sie gesperrt. Automatisch sendet keine Denksteuerung und verwendet die Modellvorgabe.
 
@@ -11,6 +11,8 @@ OpenAI erhält `reasoning.effort`, Anthropic `output_config.effort`, Gemini 3 `g
 Die langfristige Zielsetzung des Notationsmoduls ist in [NOTATION-MODULE.md](NOTATION-MODULE.md) dokumentiert.
 
 Die bestehende Updatefunktion bleibt der normale Installationsweg: **Studio-Menü → Update**.
+
+**Testfreigabe 1.1.9 – kompakte Modellauswahl.** OpenAI, Anthropic und Google stehen fest oberhalb der Modellliste. Standardmäßig erscheinen die bisherigen Hauptmodelle sowie ein gegebenenfalls abweichendes gespeichertes Modell. Der vollständige Katalog mit Suche ist optional; Öffnen startet keine Netzwerkabfrage. Bestehende Einstellungen bleiben erhalten. Installation über **Studio-Menü → Update** nach Übernahme von PR #10 in `main`. [Prüfungen und Grenzen](docs/RELEASE-1.1.9.md).
 
 ### Testfreigabe v1.1.8 – Arrangement, Notenansicht und Piano-Roll
 

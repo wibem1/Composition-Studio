@@ -1,7 +1,7 @@
 """Bundle the tested Studio source with its checked file installer. No HTTP or process launch."""
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
-s=(root/'Composition Studio.lua').read_text()
+s=(root/'Composition Studio.lua').read_text(encoding='utf-8')
 # Reuse validation, backup and rename rollback from the production installer.
 a=s.index('local function complete_update(status,fresh)')
 b=s.index(' update_status="Update auf "..rv.." installiert. Neustart …"',a)
@@ -36,5 +36,5 @@ local ok,err=pcall(complete_update,"200",fresh)
 if not ok then message("Installation abgebrochen: "..tostring(err));return end
 message(update_status)
 '''
-(root/'Composition-Studio-Offline-Install.lua').write_text(header+files_and_versions+payload+install+footer)
+(root/'Composition-Studio-Offline-Install.lua').write_text(header+files_and_versions+payload+install+footer,encoding='utf-8',newline='\n')
 print('Built offline installer with complete tested Studio source')

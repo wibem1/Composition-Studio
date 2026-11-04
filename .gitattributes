@@ -1,0 +1,3 @@
+# The offline installer embeds the exact GitHub-delivered source bytes.
+"Composition Studio.lua" text eol=lf
+Composition-Studio-Offline-Install.lua text eol=lf

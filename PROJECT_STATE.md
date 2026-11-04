@@ -1,5 +1,17 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Modellauswahl korrigiert, Testfreigabe 1.1.9 beauftragt
+
+**Auftrag und Ursache:** Globale Standards, AGENTS, Projektstand, README und Produktionscode gelesen; TODO.md existiert nicht. `main`/installierter Header 1.1.8. Im echten REAPER 7.83 beobachtet: 86 OpenAI-Modelle in einer überlangen Liste, Google und Anthropic erst darunter; automatischer Katalogabruf bei jedem Öffnen. Nutzer wünscht kompakte Hauptmodellauswahl, keine starre Dreiergrenze und keine 20 Einträge.
+
+**Implementiert:** Anbieter fest oberhalb der scrollbaren Liste, kurze bestehende Projekt-Vorauswahl plus abweichendes gespeichertes Modell, vollständiger Katalog nur optional mit Suche. Stabile Modell-IDs unabhängig vom Anzeigenamen. Öffnen/Anbieter ansehen ohne Netzwerk oder Persistenzänderung; manuelle Aktualisierung des angesehenen Anbieters ohne Wechsel der aktiven Auswahl. Modellauswahl während laufender Aufträge gesperrt. Keine Migration, kein Zurücksetzen von Einstellungen, Katalogen, Schlüsseln, Verlauf oder Projektdaten.
+
+**Nachweise:** Gesamtsyntax Lua 5.4, sechs echte Dear-ImGui-Interaktionsfälle plus gezielte Katalogabfrageprüfung, 64 Layouts, beide Lua-Editor-/Notenauswahltests, 34 Start-/Import-/Updateprüfungen inklusive echtem LilyPond, Updatehelfer und Offline-Installation aus 1.1.8 sowie fünf älteren Ständen mit exakter Sicherung/Fehlererhalt bestanden. Direkter REAPER-7.83-Test der unveränderten Produktions-Auswahlfunktion im isolierten Fenster: Anthropic/Google sichtbar und Claude-/Gemini-Auswahl korrekt. Keine Einstellungen oder MIDI dabei geschrieben. Vollständige Abgrenzung und Windows-lupa-Testgrenzen: [docs/RELEASE-1.1.9.md](docs/RELEASE-1.1.9.md).
+
+**GitHub-Nachweis:** [Draft-PR #10](https://github.com/wibem1/Composition-Studio/pull/10), getesteter Quellcommit `eb9f34ab9744312d5a7ee1bcd916a352a9846013`. Alle drei PR-Runs erfolgreich: [Modellauswahl](https://github.com/wibem1/Composition-Studio/actions/runs/41823481960), [Editor-Brücke](https://github.com/wibem1/Composition-Studio/actions/runs/41823481948), [Notenauswahl](https://github.com/wibem1/Composition-Studio/actions/runs/41823482009). GitHub-Blob-SHAs mit lokalen getesteten Bytes abgeglichen: Skript `99a15280235daf3ce8d2d781dacf71117b0bac0a`, Offline-Installer `5650d110290aea5168c8da5d643612249381eebb`. Keine Veröffentlichung auf main.
+
+**Aktuelle Nutzerfreigabe:** Nach Meldung des fertig geprüften, noch nicht veröffentlichten Updates beauftragt der Nutzer mit „weiter“ die Veröffentlichung über den bestehenden Updateweg. Header/Laufzeit 1.1.9 und Offline-Installer sind geprüft. PR #10 wird kontrolliert nach `main` übernommen; anschließend Quellbytes/Versionsnummer aus `main` abgleichen und tatsächlichen Merge hier dokumentieren. Bestehender Updater/Backup/Repair unverändert. Keine vollständige App-/Neustart-/Live-KI-Abnahme. Die installierte Benutzerfassung wird durch den GitHub-Merge nicht automatisch ersetzt.
+
 ## 03.11.2026 – Abschlussprüfung und beauftragte Testfreigabe 1.1.8 (PR #9)
 
 **Aktueller Auftrag:** Vorhandene Arrangement-/Notations-/Piano-Roll-Integration abschließen und über den bestehenden Updater veröffentlichen; fehlende Praxis ausdrücklich dokumentieren. Diese aktuelle Nutzerfreigabe ersetzt die früheren Merge-Sperren weiter unten. Globale Standards und aktuelle Repo-Anweisungen/Quellen von GitHub gelesen; keine Neuentwicklung.
