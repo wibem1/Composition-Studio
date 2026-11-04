@@ -1758,7 +1758,10 @@ function workflow_adapter.offer(stage,text,data)
  workflow_adapter.save()
  if stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
  update_status=stage=="analysis" and "Analyse gespeichert. Zur Umsetzung zum Beispiel eingeben: Überarbeite anhand dieser Analyse." or "Vorschlag gespeichert. Mit Änderungen anwenden übernehmen."
- add("KI",stage=="analysis" and workflow_core.readable(text) or update_status)
+ if stage=="analysis" then
+  update_status=update_status.." Semantische Zuordnungen: "..tostring(#(r.semantic_notes or {})).."; verworfen: "..tostring(r.semantic_invalid_count or 0).."."
+ end
+ add("KI",stage=="analysis" and (workflow_core.readable(text).."\n"..update_status) or update_status)
  busy=false
 end
 function workflow_adapter.bindings(r)
