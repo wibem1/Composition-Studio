@@ -13,3 +13,9 @@ Limits: this is a deterministic feasibility probe, NOT AI, NOT intelligent quant
 Next single step: open a project copy in REAPER 7.83, select two or three notes with non-eighth original lengths, run the script once, inspect score and compare original MIDI positions/durations; then Undo. Only if this passes, test disp_pos and AI integration.
 
 References: https://github.com/ReaTeam/ReaScripts/blob/master/MIDI%20Editor/js_Notation%20-%20Set%20displayed%20length%20of%20selected%20notes%20to%20custom%20value.lua
+
+## Next incremental step: read-only diagnostic
+
+Added `experiments/notation_display_diagnostic.lua` on the same test branch. It reports selected note start/end PPQ, channel/pitch and any matching `disp_pos` / `disp_len` metadata without writing MIDI or notation events. The first experiment still needs a live REAPER verification before expanding to write `disp_pos` or introducing AI. Duplicate simultaneous same-pitch notes are explicitly flagged as ambiguous. This diagnostic has not been tested in REAPER; it is not a release.
+
+Recommended minimal real check: in a copy of a REAPER project select 2–3 notes in MIDI editor, run the diagnostic, run the length experiment, run the diagnostic again, visually check eighth-note display and confirm original MIDI duration/positions; then Undo. If the metadata is written but the engraving remains unsuitable, stop and investigate rather than assuming AI will solve it.
