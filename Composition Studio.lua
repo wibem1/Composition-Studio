@@ -770,7 +770,12 @@ local function parse_semnotes(reply,items)
    for part in (line.."|"):gmatch("(.-)|") do f[#f+1]=part end
    local s,d,p,v,c=tonumber(f[3]),tonumber(f[4]),tonumber(f[5]),tonumber(f[6]),tonumber(f[7])
    local k=s and d and p and v and c and key(f[2],s,d,p,v,c)
-   local ok=#f==11 and k and known[k] and not duplicate[k] and not seen[k]
+   local finite=s and d and p and v and c
+     and s==s and d==d and p==p and v==v and c==c
+     and s~=math.huge and d~=math.huge and p~=math.huge and v~=math.huge and c~=math.huge
+     and s>=0 and d>0 and p>=0 and p<=127 and p%1==0
+     and v>=1 and v<=127 and v%1==0 and c>=0 and c<=16 and c%1==0
+   local ok=#f==11 and finite and k and known[k] and not duplicate[k] and not seen[k]
      and (f[10]=="BESTAETIGT" or f[10]=="VORLAEUFIG" or f[10]=="UNSICHER")
      and f[8]~="" and f[9]~="" and f[11]:match("%S")
    if ok then
