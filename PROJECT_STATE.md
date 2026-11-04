@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – SEMNOTE-Parser in Analyse-Speicherung eingebunden
+
+Experimenteller Branch `feat/semantic-notation-analysis-20261104`: `parse_semnotes` wird nun beim Speichern einer KI-Analyse aufgerufen. Eindeutig zugeordnete semantische Hinweise werden als `semantic_notes` im bestehenden Analyse-Datensatz gespeichert; die Anzahl verworfener Zeilen als `semantic_invalid_count`. Es werden keine MIDI- oder Notationsdaten geschrieben. Die vorhandenen `N`-Kontextzeilen verwenden neun Nachkommastellen. **Statisch geprüft:** Parser-Aufruf und Speicherung im Branch vorhanden, Version 1.1.10 unverändert. **Nicht geprüft:** Lua-Interpreter-/REAPER-Laufzeittest und echter KI-Aufruf; keine Freigabe oder Merge. **Offen:** Das Parserformat muss mit realen Modellantworten getestet und die Zuordnungs-/Doppelnotenlogik gegen ein echtes REAPER-Projekt geprüft werden. Naechster Schritt: ein gebuendelter Vier-Takte-End-to-End-Test nach lokalem Lua-Syntaxcheck.
+
+
 ## 04.11.2026 – Strukturierte Notenreferenzen fuer KI-Analyse
 
 Im experimentellen Branch wurde `analysis_prompt` erweitert: Notationsanalysen sollen nun `SEMNOTE`-Zeilen mit der exakten Identitaet der vorhandenen `N`-Kontextzeilen (Item-GUID, start_qn, duration_qn, Pitch, Velocity, Kanal), musikalischer Rolle, rhythmischer Deutung, Sicherheitsstufe und Begruendung liefern. Bei mehrdeutiger Zuordnung keine `SEMNOTE`-Zeile. **Status:** Prompt-Vertrag implementiert und statisch auf Vorhandensein geprueft. Es gibt **noch keinen Parser**, keine maschinelle Rueckpruefung gegen den REAPER-Take und keine automatische Anwendung der Zeilen. Ein echter KI-/REAPER-Test steht aus. Keine neue Version, kein Merge, keine produktive Freigabe. Naechster Schritt: einen streng validierenden, nur lesenden Parser in der Lua-Anwendung integrieren; anschliessend einen gemeinsamen Vier-Takte-Test durchfuehren.
