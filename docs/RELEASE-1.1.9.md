@@ -1,6 +1,6 @@
 # Composition Studio 1.1.9 – Testfreigabe
 
-Stand: 04.11.2026. Nutzerfreigabe zur Veröffentlichung über den bestehenden Updater; Merge und abschließender Byteabgleich werden in `PROJECT_STATE.md` dokumentiert.
+Stand: 04.11.2026. [PR #10](https://github.com/wibem1/Composition-Studio/pull/10) ist auf Nutzerfreigabe gemergt, Merge-Commit `dee9ec31a277d12584c94dab05e5a2fb591e56dc`. Quellbytes aus `main` und aus der regulären Updateadresse stimmen mit der getesteten Fassung überein; Nachweis in `PROJECT_STATE.md`.
 
 ## Fehler und Korrektur
 
@@ -63,10 +63,10 @@ Produktionspfade wurden durch diese Korrektur nicht verändert. Kein Live-KI-Tes
 
 Header und Laufzeitversion sind 1.1.9; der bestehende Offline-Installer enthält
 dieselben Quellbytes. Der reguläre Updater bleibt unverändert und lädt weiterhin
-aus `main`. Solange der vorbereitete PR nicht gemergt ist, liefert er 1.1.8.
-Keine Änderung der installierten Benutzerfassung durch diese Vorbereitung.
+aus `main`; **Studio-Menü → Update** liefert jetzt 1.1.9.
+Die Veröffentlichung ersetzt die installierte Benutzerfassung nicht automatisch.
 
 Ausgangsstand: `e9d857267be47dfab9bb3bb78aa154e1614508ca` (Version 1.1.8). Der Updater sichert die vorherige
 Datei als `.backup`; vorhandene Repair-Funktion und Wiederherstellung bleiben
-erhalten. Alle drei PR-Prüfungen sind erfolgreich; die Veröffentlichung über den bestehenden
-Updateweg wurde vom Nutzer beauftragt. Nach Merge `main`-Quellbytes abgleichen.
+erhalten. Alle drei PR-Prüfungen sind erfolgreich. Veröffentlichung und abschließender
+Byteabgleich sind abgeschlossen. Ein realer Update-/Neustarttest bleibt offen.

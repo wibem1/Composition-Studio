@@ -12,7 +12,7 @@ Die langfristige Zielsetzung des Notationsmoduls ist in [NOTATION-MODULE.md](NOT
 
 Die bestehende Updatefunktion bleibt der normale Installationsweg: **Studio-Menü → Update**.
 
-**Testfreigabe 1.1.9 – kompakte Modellauswahl.** OpenAI, Anthropic und Google stehen fest oberhalb der Modellliste. Standardmäßig erscheinen die bisherigen Hauptmodelle sowie ein gegebenenfalls abweichendes gespeichertes Modell. Der vollständige Katalog mit Suche ist optional; Öffnen startet keine Netzwerkabfrage. Bestehende Einstellungen bleiben erhalten. Installation über **Studio-Menü → Update** nach Übernahme von PR #10 in `main`. [Prüfungen und Grenzen](docs/RELEASE-1.1.9.md).
+**Testfreigabe 1.1.9 – kompakte Modellauswahl.** OpenAI, Anthropic und Google stehen fest oberhalb der Modellliste. Standardmäßig erscheinen die bisherigen Hauptmodelle sowie ein gegebenenfalls abweichendes gespeichertes Modell. Der vollständige Katalog mit Suche ist optional; Öffnen startet keine Netzwerkabfrage. Bestehende Einstellungen bleiben erhalten. Veröffentlicht mit [PR #10](https://github.com/wibem1/Composition-Studio/pull/10); Installation über **Studio-Menü → Update**. [Prüfungen und Grenzen](docs/RELEASE-1.1.9.md).
 
 ### Testfreigabe v1.1.8 – Arrangement, Notenansicht und Piano-Roll
 
