@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Isolierter Test der notenweisen Darstellungsparameter (nicht veröffentlicht)
+
+**Ausgangsstand:** main 1.1.9 bleibt unverändert. Testbranch `test/note-display-offset-20261104`. Zentrale und projektspezifische Entwicklungsregeln erneut gelesen. `TODO.md` existiert nicht.
+
+**Implementiert:** `experiments/notation_display_length_test.lua` (setzt angezeigte Länge ausgewählter Noten testweise auf Achtelnoten, ohne MIDI-Note-Events zu bearbeiten) und `experiments/notation_display_diagnostic.lua` (rein lesender Bericht zu MIDI-Anfang/-Ende und expliziten `disp_pos`/`disp_len`-Notationseinträgen). Einzelheiten: `docs/NOTATION-DISPLAY-EXPERIMENT-2026-11-04.md`.
+
+**Nachweisgrenze:** GitHub-Quelltexte und bekannte ReaScript-Schnittstelle; noch keine echte REAPER-Ausführung, keine bestätigte optische Wirkung, keine KI-Anbindung, keine Freigabe. Duplikate gleicher Note zur selben Zeit bleiben ein Sonderfall. Kein API-Kostenaufwand.
+
+**Nächster einzelner Schritt:** Minimaler Vergleich in REAPER-Projektkopie: Diagnose → Längentest → Diagnose, MIDI-Werte und Notenbild prüfen → Undo. Erst danach gezielter `disp_pos`-Schreibtest.
+
+
 ## 04.11.2026 – Modellauswahl korrigiert, Testfreigabe 1.1.9 veröffentlicht
 
 **Auftrag und Ursache:** Globale Standards, AGENTS, Projektstand, README und Produktionscode gelesen; TODO.md existiert nicht. `main`/installierter Header 1.1.8. Im echten REAPER 7.83 beobachtet: 86 OpenAI-Modelle in einer überlangen Liste, Google und Anthropic erst darunter; automatischer Katalogabruf bei jedem Öffnen. Nutzer wünscht kompakte Hauptmodellauswahl, keine starre Dreiergrenze und keine 20 Einträge.
