@@ -197,7 +197,7 @@ for effort in ('low', 'medium', 'high'):
     assert '"thinkingLevel":"' + effort + '"' in body, (effort, body)
     assert body == ',' + requested
 assert arg.globals().CHECK_REASONING('google', 'gemini-4-argon', 'auto')[1] == 'provider_default'
-rates = source[source.index('  local rates={'):source.index('  local function rate_values(')]
+rates = source[source.index(' local rates={'):source.index('  local function rate_values(')]
 arg.execute(rates + '\nCHECK_RATE=rates["google/gemini-4-argon"]')
 r = arg.globals().CHECK_RATE
 assert (r[1],r[2],r[3],r.expires)==(2,10,0.1,'2026-11-30')
