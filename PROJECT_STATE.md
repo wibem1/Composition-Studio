@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Testvorbereitung: sichtbar und reproduzierbar
+
+Im Entwicklungsbranch wurde die Auswertung der semantischen Analyse im Chat sichtbar gemacht: Nach einer KI-Analyse erscheinen die Anzahl akzeptierter und verworfener `SEMNOTE`-Zuordnungen (Commit `4a40ba56049ad6ecbc56ccfc3bca2c2b380297cf`). Die Datei `tests/test_semnotes.lua` enthaelt acht reproduzierbare Parser-Regressionsfaelle und laedt die Parserfunktion direkt aus der produktiven Skriptdatei (Commit `bab2dd19b62e9fc5162e29ff72efb286a32c8cd4`). **Pruefstatus:** Beide Dateien auf GitHub gesichert; der neue Test-Harness wurde noch nicht mit Lua ausgefuehrt. Die frueheren sechs isolierten Lua-Funktionstests bleiben separat dokumentiert. Kein REAPER-Laufzeittest, kein echter KI-Aufruf. Keine Versionserhoehung und kein Merge. Fuer die Freigabe fehlt der gemeinsam vereinbarte einzelne Vier-Takte-Praxistest durch den Nutzer.
+
+
 ## 04.11.2026 – Lua-Parser-Funktionstests (lokal)
 
 Die in `Composition Studio.lua` vorhandene `parse_semnotes`-Funktion wurde in einem isolierten Lua-5.4-Harness ueber `liblua5.4.so.0` ausgefuehrt. Sechs Tests erfolgreich: gueltiger Notenbezug, doppelte SEMNOTE-Zeile, abweichende Tonhoehe, Sicherheitsstufe UNSICHER, ungueltiger Zahlenwert und doppelte Originalnotenidentitaet. **Pruefgrenze:** Der Funktionskoerper wurde fuer den isolierten Test aus dem zuvor gelesenen GitHub-Stand uebernommen; es wurde nicht die vollstaendige 189-kB-REAPER-Datei kompiliert oder ausgefuehrt. Keine echte KI-Antwort und keine REAPER-Laufzeit. Der abschliessende REAPER-Vier-Takte-Test bleibt beim Nutzer; keine Freigabe/kein Merge vor diesem Test.
