@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Uebergabe zur abschliessenden Integration: Draft-PR #12
+
+[Draft-PR #12](https://github.com/wibem1/Composition-Studio/pull/12) wurde aus `feat/semantic-notation-analysis-20261104` gegen `main` erstellt. Implementiert: semantischer Analyseprompt, `SEMNOTE`-Parser, schreibgeschuetzte Speicherung gueltiger Zuordnungen in `semantic_notes` und Zahl verworfener Zuordnungen in `semantic_invalid_count`. Die produktive Fassung bleibt 1.1.10. **Pruefstatus:** Nur Quellcode-Sichtpruefung; keine GitHub-Workflow-Runs fuer den Head-Commit gemeldet, keine Lua-Laufzeit- oder REAPER-7.83-Pruefung, keine reale KI-Antwort. Ein zusaetzlicher Testdatei-Upload wurde blockiert. **Wichtig:** Die Funktion ist nicht als End-to-End-getestet oder freigegeben zu bezeichnen. **Naechster Schritt:** Lua-Syntax und isolierte Parserfaelle pruefen, dann ein einziger REAPER-Vier-Takte-A/B-Test mit echter KI-Antwort und anschliessendem Vergleich der MIDI-Events; erst danach Merge/Update entscheiden.
+
+
 ## 04.11.2026 – SEMNOTE-Parser in Analyse-Speicherung eingebunden
 
 Experimenteller Branch `feat/semantic-notation-analysis-20261104`: `parse_semnotes` wird nun beim Speichern einer KI-Analyse aufgerufen. Eindeutig zugeordnete semantische Hinweise werden als `semantic_notes` im bestehenden Analyse-Datensatz gespeichert; die Anzahl verworfener Zeilen als `semantic_invalid_count`. Es werden keine MIDI- oder Notationsdaten geschrieben. Die vorhandenen `N`-Kontextzeilen verwenden neun Nachkommastellen. **Statisch geprüft:** Parser-Aufruf und Speicherung im Branch vorhanden, Version 1.1.10 unverändert. **Nicht geprüft:** Lua-Interpreter-/REAPER-Laufzeittest und echter KI-Aufruf; keine Freigabe oder Merge. **Offen:** Das Parserformat muss mit realen Modellantworten getestet und die Zuordnungs-/Doppelnotenlogik gegen ein echtes REAPER-Projekt geprüft werden. Naechster Schritt: ein gebuendelter Vier-Takte-End-to-End-Test nach lokalem Lua-Syntaxcheck.
