@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Semantische Notationsanalyse (experimenteller Branch)
+
+Branch `feat/semantic-notation-analysis-20261104`, nicht auf `main` veröffentlicht. Nach dokumentierter Vier-Takte-Prüfung wurde `tools/semantic_notation.py` als Sicherheitsbaustein hinzugefügt. Die vorhandene Funktion `analysis_prompt` in `Composition Studio.lua` ergänzt bei Aufträgen mit „Notation“, „notier“, „Partitur“ oder „transkrib“ den bestehenden KI-Analyseprompt um eine explizite taktweise musikalische Interpretation und Unsicherheitskennzeichnung. Keine neue API-Route, keine Änderung von MIDI-Noten, Notationsmetadaten oder UI; Versionsnummer bleibt 1.1.10. **Statische Kontrolle:** Prompt-Text im Branch vorhanden, bestehender `music_context`-Aufruf erhalten, `main` ohne Zusatz. **Nicht geprüft:** Lua-Syntax mit externem Interpreter, vollständiger REAPER-/KI-Livetest, KI-Qualität und tatsächliche Partiturerzeugung. Der Python-Sicherheitsbaustein ist noch nicht an die Lua-Laufzeit gekoppelt; deshalb keine automatische Notationsänderung. Nächster Schritt: Prompt-Antwortformat/Notenidentitäten und sichere Übernahme im bestehenden Lua-Code entwickeln; anschließend ein gemeinsamer Vier-Takte-REAPER-Test.
+
+
 ## 04.11.2026 – Gemini 4 Argon, Testkandidat 1.1.10 (PR #11)
 
 **Ausgangslage:** `main` v1.1.9, Gemini 4 Argon fehlte in `MODELS.google`. Verbindliche Standards, Projektanweisungen, Projektstand und betroffenen Code erneut von GitHub gelesen. Separater Branch `fix/google-argon-featured-20261104` und [PR #11](https://github.com/wibem1/Composition-Studio/pull/11).
