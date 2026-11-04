@@ -750,7 +750,17 @@ export_last_midi=function()
  if valid==0 then update_status="Noch keine gültige von Composition Studio erzeugte MIDI-Komposition zum Exportieren."; return end
  if ensure_title_then("midi") then return end; begin_save_panel("midi","MIDI exportieren",safe_work_title(work_title)..".mid","mid")
 end
-local function analysis_prompt(request,items,tracks) return [[Du analysierst das konkret übergebene MIDI-Material. Antworte musikalisch präzise als normaler Text. Erfinde nichts. Erzeuge kein MIDI und keine CS-Zeilen.]].."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false) end
+local function analysis_prompt(request,items,tracks)
+ local prompt=[[Du analysierst das konkret übergebene MIDI-Material. Antworte musikalisch präzise als normaler Text. Erfinde nichts. Erzeuge kein MIDI und keine CS-Zeilen.]].."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false)
+ local query=tostring(request or ""):lower()
+ if query:find("notation",1,true) or query:find("notier",1,true) or query:find("partitur",1,true) or query:find("transkrib",1,true) then
+  prompt=prompt..[[
+
+ZUSATZAUFTRAG: MUSIKALISCHE NOTATIONSINTERPRETATION (NUR ANALYSE)
+Interpretiere das vorhandene MIDI musikalisch, taktweise, nicht durch pauschale Quantisierung. Bestimme pro Takt die erkennbaren Phrasen, rhythmische Absicht, Melodie, Bass, Begleitung und eigenstaendige Mittelstimmen. Unterscheide expressive Timingabweichungen von musikalisch beabsichtigten Notenwerten. Begruende Hand- und Stimmenzuordnung; beschreibe harmonische Funktion nur soweit aus den vorliegenden Daten belegbar. Markiere jede unsichere Deutung explizit mit 'UNSICHER' und nenne Alternativen. Behandle Vorschlagsnoten nur bei konkreter musikalischer Evidenz; MIDI-Kuerze allein ist kein Beweis. Nenne die Originalnoten/Positionen, auf die sich die Deutung stuetzt. Fehlen Daten fuer eine Aussage, schreibe 'NICHT BELEGBAR'. Liefere zuerst eine taktweise Analyse, dann eine kurze Liste der offenen Entscheidungen. Keine MIDI-, Notations- oder Track-Aenderungen vornehmen; keine unbelegte Behauptung, die Notation sei bereits korrigiert.]]
+ end
+ return prompt
+end
 local function composition_prompt(request,items,tracks,is_new)
  if is_new then
   return [[Komponiere jetzt das verlangte Stück vollständig. Erzeuge die Musik selbst – keinen Entwurf, keinen Formplan, kein Konzept, keine Klangbeschreibung und keine Erläuterung darüber, wie das Stück später komponiert werden könnte. Triff die musikalischen Entscheidungen unmittelbar in der Komposition: konkrete Stimmen, Tonhöhen, Dauern, Rhythmus, Harmonik, Artikulation, Dynamik und Verlauf. Die Komposition muss so vollständig und eindeutig notiert sein, dass eine nachfolgende technische Instanz sie ohne eigene musikalische Entscheidungen lediglich übertragen kann. Gib der fertigen Komposition einen kurzen Werktitel und, soweit musikalisch bestimmbar, Tonart und Tempo an. Denke nicht an MIDI-Codierung, QN-Werte, CS-Zeilen oder das technische Zielformat. Keine Analyse und keine Beschreibung der Arbeitsweise.]].."\n\nAUFTRAG:\n"..request
