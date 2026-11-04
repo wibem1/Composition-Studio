@@ -1,0 +1,29 @@
+name: Semantic notation analysis regression
+on:
+  pull_request:
+    paths:
+      - 'Composition Studio.lua'
+      - 'Composition-Studio-Offline-Install.lua'
+      - 'Composition-Studio-Semantic-Test-Install.lua'
+      - 'tools/**'
+      - 'tests/**'
+      - '.github/workflows/semantic-analysis-regression.yml'
+  workflow_dispatch:
+jobs:
+  semantic-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install lupa==2.8 imgui-bundle==1.93.0
+      - name: Verify reproducible installers
+        run: |
+          python tools/build_offline_installer.py
+          python tools/build_semantic_test_installer.py
+          git diff --exit-code -- '*Install.lua'
+      - name: All offline regressions and complete Lua syntax
+        run: python tools/run_regressions.py

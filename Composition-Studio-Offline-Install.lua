@@ -721,7 +721,7 @@ local function selected_items(with_notes,scope) if scope~="items" then local row
 local function track_context_items(tracks) local a={}; local seen={}; for _,t in ipairs(tracks) do for i=0,reaper.CountTrackMediaItems(t.track)-1 do local item=reaper.GetTrackMediaItem(t.track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local g=item_guid(item); if not seen[g] then seen[g]=true; local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=t.track,guid=g,track_guid=t.guid,track_name=t.name,take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; local _,nc=reaper.MIDI_CountEvts(take); for n=0,(nc or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end; a[#a+1]=it end end end end; return a end
 local function time_selection_context() local s,e=reaper.GetSet_LoopTimeRange(false,false,0,0,false); if not s or not e or e<=s then return "TIME_SELECTION none" end; local sq=reaper.TimeMap2_timeToQN(0,s); local eq=reaper.TimeMap2_timeToQN(0,e); local _,sm,sb=reaper.TimeMap2_timeToBeats(0,s); local _,em,eb=reaper.TimeMap2_timeToBeats(0,e); return string.format("TIME_SELECTION startQN=%.3f endQN=%.3f startBar=%d startBeat=%.3f endBar=%d endBeat=%.3f",sq,eq,(sm or 0)+1,(sb or 0)+1,(em or 0)+1,(eb or 0)+1) end
 local function compact_context(items,tracks,ignore_time) tracks=tracks or selected_tracks(); local l={string.format("Tempo %.2f BPM; selected MIDI items=%d; selected tracks=%d",reaper.Master_GetTempo(),#items,#tracks)}; l[#l+1]=ignore_time and "TIME_SELECTION ignored for free new composition" or time_selection_context(); for i,t in ipairs(tracks) do l[#l+1]=string.format("TRACK %d id=%s name=%s index=%d",i,t.guid,t.name,t.index) end; for i,it in ipairs(items) do l[#l+1]=string.format("ITEM %d id=%s trackId=%s track=%s take=%s rangeQN=%.3f..%.3f",i,it.guid,it.track_guid,it.track_name,it.take_name,it.start_qn,it.end_qn); if it.selection_source then l[#l+1]="NOTATION_SELECTION: "..#it.selection_source.." selected notes" end; if it.score_context then l[#l+1]="SCORE_CONTEXT: sichtbares MIDI-Item; musikalischer Kontext, keine Freigabe zum direkten Überschreiben" end end; return table.concat(l,"\n") end
-local function music_context(items,tracks,ignore_time) local l={compact_context(items,tracks,ignore_time)}; for _,it in ipairs(items) do if it.selection_source then l[#l+1]="NOTATION_SELECTION "..it.guid.." count="..#it.selection_source..". Only selected notes are the edit context; keep unselected notes unchanged." end end; for _,it in ipairs(items) do for _,n in ipairs(it.notes) do l[#l+1]=string.format("N %s %.5f %.5f %d %d %d",it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end end; return table.concat(l,"\n") end
+local function music_context(items,tracks,ignore_time) local l={compact_context(items,tracks,ignore_time)}; for _,it in ipairs(items) do if it.selection_source then l[#l+1]="NOTATION_SELECTION "..it.guid.." count="..#it.selection_source..". Only selected notes are the edit context; keep unselected notes unchanged." end end; for _,it in ipairs(items) do for _,n in ipairs(it.notes) do l[#l+1]=string.format("N %s %.9f %.9f %d %d %d",it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end end; return table.concat(l,"\n") end
 local function recent_dialog() local l={}; for i=math.max(1,#history-7),#history do l[#l+1]=history[i].role..": "..history[i].text end; return table.concat(l,"\n") end
 
 local function first_program_changes_on_track(track)
@@ -781,7 +781,71 @@ export_last_midi=function()
  if valid==0 then update_status="Noch keine gültige von Composition Studio erzeugte MIDI-Komposition zum Exportieren."; return end
  if ensure_title_then("midi") then return end; begin_save_panel("midi","MIDI exportieren",safe_work_title(work_title)..".mid","mid")
 end
-local function analysis_prompt(request,items,tracks) return [[Du analysierst das konkret übergebene MIDI-Material. Antworte musikalisch präzise als normaler Text. Erfinde nichts. Erzeuge kein MIDI und keine CS-Zeilen.]].."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false) end
+-- Parse semantic AI suggestions against the exact notes supplied in the analysis context.
+-- Read only: never interpret SEMNOTE as a MIDI editing command.
+local function parse_semnotes(reply,items)
+ local known,duplicate,accepted,rejected={},{},{},{}
+ local function key(g,s,d,p,v,c)
+  return table.concat({g,string.format("%.9f",s),string.format("%.9f",d),p,v,c},"|")
+ end
+ for _,it in ipairs(items or {}) do
+  for _,n in ipairs(it.notes or {}) do
+   local k=key(it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel)
+   if known[k] then duplicate[k]=true else known[k]=true end
+  end
+ end
+ local roles={Melodie=true,Bass=true,Begleitung=true,Mittelstimme=true,Unklar=true}
+ local seen={}
+ for line in tostring(reply or ""):gmatch("[^\r\n]+") do
+  if line:sub(1,8)=="SEMNOTE|" then
+   local f={}
+   for part in (line.."|"):gmatch("(.-)|") do f[#f+1]=part end
+   local s,d,p,v,c=tonumber(f[3]),tonumber(f[4]),tonumber(f[5]),tonumber(f[6]),tonumber(f[7])
+   local k=s and d and p and v and c and key(f[2],s,d,p,v,c)
+   local finite=s and d and p and v and c
+     and s==s and d==d and p==p and v==v and c==c
+     and s~=math.huge and d~=math.huge and p~=math.huge and v~=math.huge and c~=math.huge
+     and s>=0 and d>0 and p>=0 and p<=127 and p%1==0
+     and v>=1 and v<=127 and v%1==0 and c>=0 and c<=15 and c%1==0
+   local ok=#f==11 and finite and k and known[k] and not duplicate[k] and not seen[k]
+     and (f[10]=="BESTAETIGT" or f[10]=="VORLAEUFIG" or f[10]=="UNSICHER")
+     and roles[f[8]] and f[9] and f[9]:match("%S") and f[11]:match("%S")
+   if ok then
+    seen[k]=true
+    accepted[#accepted+1]={identity=k,item_guid=f[2],original={start_qn=s,duration_qn=d,pitch=p,velocity=v,channel=c},role=f[8],rhythm=f[9],confidence=f[10],reason=f[11]}
+   else rejected[#rejected+1]=line end
+  end
+ end
+ return accepted,rejected
+end
+local function analysis_prompt(request,items,tracks)
+ local prompt=[[Du analysierst das konkret übergebene MIDI-Material. Antworte musikalisch präzise als normaler Text. Erfinde nichts. Erzeuge kein MIDI und keine CS-Zeilen.]].."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false)
+ local query=tostring(request or ""):lower()
+ if query:find("notation",1,true) or query:find("notier",1,true) or query:find("partitur",1,true) or query:find("transkrib",1,true) or query:find("notenansicht",1,true) or query:find("notensicht",1,true) then
+  -- Supply actual REAPER measure boundaries; QN values alone do not establish meter.
+  local lo,hi=math.huge,-math.huge
+  for _,it in ipairs(items or {}) do for _,n in ipairs(it.notes or {}) do
+   lo=math.min(lo,n.start_qn);hi=math.max(hi,n.start_qn+n.duration_qn)
+  end end
+  local q,count=lo,0
+  prompt=prompt.."\nMETRIK: BAR|Taktnummer (1-basiert)|Start-QN|End-QN|Zaehler|Nenner; MIDI-Kanaele 0..15.\n"
+  while q<hi and count<256 do
+   local bar,a,b=reaper.TimeMap_QNToMeasures(0,q)
+   if not bar or not a or not b or b<=q then break end
+   local num,den=reaper.TimeMap_GetTimeSigAtTime(0,reaper.TimeMap2_QNToTime(0,q))
+   prompt=prompt..string.format("BAR|%d|%.9f|%.9f|%d|%d\n",bar+1,a,b,num,den)
+   q=b;count=count+1
+  end
+  if q<hi then prompt=prompt.."METRIK UNVOLLSTAENDIG: Taktzuordnung ausserhalb der BAR-Zeilen NICHT BELEGBAR.\n" end
+  prompt=prompt..[[
+
+ZUSATZAUFTRAG: MUSIKALISCHE NOTATIONSINTERPRETATION (NUR ANALYSE)
+Interpretiere das vorhandene MIDI musikalisch, taktweise, nicht durch pauschale Quantisierung. Bestimme pro Takt die erkennbaren Phrasen, rhythmische Absicht, Melodie, Bass, Begleitung und eigenstaendige Mittelstimmen. Unterscheide expressive Timingabweichungen von musikalisch beabsichtigten Notenwerten. Begruende Hand- und Stimmenzuordnung; beschreibe harmonische Funktion nur soweit aus den vorliegenden Daten belegbar. Markiere jede unsichere Deutung explizit mit 'UNSICHER' und nenne Alternativen. Behandle Vorschlagsnoten nur bei konkreter musikalischer Evidenz; MIDI-Kuerze allein ist kein Beweis. Verwende fuer jeden Notenbezug die exakte Identitaet aus den vorhandenen N-Zeilen: Item-GUID, start_qn, duration_qn, MIDI-Pitch, Velocity, Kanal. Erfinde keine Noten-IDs und runde die Originalwerte nicht neu. Jede Notationsentscheidung bekommt eine Begruendung und eine Sicherheitsstufe: BESTAETIGT, VORLAEUFIG oder UNSICHER. BESTAETIGT nur bei eindeutiger musikalischer Evidenz, niemals allein aufgrund der Notenlaenge. Gib zusaetzlich eine maschinenlesbare, rein beschreibende Zeile pro begruendeter Entscheidung aus:
+SEMNOTE|<item_guid>|<start_qn>|<duration_qn>|<pitch>|<velocity>|<channel>|<rolle>|<rhythmus>|<sicherheit>|<begruendung>
+Verwende als Rolle Melodie, Bass, Begleitung, Mittelstimme oder Unklar; begruende Mischfunktionen im Text. Rhythmus soll konventionelle Notenwerte, echte Pausen, Bindungen, Stimmen-/Handverteilung und gegebenenfalls expressive Abweichungen beschreiben. Keine unueblichen Kleinstwerte oder komplexen Tuplets allein zur Nachbildung von Timingabweichungen. Leite Spielbarkeit aus dem musikalischen Zusammenhang ab, niemals nur aus Tonhoehe. Felder duerfen keine senkrechten Striche enthalten. Falls die Zuordnung zu einer N-Zeile nicht eindeutig ist, liefere keine SEMNOTE-Zeile dafuer, sondern erklaere die Unsicherheit im Text. Die SEMNOTE-Zeilen sind Vorschlaege zur spaeteren Pruefung, KEINE Schreibbefehle. Fehlen Daten fuer eine Aussage, schreibe 'NICHT BELEGBAR'. Liefere zuerst eine taktweise Analyse, dann die SEMNOTE-Zeilen und eine kurze Liste der offenen Entscheidungen. Keine MIDI-, Notations- oder Track-Aenderungen vornehmen; keine unbelegte Behauptung, die Notation sei bereits korrigiert.]]
+ end
+ return prompt
+end
 local function composition_prompt(request,items,tracks,is_new)
  if is_new then
   return [[Komponiere jetzt das verlangte Stück vollständig. Erzeuge die Musik selbst – keinen Entwurf, keinen Formplan, kein Konzept, keine Klangbeschreibung und keine Erläuterung darüber, wie das Stück später komponiert werden könnte. Triff die musikalischen Entscheidungen unmittelbar in der Komposition: konkrete Stimmen, Tonhöhen, Dauern, Rhythmus, Harmonik, Artikulation, Dynamik und Verlauf. Die Komposition muss so vollständig und eindeutig notiert sein, dass eine nachfolgende technische Instanz sie ohne eigene musikalische Entscheidungen lediglich übertragen kann. Gib der fertigen Komposition einen kurzen Werktitel und, soweit musikalisch bestimmbar, Tonart und Tempo an. Denke nicht an MIDI-Codierung, QN-Werte, CS-Zeilen oder das technische Zielformat. Keine Analyse und keine Beschreibung der Arbeitsweise.]].."\n\nAUFTRAG:\n"..request
@@ -1732,11 +1796,37 @@ function workflow_adapter.offer(stage,text,data)
  r.score_scope=false
  for _,it in ipairs(data.full or {}) do if it.score_context then r.score_scope=true;break end end
  for _,tr in ipairs(data.music_tracks or data.tracks or {}) do r.track_bindings[#r.track_bindings+1]=tr.guid end
+ if stage=="analysis" then
+  local notes,invalid=parse_semnotes(text,data.full or {})
+  r.semantic_notes=notes
+  r.semantic_invalid_count=#invalid
+  r.semantic_rejected=invalid
+  r.semantic_original={}
+  r.semantic_uncertain_count=0
+  for _,it in ipairs(data.full or {}) do
+   for _,n in ipairs(it.notes or {}) do
+    r.semantic_original[#r.semantic_original+1]={item_guid=it.guid,start_qn=n.start_qn,duration_qn=n.duration_qn,pitch=n.pitch,velocity=n.velocity,channel=n.channel}
+   end
+  end
+  for _,n in ipairs(notes) do if n.confidence~="BESTAETIGT" then r.semantic_uncertain_count=r.semantic_uncertain_count+1 end end
+  r.semantic_unassigned_count=math.max(0,#r.semantic_original-#notes)
+  r.semantic_source_unchanged=(workflow_adapter.guard()==r.source_guard)
+ end
  workflow_adapter.records[#workflow_adapter.records+1]=r
- workflow_adapter.save()
+ local saved,save_error=pcall(workflow_adapter.save)
+ if not saved then
+  table.remove(workflow_adapter.records)
+  workflow_adapter.history_error=true
+  error(save_error)
+ end
  if stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
- update_status=stage=="analysis" and "Analyse gespeichert. Zur Umsetzung zum Beispiel eingeben: Überarbeite anhand dieser Analyse." or "Vorschlag gespeichert. Mit Änderungen anwenden übernehmen."
- add("KI",stage=="analysis" and workflow_core.readable(text) or update_status)
+ update_status=stage=="analysis" and "Analyse gespeichert. Musikalische Deutungen bleiben Vorschläge." or "Vorschlag gespeichert. Mit Änderungen anwenden übernehmen."
+ if stage=="analysis" then
+  update_status=update_status.." Semantische Zuordnungen: "..tostring(#(r.semantic_notes or {})).."; verworfen: "..tostring(r.semantic_invalid_count or 0).."; unsicher/vorläufig: "..r.semantic_uncertain_count.."; ohne Zuordnung: "..r.semantic_unassigned_count.."."
+  update_status=update_status..(r.semantic_source_unchanged and " Originalprüfung: unverändert." or " ACHTUNG: Original während der Analyse verändert; Analyse ist veraltet, bitte neu analysieren.")
+  update_status=update_status.." Nur Analyse; keine Notation angewendet."
+ end
+ add("KI",stage=="analysis" and (workflow_core.readable(text).."\n"..update_status) or update_status)
  busy=false
 end
 function workflow_adapter.bindings(r)
@@ -2265,6 +2355,17 @@ local function begin_process(request)
  if notationCount==0 and mentionsSelectedNotes then
   add("KI","Im REAPER-MIDI-Editor (Piano-Roll oder Notenansicht) sind keine editierbaren Einzelnoten markiert. Kein ganzes MIDI-Item wird ersatzweise bearbeitet.")
   busy=false;return
+ end
+ if notationCount>0 and mentionsSelectedNotes and (lower:find("analys",1,true) or lower:find("untersuch",1,true)) then
+  local key=get_key()
+  if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar.");busy=false;return end
+  local tracks=score_context_tracks(notationItems)
+  local reference=editor_reference_excerpt(notationItems)
+  local prompt=analysis_prompt(request,notationItems,tracks)
+  if reference~="" then prompt=prompt.."\n\n"..reference end
+  diag_set("context",music_context(notationItems,tracks,false))
+  launch("analysis",prompt,key,{request=request,full=notationItems,music_tracks=tracks,reference_context=reference,workflow_guard=workflow_adapter.guard()})
+  return
  end
  local semitones=lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbton")
                  or lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbtön")

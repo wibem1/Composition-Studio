@@ -1,0 +1,199 @@
+Lua 5.4: complete syntax check of all repository Lua files
+Native Lua JSON, two-step workflow and communication/idea logging wiring checks passed
+PASS tests/json-bridge-test.lua
+OK: AI note patch production-function mock checks, strict count/IDs, stale source, collisions, untouched notes and CC
+OK: selected-notation source functions tested, multi-take read, targeted Undo edit, stale guard, note isolation
+PASS tests/test_notation_selection_integration.lua
+OK: actual production score-context and notation bridge functions pass multi-track, no-mutation, limit and fallback tests
+OK: saved analysis scope, harmonic reference, stale guard, malicious apply and continuation isolation
+PASS tests/test_score_workspace_bridge.lua
+PASS valid
+PASS duplicate
+PASS wrong pitch
+PASS uncertain
+PASS invalid numeric
+PASS ambiguous original
+PASS missing reason
+PASS missing confidence
+PASS whitespace role
+PASS unknown role
+PASS whitespace rhythm
+PASS whitespace reason
+PASS extra field
+PASS wrong duration
+PASS fractional pitch
+PASS infinite start
+PASS negative start
+PASS zero duration
+PASS channel 16 invalid even if in context
+PASS arbitrary MIDI command ignored
+PASS unknown item
+PASS channel zero valid
+All semantic parser tests passed
+PASS tests/test_semnotes.lua
+PASS openai token categories without double-counted thinking/cache
+PASS anthropic token categories without double-counted thinking/cache
+PASS google token categories without double-counted thinking/cache
+PASS missing usage remains unknown
+PASS null usage remains unknown
+PASS negative tokens remains unknown
+PASS fractional tokens remains unknown
+PASS cache exceeds input remains unknown
+PASS missing output count remains unknown
+PASS conflicting cache writes remains unknown
+PASS quoted fake usage remains unknown
+PASS nested fake usage remains unknown
+PASS no response remains unknown
+PASS OpenAI cache read/write price
+PASS OpenAI long-context price threshold
+PASS Anthropic 5m/1h write prices
+PASS Gemini thinking and cached price
+PASS nullable optional cache counts
+PASS persistent totals/order and idempotent accounting
+PASS interrupted request stays visible after restart
+PASS unpriced model tracks usage and marks incomplete cost
+PASS request retains model and tariff snapshot
+PASS explicit free-tier zero prices
+PASS invalid custom price is rejected
+PASS price settings validation and persistence
+PASS promotional price expiration
+PASS actual ai_command/ai_poll integration records usage
+PASS paid usage counted even when answer text cannot be read
+PASS HTTP error without usage is never reported as known zero cost
+PASS timeout remains incomplete
+PASS root requests reset order while follow-up stages accumulate
+PASS cost overview text and estimate label
+32 cost tests passed
+PASS tools/test_cost_accounting.py
+PASS 64 real Dear ImGui layouts: fonts 10–26, small/large windows, long UTF-8 models/status, proposal and history; footer visible without outer scrolling
+PASS tools/test_layout.py
+PASS full script Lua 5.4 syntax
+PASS full script startup and first visible UI frame with simulated REAPER/ImGui
+PASS process result '0\nOK'
+PASS process result '0\r\nOK\nwarning'
+PASS process result '1\nerror'
+PASS process result '-1\n'
+PASS process result '0'
+PASS process result ''
+PASS process result 'garbage\n'
+PASS process result None
+PASS zero exit imports MIDI between existing tracks and preserves cursor/GUIDs/log
+PASS nonzero compiler exit
+PASS missing/timeout process response
+PASS malformed process response
+PASS missing MIDI file
+PASS InsertMedia produces no tracks
+PASS empty imported track
+PASS non-MIDI imported item
+PASS one-bar continuation at QN 8 accepted
+PASS wrong continuation start rolled back
+PASS wrong continuation length rolled back
+PASS MIDI block insertion, idempotence and invalid input
+PASS update click gives explicit feedback when busy or launch fails
+PASS update same version
+PASS update older version
+PASS update HTTP failure
+PASS update invalid payload
+PASS update syntax failure
+PASS update installation and backup
+PASS update install rename failure restores original
+PASS update startup failure restores previous script
+SKIP actual LilyPond compilation: set LILYPOND_EXE to an installed compiler
+PASS transition variant retains original and prefix in one Undo block
+PASS ambiguous transition track mapping rolls back import
+33 tests passed
+PASS tools/test_lilypond_import.py
+PASS 6 real Dear ImGui picker interactions: 86 models, bounded dock popup, search, all providers, duplicate labels, persistence, busy guard, no automatic network
+PASS explicit catalog refresh targets the browsed provider; missing key preserves selection
+PASS real Google Argon model registry, model ID, reasoning levels and API cost estimates
+PASS tools/test_model_picker.py
+PASS macOS transport: real curl, quoted script path, three provider headers, 5 HTTP pages, filtering and persistent future model IDs
+PASS model errors: HTTP 401, invalid response, process failure, timeout, old catalog retained, credentials cleaned
+PASS tools/test_model_transport.py
+PASS offline installation from dee9ec31a277d12584c94dab05e5a2fb591e56dc with exact original backup and no process/network APIs
+PASS offline installation from e9d8572 with exact original backup and no process/network APIs
+PASS offline installation from 9dfebaeb2b2cda7fc562aee693162b9aada7801b with exact original backup and no process/network APIs
+PASS offline installation from d307d19 with exact original backup and no process/network APIs
+PASS offline installation from 340291c with exact original backup and no process/network APIs
+PASS offline installation from 3443e83 with exact original backup and no process/network APIs
+PASS offline installation from 87fa72c with exact original backup and no process/network APIs
+PASS offline installer preserves original on already-current
+PASS offline installer preserves original on newer-current
+PASS offline installer preserves original on missing-path
+PASS offline installer preserves original on wrong-file
+PASS offline installer preserves original on write-failure
+PASS offline installer preserves original on rename-failure
+PASS offline installer preserves original on corrupt-payload
+PASS tools/test_offline_installer.py
+PASS openai token categories without double-counted thinking/cache
+PASS anthropic token categories without double-counted thinking/cache
+PASS google token categories without double-counted thinking/cache
+PASS missing usage remains unknown
+PASS null usage remains unknown
+PASS negative tokens remains unknown
+PASS fractional tokens remains unknown
+PASS cache exceeds input remains unknown
+PASS missing output count remains unknown
+PASS conflicting cache writes remains unknown
+PASS quoted fake usage remains unknown
+PASS nested fake usage remains unknown
+PASS no response remains unknown
+PASS OpenAI cache read/write price
+PASS OpenAI long-context price threshold
+PASS Anthropic 5m/1h write prices
+PASS Gemini thinking and cached price
+PASS nullable optional cache counts
+PASS persistent totals/order and idempotent accounting
+PASS interrupted request stays visible after restart
+PASS unpriced model tracks usage and marks incomplete cost
+PASS request retains model and tariff snapshot
+PASS explicit free-tier zero prices
+PASS invalid custom price is rejected
+PASS price settings validation and persistence
+PASS promotional price expiration
+PASS actual ai_command/ai_poll integration records usage
+PASS paid usage counted even when answer text cannot be read
+PASS HTTP error without usage is never reported as known zero cost
+PASS timeout remains incomplete
+PASS root requests reset order while follow-up stages accumulate
+PASS cost overview text and estimate label
+32 cost tests passed
+PASS: 28 provider/mode request fixtures, default, restart persistence, busy lock, invalid settings and diagnostics
+PASS tools/test_reasoning.py
+PASS offline planning helper: exact inventory, duplicate/malformed/nonfinite rejection, uncertainty and no source mutation
+PASS tools/test_semantic_plan.py
+PASS isolated installer: install, register, first UI frame, separate state and stable/autostart preservation
+PASS isolated installer: rename
+PASS isolated installer: write
+PASS tools/test_semantic_test_installer.py
+PASS production request, meter, one provider stage, strict note binding, uncertainty, real JSON persistence/reload, no MIDI/CC/tempo APIs
+PASS selected-note analysis: one provider stage, exact target scope, read-only reference and missing-selection guard
+PASS external source change during request is recorded and visibly marked stale
+PASS failed persistence retains existing history and removes unsaved in-memory record
+PASS tools/test_semantic_workflow.py
+PASS text continuations: exact new bars, explicit transition, German number words, existing ending preserved by default, generated result stays a proposal
+PASS ambiguous/unsupported transitions and unsafe musical boundaries do not launch generation
+PASS selected-track context also works without selected MIDI items
+PASS real controller response path: extra voice, analysis, free continuation, SWAM, review; invalid transition rejected
+PASS REAPER-specific UI has no transition menu or separate review button
+PASS tools/test_text_workflow.py
+PASS standalone updater: install
+PASS standalone updater: fallback
+PASS standalone updater: windows-install
+PASS standalone updater: windows-fallback
+PASS standalone updater: http-error
+PASS standalone updater: invalid-body
+PASS standalone updater: syntax-error
+PASS standalone updater: cancel
+PASS standalone updater: rename-failure
+PASS standalone updater: already-current
+PASS standalone updater: missing target reports failure without guessing a path
+PASS standalone updater: install
+PASS standalone updater: windows-install
+PASS exact v1.1.7 -> current source installation and byte-exact backup (Unix/Windows transport mocks)
+PASS tools/test_update_helper.py
+PASS REAPER: preview without write, exact original guard, durable raw/source, apply once, reload, analysis→revision, model call only on review, transition boundary
+PASS model catalogs: future IDs, Google capability filtering, OpenAI non-text filter, Anthropic/Google pagination
+PASS actual JSON translator: tempo events and per-track Sustain, invalid controller rejected
+PASS tools/test_workflow_core.py
+ALL REGRESSION SUITES PASSED. Host/UI mocks are not a REAPER acceptance test.

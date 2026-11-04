@@ -763,6 +763,7 @@ local function parse_semnotes(reply,items)
    if known[k] then duplicate[k]=true else known[k]=true end
   end
  end
+ local roles={Melodie=true,Bass=true,Begleitung=true,Mittelstimme=true,Unklar=true}
  local seen={}
  for line in tostring(reply or ""):gmatch("[^\r\n]+") do
   if line:sub(1,8)=="SEMNOTE|" then
@@ -774,13 +775,13 @@ local function parse_semnotes(reply,items)
      and s==s and d==d and p==p and v==v and c==c
      and s~=math.huge and d~=math.huge and p~=math.huge and v~=math.huge and c~=math.huge
      and s>=0 and d>0 and p>=0 and p<=127 and p%1==0
-     and v>=1 and v<=127 and v%1==0 and c>=0 and c<=16 and c%1==0
+     and v>=1 and v<=127 and v%1==0 and c>=0 and c<=15 and c%1==0
    local ok=#f==11 and finite and k and known[k] and not duplicate[k] and not seen[k]
      and (f[10]=="BESTAETIGT" or f[10]=="VORLAEUFIG" or f[10]=="UNSICHER")
-     and f[8]~="" and f[9]~="" and f[11]:match("%S")
+     and roles[f[8]] and f[9] and f[9]:match("%S") and f[11]:match("%S")
    if ok then
     seen[k]=true
-    accepted[#accepted+1]={identity=k,role=f[8],rhythm=f[9],confidence=f[10],reason=f[11]}
+    accepted[#accepted+1]={identity=k,item_guid=f[2],original={start_qn=s,duration_qn=d,pitch=p,velocity=v,channel=c},role=f[8],rhythm=f[9],confidence=f[10],reason=f[11]}
    else rejected[#rejected+1]=line end
   end
  end
@@ -789,13 +790,28 @@ end
 local function analysis_prompt(request,items,tracks)
  local prompt=[[Du analysierst das konkret übergebene MIDI-Material. Antworte musikalisch präzise als normaler Text. Erfinde nichts. Erzeuge kein MIDI und keine CS-Zeilen.]].."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false)
  local query=tostring(request or ""):lower()
- if query:find("notation",1,true) or query:find("notier",1,true) or query:find("partitur",1,true) or query:find("transkrib",1,true) then
+ if query:find("notation",1,true) or query:find("notier",1,true) or query:find("partitur",1,true) or query:find("transkrib",1,true) or query:find("notenansicht",1,true) or query:find("notensicht",1,true) then
+  -- Supply actual REAPER measure boundaries; QN values alone do not establish meter.
+  local lo,hi=math.huge,-math.huge
+  for _,it in ipairs(items or {}) do for _,n in ipairs(it.notes or {}) do
+   lo=math.min(lo,n.start_qn);hi=math.max(hi,n.start_qn+n.duration_qn)
+  end end
+  local q,count=lo,0
+  prompt=prompt.."\nMETRIK: BAR|Taktnummer (1-basiert)|Start-QN|End-QN|Zaehler|Nenner; MIDI-Kanaele 0..15.\n"
+  while q<hi and count<256 do
+   local bar,a,b=reaper.TimeMap_QNToMeasures(0,q)
+   if not bar or not a or not b or b<=q then break end
+   local num,den=reaper.TimeMap_GetTimeSigAtTime(0,reaper.TimeMap2_QNToTime(0,q))
+   prompt=prompt..string.format("BAR|%d|%.9f|%.9f|%d|%d\n",bar+1,a,b,num,den)
+   q=b;count=count+1
+  end
+  if q<hi then prompt=prompt.."METRIK UNVOLLSTAENDIG: Taktzuordnung ausserhalb der BAR-Zeilen NICHT BELEGBAR.\n" end
   prompt=prompt..[[
 
 ZUSATZAUFTRAG: MUSIKALISCHE NOTATIONSINTERPRETATION (NUR ANALYSE)
 Interpretiere das vorhandene MIDI musikalisch, taktweise, nicht durch pauschale Quantisierung. Bestimme pro Takt die erkennbaren Phrasen, rhythmische Absicht, Melodie, Bass, Begleitung und eigenstaendige Mittelstimmen. Unterscheide expressive Timingabweichungen von musikalisch beabsichtigten Notenwerten. Begruende Hand- und Stimmenzuordnung; beschreibe harmonische Funktion nur soweit aus den vorliegenden Daten belegbar. Markiere jede unsichere Deutung explizit mit 'UNSICHER' und nenne Alternativen. Behandle Vorschlagsnoten nur bei konkreter musikalischer Evidenz; MIDI-Kuerze allein ist kein Beweis. Verwende fuer jeden Notenbezug die exakte Identitaet aus den vorhandenen N-Zeilen: Item-GUID, start_qn, duration_qn, MIDI-Pitch, Velocity, Kanal. Erfinde keine Noten-IDs und runde die Originalwerte nicht neu. Jede Notationsentscheidung bekommt eine Begruendung und eine Sicherheitsstufe: BESTAETIGT, VORLAEUFIG oder UNSICHER. BESTAETIGT nur bei eindeutiger musikalischer Evidenz, niemals allein aufgrund der Notenlaenge. Gib zusaetzlich eine maschinenlesbare, rein beschreibende Zeile pro begruendeter Entscheidung aus:
 SEMNOTE|<item_guid>|<start_qn>|<duration_qn>|<pitch>|<velocity>|<channel>|<rolle>|<rhythmus>|<sicherheit>|<begruendung>
-Felder duerfen keine senkrechten Striche enthalten. Falls die Zuordnung zu einer N-Zeile nicht eindeutig ist, liefere keine SEMNOTE-Zeile dafuer, sondern erklaere die Unsicherheit im Text. Die SEMNOTE-Zeilen sind Vorschlaege zur spaeteren Pruefung, KEINE Schreibbefehle. Fehlen Daten fuer eine Aussage, schreibe 'NICHT BELEGBAR'. Liefere zuerst eine taktweise Analyse, dann die SEMNOTE-Zeilen und eine kurze Liste der offenen Entscheidungen. Keine MIDI-, Notations- oder Track-Aenderungen vornehmen; keine unbelegte Behauptung, die Notation sei bereits korrigiert.]]
+Verwende als Rolle Melodie, Bass, Begleitung, Mittelstimme oder Unklar; begruende Mischfunktionen im Text. Rhythmus soll konventionelle Notenwerte, echte Pausen, Bindungen, Stimmen-/Handverteilung und gegebenenfalls expressive Abweichungen beschreiben. Keine unueblichen Kleinstwerte oder komplexen Tuplets allein zur Nachbildung von Timingabweichungen. Leite Spielbarkeit aus dem musikalischen Zusammenhang ab, niemals nur aus Tonhoehe. Felder duerfen keine senkrechten Striche enthalten. Falls die Zuordnung zu einer N-Zeile nicht eindeutig ist, liefere keine SEMNOTE-Zeile dafuer, sondern erklaere die Unsicherheit im Text. Die SEMNOTE-Zeilen sind Vorschlaege zur spaeteren Pruefung, KEINE Schreibbefehle. Fehlen Daten fuer eine Aussage, schreibe 'NICHT BELEGBAR'. Liefere zuerst eine taktweise Analyse, dann die SEMNOTE-Zeilen und eine kurze Liste der offenen Entscheidungen. Keine MIDI-, Notations- oder Track-Aenderungen vornehmen; keine unbelegte Behauptung, die Notation sei bereits korrigiert.]]
  end
  return prompt
 end
@@ -1753,13 +1769,31 @@ function workflow_adapter.offer(stage,text,data)
   local notes,invalid=parse_semnotes(text,data.full or {})
   r.semantic_notes=notes
   r.semantic_invalid_count=#invalid
+  r.semantic_rejected=invalid
+  r.semantic_original={}
+  r.semantic_uncertain_count=0
+  for _,it in ipairs(data.full or {}) do
+   for _,n in ipairs(it.notes or {}) do
+    r.semantic_original[#r.semantic_original+1]={item_guid=it.guid,start_qn=n.start_qn,duration_qn=n.duration_qn,pitch=n.pitch,velocity=n.velocity,channel=n.channel}
+   end
+  end
+  for _,n in ipairs(notes) do if n.confidence~="BESTAETIGT" then r.semantic_uncertain_count=r.semantic_uncertain_count+1 end end
+  r.semantic_unassigned_count=math.max(0,#r.semantic_original-#notes)
+  r.semantic_source_unchanged=(workflow_adapter.guard()==r.source_guard)
  end
  workflow_adapter.records[#workflow_adapter.records+1]=r
- workflow_adapter.save()
+ local saved,save_error=pcall(workflow_adapter.save)
+ if not saved then
+  table.remove(workflow_adapter.records)
+  workflow_adapter.history_error=true
+  error(save_error)
+ end
  if stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
- update_status=stage=="analysis" and "Analyse gespeichert. Zur Umsetzung zum Beispiel eingeben: Überarbeite anhand dieser Analyse." or "Vorschlag gespeichert. Mit Änderungen anwenden übernehmen."
+ update_status=stage=="analysis" and "Analyse gespeichert. Musikalische Deutungen bleiben Vorschläge." or "Vorschlag gespeichert. Mit Änderungen anwenden übernehmen."
  if stage=="analysis" then
-  update_status=update_status.." Semantische Zuordnungen: "..tostring(#(r.semantic_notes or {})).."; verworfen: "..tostring(r.semantic_invalid_count or 0).."."
+  update_status=update_status.." Semantische Zuordnungen: "..tostring(#(r.semantic_notes or {})).."; verworfen: "..tostring(r.semantic_invalid_count or 0).."; unsicher/vorläufig: "..r.semantic_uncertain_count.."; ohne Zuordnung: "..r.semantic_unassigned_count.."."
+  update_status=update_status..(r.semantic_source_unchanged and " Originalprüfung: unverändert." or " ACHTUNG: Original während der Analyse verändert; Analyse ist veraltet, bitte neu analysieren.")
+  update_status=update_status.." Nur Analyse; keine Notation angewendet."
  end
  add("KI",stage=="analysis" and (workflow_core.readable(text).."\n"..update_status) or update_status)
  busy=false
@@ -2290,6 +2324,17 @@ local function begin_process(request)
  if notationCount==0 and mentionsSelectedNotes then
   add("KI","Im REAPER-MIDI-Editor (Piano-Roll oder Notenansicht) sind keine editierbaren Einzelnoten markiert. Kein ganzes MIDI-Item wird ersatzweise bearbeitet.")
   busy=false;return
+ end
+ if notationCount>0 and mentionsSelectedNotes and (lower:find("analys",1,true) or lower:find("untersuch",1,true)) then
+  local key=get_key()
+  if not key then add("KI","Kein API-Key für "..provider_name().." verfügbar.");busy=false;return end
+  local tracks=score_context_tracks(notationItems)
+  local reference=editor_reference_excerpt(notationItems)
+  local prompt=analysis_prompt(request,notationItems,tracks)
+  if reference~="" then prompt=prompt.."\n\n"..reference end
+  diag_set("context",music_context(notationItems,tracks,false))
+  launch("analysis",prompt,key,{request=request,full=notationItems,music_tracks=tracks,reference_context=reference,workflow_guard=workflow_adapter.guard()})
+  return
  end
  local semitones=lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbton")
                  or lower:match("^%s*transponier.-%s+um%s+([%+%-]?%d+)%s+halbtön")

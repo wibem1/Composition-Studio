@@ -1,5 +1,7 @@
 # Composition Studio
 
+**Separater Entwicklungstest (PR #12):** [Musikalische MIDI-Notationsanalyse – Installation und ein abschließender Vier-Takte-Test](docs/SEMANTIC-ANALYSIS-TEST.md). Der isolierte Installer ersetzt die stabile Version nicht. Analyse, Zuordnung und Speicherung sind automatisiert geprüft; reale REAPER-/KI-Abnahme steht aus.
+
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
 Aktueller Stand: **v1.1.10 · 04.11.2026 · TESTFREIGABE**. Modellauswahl in REAPER isoliert geprüft; vollständiger App-/Neustart-/Live-KI-Test ausstehend.
