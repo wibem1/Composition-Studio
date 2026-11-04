@@ -1744,6 +1744,11 @@ function workflow_adapter.offer(stage,text,data)
  r.score_scope=false
  for _,it in ipairs(data.full or {}) do if it.score_context then r.score_scope=true;break end end
  for _,tr in ipairs(data.music_tracks or data.tracks or {}) do r.track_bindings[#r.track_bindings+1]=tr.guid end
+ if stage=="analysis" then
+  local notes,invalid=parse_semnotes(text,data.full or {})
+  r.semantic_notes=notes
+  r.semantic_invalid_count=#invalid
+ end
  workflow_adapter.records[#workflow_adapter.records+1]=r
  workflow_adapter.save()
  if stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
