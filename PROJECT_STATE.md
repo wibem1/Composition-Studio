@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Parser-Haertung fuer Vier-Takte-Test
+
+Im Draft-PR #12 wurde die SEMNOTE-Eingangspruefung verschaerft: MIDI-Tonhoehe und Velocity muessen ganzzahlig und im MIDI-Wertebereich liegen; Start und Dauer muessen endlich sein, Start nicht negativ, Dauer positiv; Kanal muss ganzzahlig im tolerierten Bereich liegen. Ungueltige Identitaeten werden nicht als musikalische Notenzuordnung gespeichert. Commit `9b67377481ab2a948ce7e6a604e87fe2f57a7c6b`. **Statisch kontrolliert:** Codeaenderung von GitHub bestaetigt. **Weiterhin offen:** Lua-Laufzeittest, Parser-Grenzfalltests, reale KI-Antwort und REAPER-End-to-End-Test. Keine Freigabe und kein Merge.
+
+
 ## 04.11.2026 – Uebergabe zur abschliessenden Integration: Draft-PR #12
 
 [Draft-PR #12](https://github.com/wibem1/Composition-Studio/pull/12) wurde aus `feat/semantic-notation-analysis-20261104` gegen `main` erstellt. Implementiert: semantischer Analyseprompt, `SEMNOTE`-Parser, schreibgeschuetzte Speicherung gueltiger Zuordnungen in `semantic_notes` und Zahl verworfener Zuordnungen in `semantic_invalid_count`. Die produktive Fassung bleibt 1.1.10. **Pruefstatus:** Nur Quellcode-Sichtpruefung; keine GitHub-Workflow-Runs fuer den Head-Commit gemeldet, keine Lua-Laufzeit- oder REAPER-7.83-Pruefung, keine reale KI-Antwort. Ein zusaetzlicher Testdatei-Upload wurde blockiert. **Wichtig:** Die Funktion ist nicht als End-to-End-getestet oder freigegeben zu bezeichnen. **Naechster Schritt:** Lua-Syntax und isolierte Parserfaelle pruefen, dann ein einziger REAPER-Vier-Takte-A/B-Test mit echter KI-Antwort und anschliessendem Vergleich der MIDI-Events; erst danach Merge/Update entscheiden.
