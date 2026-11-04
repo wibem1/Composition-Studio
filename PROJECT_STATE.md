@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 04.11.2026 – Strukturierte Notenreferenzen fuer KI-Analyse
+
+Im experimentellen Branch wurde `analysis_prompt` erweitert: Notationsanalysen sollen nun `SEMNOTE`-Zeilen mit der exakten Identitaet der vorhandenen `N`-Kontextzeilen (Item-GUID, start_qn, duration_qn, Pitch, Velocity, Kanal), musikalischer Rolle, rhythmischer Deutung, Sicherheitsstufe und Begruendung liefern. Bei mehrdeutiger Zuordnung keine `SEMNOTE`-Zeile. **Status:** Prompt-Vertrag implementiert und statisch auf Vorhandensein geprueft. Es gibt **noch keinen Parser**, keine maschinelle Rueckpruefung gegen den REAPER-Take und keine automatische Anwendung der Zeilen. Ein echter KI-/REAPER-Test steht aus. Keine neue Version, kein Merge, keine produktive Freigabe. Naechster Schritt: einen streng validierenden, nur lesenden Parser in der Lua-Anwendung integrieren; anschliessend einen gemeinsamen Vier-Takte-Test durchfuehren.
+
+
 ## 04.11.2026 – Semantische Notationsanalyse (experimenteller Branch)
 
 Branch `feat/semantic-notation-analysis-20261104`, nicht auf `main` veröffentlicht. Nach dokumentierter Vier-Takte-Prüfung wurde `tools/semantic_notation.py` als Sicherheitsbaustein hinzugefügt. Die vorhandene Funktion `analysis_prompt` in `Composition Studio.lua` ergänzt bei Aufträgen mit „Notation“, „notier“, „Partitur“ oder „transkrib“ den bestehenden KI-Analyseprompt um eine explizite taktweise musikalische Interpretation und Unsicherheitskennzeichnung. Keine neue API-Route, keine Änderung von MIDI-Noten, Notationsmetadaten oder UI; Versionsnummer bleibt 1.1.10. **Statische Kontrolle:** Prompt-Text im Branch vorhanden, bestehender `music_context`-Aufruf erhalten, `main` ohne Zusatz. **Nicht geprüft:** Lua-Syntax mit externem Interpreter, vollständiger REAPER-/KI-Livetest, KI-Qualität und tatsächliche Partiturerzeugung. Der Python-Sicherheitsbaustein ist noch nicht an die Lua-Laufzeit gekoppelt; deshalb keine automatische Notationsänderung. Nächster Schritt: Prompt-Antwortformat/Notenidentitäten und sichere Übernahme im bestehenden Lua-Code entwickeln; anschließend ein gemeinsamer Vier-Takte-REAPER-Test.
