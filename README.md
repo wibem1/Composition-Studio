@@ -2,7 +2,7 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
-Aktueller Stand: **v1.1.9 · 04.11.2026 · TESTFREIGABE**. Modellauswahl in REAPER isoliert geprüft; vollständiger App-/Neustart-/Live-KI-Test ausstehend.
+Aktueller Stand: **v1.1.10 · 04.11.2026 · TESTFREIGABE**. Modellauswahl in REAPER isoliert geprüft; vollständiger App-/Neustart-/Live-KI-Test ausstehend.
 
 Denkaufwand im Hauptfenster: **Kurz / Mittel / Hoch / Automatisch**, mit **Mittel** als Voreinstellung. Die Auswahl wird dauerhaft gespeichert und gilt für die KI-Aufrufe des Auftrags einschließlich Konzeption und Komposition. Während eines laufenden Auftrags ist sie gesperrt. Automatisch sendet keine Denksteuerung und verwendet die Modellvorgabe.
 
@@ -11,6 +11,8 @@ OpenAI erhält `reasoning.effort`, Anthropic `output_config.effort`, Gemini 3 `g
 Die langfristige Zielsetzung des Notationsmoduls ist in [NOTATION-MODULE.md](NOTATION-MODULE.md) dokumentiert.
 
 Die bestehende Updatefunktion bleibt der normale Installationsweg: **Studio-Menü → Update**.
+
+**Testfreigabe 1.1.10 – Google Gemini 4 Argon.** Unter Google erscheint jetzt Gemini 4 Argon (`gemini-4-argon`) als erstes Hauptmodell. Die drei Denkstufen und die bestehende dynamische Modellsuche bleiben erhalten; vorhandene Einstellungen werden nicht verändert. Argon erfordert Googles kostenpflichtigen API-Zugang und ist **nicht** im kostenlosen Gemini-API-Kontingent enthalten. Kostenschätzung 2/10 USD je Million Input-/Output-Tokens bis 30.11.2026, danach 4/20 USD. Automatisierte Modellauswahl-, Denkmodus-, Layout-, Notations- und Offline-Installationstests bestanden; ein Live-Aufruf bei Google und die Gesamtprüfung in einer laufenden REAPER-Instanz stehen noch aus. Installation über **Studio-Menü → Update** nach Veröffentlichung auf `main`.
 
 **Testfreigabe 1.1.9 – kompakte Modellauswahl.** OpenAI, Anthropic und Google stehen fest oberhalb der Modellliste. Standardmäßig erscheinen die bisherigen Hauptmodelle sowie ein gegebenenfalls abweichendes gespeichertes Modell. Der vollständige Katalog mit Suche ist optional; Öffnen startet keine Netzwerkabfrage. Bestehende Einstellungen bleiben erhalten. Veröffentlicht mit [PR #10](https://github.com/wibem1/Composition-Studio/pull/10); Installation über **Studio-Menü → Update**. [Prüfungen und Grenzen](docs/RELEASE-1.1.9.md).
 
