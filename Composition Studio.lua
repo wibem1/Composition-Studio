@@ -690,7 +690,7 @@ local function selected_items(with_notes,scope) if scope~="items" then local row
 local function track_context_items(tracks) local a={}; local seen={}; for _,t in ipairs(tracks) do for i=0,reaper.CountTrackMediaItems(t.track)-1 do local item=reaper.GetTrackMediaItem(t.track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local g=item_guid(item); if not seen[g] then seen[g]=true; local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=t.track,guid=g,track_guid=t.guid,track_name=t.name,take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; local _,nc=reaper.MIDI_CountEvts(take); for n=0,(nc or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end; a[#a+1]=it end end end end; return a end
 local function time_selection_context() local s,e=reaper.GetSet_LoopTimeRange(false,false,0,0,false); if not s or not e or e<=s then return "TIME_SELECTION none" end; local sq=reaper.TimeMap2_timeToQN(0,s); local eq=reaper.TimeMap2_timeToQN(0,e); local _,sm,sb=reaper.TimeMap2_timeToBeats(0,s); local _,em,eb=reaper.TimeMap2_timeToBeats(0,e); return string.format("TIME_SELECTION startQN=%.3f endQN=%.3f startBar=%d startBeat=%.3f endBar=%d endBeat=%.3f",sq,eq,(sm or 0)+1,(sb or 0)+1,(em or 0)+1,(eb or 0)+1) end
 local function compact_context(items,tracks,ignore_time) tracks=tracks or selected_tracks(); local l={string.format("Tempo %.2f BPM; selected MIDI items=%d; selected tracks=%d",reaper.Master_GetTempo(),#items,#tracks)}; l[#l+1]=ignore_time and "TIME_SELECTION ignored for free new composition" or time_selection_context(); for i,t in ipairs(tracks) do l[#l+1]=string.format("TRACK %d id=%s name=%s index=%d",i,t.guid,t.name,t.index) end; for i,it in ipairs(items) do l[#l+1]=string.format("ITEM %d id=%s trackId=%s track=%s take=%s rangeQN=%.3f..%.3f",i,it.guid,it.track_guid,it.track_name,it.take_name,it.start_qn,it.end_qn); if it.selection_source then l[#l+1]="NOTATION_SELECTION: "..#it.selection_source.." selected notes" end; if it.score_context then l[#l+1]="SCORE_CONTEXT: sichtbares MIDI-Item; musikalischer Kontext, keine Freigabe zum direkten Überschreiben" end end; return table.concat(l,"\n") end
-local function music_context(items,tracks,ignore_time) local l={compact_context(items,tracks,ignore_time)}; for _,it in ipairs(items) do if it.selection_source then l[#l+1]="NOTATION_SELECTION "..it.guid.." count="..#it.selection_source..". Only selected notes are the edit context; keep unselected notes unchanged." end end; for _,it in ipairs(items) do for _,n in ipairs(it.notes) do l[#l+1]=string.format("N %s %.5f %.5f %d %d %d",it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end end; return table.concat(l,"\n") end
+local function music_context(items,tracks,ignore_time) local l={compact_context(items,tracks,ignore_time)}; for _,it in ipairs(items) do if it.selection_source then l[#l+1]="NOTATION_SELECTION "..it.guid.." count="..#it.selection_source..". Only selected notes are the edit context; keep unselected notes unchanged." end end; for _,it in ipairs(items) do for _,n in ipairs(it.notes) do l[#l+1]=string.format("N %s %.9f %.9f %d %d %d",it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end end; return table.concat(l,"\n") end
 local function recent_dialog() local l={}; for i=math.max(1,#history-7),#history do l[#l+1]=history[i].role..": "..history[i].text end; return table.concat(l,"\n") end
 
 local function first_program_changes_on_track(track)
@@ -749,6 +749,37 @@ export_last_midi=function()
  local valid=0; for _,it in ipairs(made) do if reaper.ValidatePtr2(0,it,"MediaItem*") then valid=valid+1 end end
  if valid==0 then update_status="Noch keine gültige von Composition Studio erzeugte MIDI-Komposition zum Exportieren."; return end
  if ensure_title_then("midi") then return end; begin_save_panel("midi","MIDI exportieren",safe_work_title(work_title)..".mid","mid")
+end
+-- Parse semantic AI suggestions against the exact notes supplied in the analysis context.
+-- Read only: never interpret SEMNOTE as a MIDI editing command.
+local function parse_semnotes(reply,items)
+ local known,duplicate,accepted,rejected={},{},{},{}
+ local function key(g,s,d,p,v,c)
+  return table.concat({g,string.format("%.9f",s),string.format("%.9f",d),p,v,c},"|")
+ end
+ for _,it in ipairs(items or {}) do
+  for _,n in ipairs(it.notes or {}) do
+   local k=key(it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel)
+   if known[k] then duplicate[k]=true else known[k]=true end
+  end
+ end
+ local seen={}
+ for line in tostring(reply or ""):gmatch("[^\r\n]+") do
+  if line:sub(1,8)=="SEMNOTE|" then
+   local f={}
+   for part in (line.."|"):gmatch("(.-)|") do f[#f+1]=part end
+   local s,d,p,v,c=tonumber(f[3]),tonumber(f[4]),tonumber(f[5]),tonumber(f[6]),tonumber(f[7])
+   local k=s and d and p and v and c and key(f[2],s,d,p,v,c)
+   local ok=#f==11 and k and known[k] and not duplicate[k] and not seen[k]
+     and (f[10]=="BESTAETIGT" or f[10]=="VORLAEUFIG" or f[10]=="UNSICHER")
+     and f[8]~="" and f[9]~="" and f[11]:match("%S")
+   if ok then
+    seen[k]=true
+    accepted[#accepted+1]={identity=k,role=f[8],rhythm=f[9],confidence=f[10],reason=f[11]}
+   else rejected[#rejected+1]=line end
+  end
+ end
+ return accepted,rejected
 end
 local function analysis_prompt(request,items,tracks)
  local prompt=[[Du analysierst das konkret übergebene MIDI-Material. Antworte musikalisch präzise als normaler Text. Erfinde nichts. Erzeuge kein MIDI und keine CS-Zeilen.]].."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false)
