@@ -19,6 +19,11 @@ baseline = subprocess.check_output(['git', 'show', 'b35301c:Composition Studio.l
 runtime = render()
 # Feature integration is explicit; the pre-existing 1.1.11 musical paths stay intact.
 legacy_runtime = runtime
+# Intentional timeout/diagnostic fixes have dedicated behavioral regressions.
+for unit in manifest['units']:
+    if unit['id'] in ('platform/process', 'ai/requests', 'ai/costs'):
+        previous = subprocess.check_output(['git', 'show', '31b5849af27b67dab488bda72c07c9a2d83e3166:' + unit['path']], cwd=ROOT, text=True)
+        legacy_runtime = legacy_runtime.replace(inline(unit), previous, 1)
 for unit in manifest['units']:
     if unit['id'] in ('music/model', 'music/memory', 'workflow/music_workspace'):
         legacy_runtime = legacy_runtime.replace(inline(unit), '', 1)

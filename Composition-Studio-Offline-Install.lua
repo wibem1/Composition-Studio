@@ -42,7 +42,7 @@ end
 
 local fresh=[====[
 -- @description Composition Studio
--- @version 1.2.0
+-- @version 1.2.1
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -86,7 +86,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.2.0"
+local VERSION="1.2.1"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -194,7 +194,11 @@ local function windows_curl_script(body,request_file,output_file,code_file,metho
  h[#h+1]="$bytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()"
  h[#h+1]="[IO.File]::WriteAllBytes("..ps_quote(output_file)..",$bytes)"
  h[#h+1]="$code = [string][int]$response.StatusCode"
- h[#h+1]="} catch { $code = 'TRANSPORT_ERROR: ' + $_.Exception.Message; [IO.File]::WriteAllText("..ps_quote(output_file)..",($_ | Out-String)) } finally {"
+ h[#h+1]="} catch {"
+ h[#h+1]="$cause = $_.Exception; $timedOut = $false"
+ h[#h+1]="while ($cause) { if ($cause -is [System.OperationCanceledException] -or $cause -is [System.TimeoutException]) { $timedOut = $true }; $cause = $cause.InnerException }"
+ h[#h+1]="if ($timedOut) { $code = 'TIMEOUT'; [IO.File]::WriteAllText("..ps_quote(output_file)..",'Zeitlimit nach "..tostring(timeout or 180).." Sekunden erreicht.') } else { $code = 'TRANSPORT_ERROR'; [IO.File]::WriteAllText("..ps_quote(output_file)..",($_ | Out-String)) }"
+ h[#h+1]="} finally {"
  h[#h+1]="if ($client) { $client.Dispose() }"
  h[#h+1]="[IO.File]::WriteAllText("..ps_quote(code_file..".pending")..",$code)"
  h[#h+1]="Move-Item -LiteralPath "..ps_quote(code_file..".pending").." -Destination "..ps_quote(code_file).." -Force"
@@ -1023,7 +1027,12 @@ do
   end
  end
  function costs.begin() costs.order=summary(""); persist() end
+ local function clear_call_diagnostics()
+  for _,field in ipairs({"usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_reasoning_tokens","usage_estimated_usd"}) do diag_set(field,"") end
+ end
  function costs.start(a)
+  clear_call_diagnostics()
+  diag_set("usage_cost_status","Aufruf läuft; Verbrauch noch nicht bekannt")
   a.cost_order=costs.order; a.cost_rate=costs.rate(a.provider,a.model)
   for _,s in ipairs({costs.total,a.cost_order}) do s.calls=s.calls+1; s.unknown=s.unknown+1 end
   persist()
@@ -1031,6 +1040,7 @@ do
  function costs.record(a,raw)
   if a.cost_recorded then return end; a.cost_recorded=true
   local n=costs.usage(a.provider,raw); local usd=costs.price(n,a.cost_rate)
+  clear_call_diagnostics()
   -- Diagnose shows real provider usage, not an estimate from response length.
   -- Anthropic reports thinking within output_tokens, not as a separate usage field.
   if n then
@@ -1117,6 +1127,7 @@ local function reasoning_parameters(pv,md,choice)
 end
 -- End thinking control.
 local function ai_command(prompt,key)
+ local timeout=600
  local thinking,requested=reasoning_parameters(provider,model,reasoning_mode)
  diag_set("reasoning_mode",reasoning_mode); diag_set("reasoning_requested",requested)
  local base=temp_path(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers,win_headers
@@ -1125,15 +1136,16 @@ local function ai_command(prompt,key)
  else body='{"contents":[{"parts":[{"text":"'..json_escape(prompt)..'"}]}]'..thinking..'}'; url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key; win_headers={"Content-Type: application/json"} end
  if not write_file(rq,body) then return nil,"Anfrage konnte nicht geschrieben werden: "..rq end
  if IS_WINDOWS then
-  local script=windows_curl_script(nil,rq,rs,cd,win_headers,url,180)
+  local script=windows_curl_script(nil,rq,rs,cd,win_headers,url,timeout)
   if not script then return nil,"PowerShell-Aufruf konnte nicht vorbereitet werden." end
   if not ps_launch(script,true) then os.remove(script); os.remove(rq); return nil,"Windows-Hintergrundprozess konnte nicht gestartet werden." end
  else
   headers=""; for _,h in ipairs(win_headers) do headers=headers.." -H "..shell_quote(h) end
-  local cmd="/usr/bin/curl -sS --max-time 180 -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(cd).." 2>/dev/null &"
+  local pending=cd..".pending"
+  local cmd="(/usr/bin/curl -sS --max-time "..timeout.." -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(pending).." 2>/dev/null; cs_exit=$?; if [ \"$cs_exit\" -eq 28 ]; then printf '%s' TIMEOUT > "..shell_quote(pending).."; fi; mv "..shell_quote(pending).." "..shell_quote(cd)..") &"
   os.execute(cmd)
  end
- local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,reasoning_mode=reasoning_mode,reasoning_requested=requested,deadline=reaper.time_precise()+200}
+ local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,reasoning_mode=reasoning_mode,reasoning_requested=requested,timeout_seconds=timeout,deadline=reaper.time_precise()+timeout+20}
  costs.start(a)
  return a,nil
 end
@@ -1143,6 +1155,7 @@ local function ai_poll(a)
  if not status or trim(status)=="" then
   if reaper.time_precise()<a.deadline then return nil,nil,false end
   costs.record(a,read_file(a.rs))
+  diag_set("api_status","TIMEOUT")
   diag_set("api_error","Zeitlimit / Hintergrundprozess ohne Statusdatei")
   return nil,"KI-Zeitlimit erreicht; siehe Diagnose und CompositionStudioTemp.",true
  end
@@ -1151,6 +1164,12 @@ local function ai_poll(a)
  costs.record(a,raw)
  -- Don't retain access credentials: API responses do not include submitted keys.
  diag_set("api_status",status); diag_set("api_stop_reason",raw and (raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"') or raw:match('"finish_reason"%s*:%s*"([^"]+)"')) or "")
+ if status=="TIMEOUT" then
+  diag_set("api_error","Zeitlimit / KI-Antwort nicht vollständig eingetroffen")
+  os.remove(a.rq);os.remove(a.rs);os.remove(a.cd)
+  local usage=last_diag.usage_input_tokens and last_diag.usage_input_tokens~="" and "Vorliegende Verbrauchsdaten stehen in der Kostenübersicht." or "Verbrauch dieses Aufrufs ist unbekannt."
+  return nil,"KI-Zeitlimit erreicht ("..tostring(a.timeout_seconds or 600).." Sekunden). Kein Ergebnis übernommen. Nicht automatisch erneut angefragt. "..usage,true
+ end
  if status~="200" or not raw then
   local excerpt=(raw or ""):sub(1,1500)
   diag_set("api_response_excerpt",excerpt)
