@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Vollständiger Track: begrenzte Aufrufe und gesicherte Zwischenstände
+
+**Auftrag:** Nutzer lehnt Verkürzung des Tracks ab, bestätigt Ganztrack-Ablauf und bemängelt lange, kostenpflichtige Aufrufe ohne verwertbares Ergebnis. Zweite Diagnose 1.2.1: Google Argon beendet mit MAX_TOKENS nach 4:27 Minuten, 33961/32768 Tokens, geschätzte 0,395602 USD. Google-Einzelaufruf enthält kein appseitiges Ausgabelimit; höhere Modellkapazität hier nicht belegt.
+
+**Implementiert auf `feat/whole-track-workflow-20261105`:** Neuer ausdrücklich gewählter Ganztrack-Ablauf mit kostenfreier Vorbereitung, Aufruf-/Tarifvorschau, geschätztem Ausgabenbudget, einem gemeinsamen Werkplan und gespeicherten technischen Fenstern für den gesamten Track. Neue Aufrufe maximal 2048/8192 Ausgabetokens und 120 Sekunden HTTP-Limit; kein automatischer Retry. Gültige Ergebnisse bleiben bei späterem Fehler erhalten und lassen sich nach ausdrücklicher neuer Kostenfreigabe fortsetzen, auch nach Neustart. Unbekannter Verbrauch stoppt Folgeaufrufe. Nur ein technisch vollständiger Vorschlag wird über vorhandene JSON-/CS-/Commit-/Undo-Schnittstellen angeboten; Originale und Tempokarte bleiben erhalten. Keine Kosten-/Zeitersparnis oder harte Rechnungsobergrenze behauptet. [Bedienung, Verträge und Grenzen](docs/WHOLE-TRACK-WORKFLOW.md).
+
+**Prüfstand:** Neuer Produktionsfunktions-Test für kompletten 36-Takte-Umfang, drei Stimmen, spätes Scheitern und Wiederaufnahme mit erhaltenen Ergebnissen, Budget-/Quell-/Projekt-/Abbruchschutz, Persistenz und einmaliges Apply bestanden. Requestparameter und Tokenabbrüche aller drei Anbieter geprüft. Vollständiger finaler Offline-Runner: 17 Python-Suiten und drei Lua-Dateien grün. Anschließend minimale Toleranz für serialisierte Fenstergrenzen ergänzt und gezielt erneut geprüft; CI am gesicherten Commit vor PR-Abschluss prüfen. Keine kostenpflichtigen KI-Aufrufe, keine native Windows-/REAPER-/Hörabnahme. Engine und Notations-PR #12 unverändert.
+
+**Status:** Entwicklungsbranch, keine neue Version oder Veröffentlichung; installierte 1.2.1 unverändert. Nächster Schritt: finalen Runner und PR prüfen, danach gezielte native Abnahme an Projektkopie. Musikalische Kohärenz ist promptgestützt, nicht durch eine unabhängige Qualitätsbewertung belegt.
+
 ## 05.11.2026 – 1.2.1-Testfreigabe veröffentlicht
 
 **Veröffentlichung:** [PR #15](https://github.com/wibem1/Composition-Studio/pull/15) gemergt, Merge-Commit `2754871b5e32909cdc0baf263103ece9faf75b0c`. Header und Laufzeit 1.2.1 auf main. Studio-Blob `33764f8200c01d12a77292346bdafc7d30417797`, Offline-Installer-Blob `5a8e4343b6964f24f337914734103e59de2ce871`; beide identisch mit geprüftem Kandidaten `97bc5e88ef6596c59bfd8458c9fa1da3533c9980`. Tatsächlichen raw.githubusercontent.com-Update-Download nach Merge bytegenau abgeglichen.

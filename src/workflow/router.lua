@@ -1,4 +1,7 @@
 local function begin_process(request)
+-- BEGIN WHOLE TRACK ROUTING
+ if whole_track and whole_track.try_request(request) then return end
+-- END WHOLE TRACK ROUTING
 -- BEGIN MUSIC WORKSPACE ROUTING
  if music_workspace and music_workspace.try_request(request) then return end
 -- END MUSIC WORKSPACE ROUTING

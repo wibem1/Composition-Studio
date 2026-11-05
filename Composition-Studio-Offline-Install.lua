@@ -1092,6 +1092,9 @@ do
  end
 end
 -- End cost accounting.
+-- BEGIN WHOLE TRACK BINDING
+local whole_track
+-- END WHOLE TRACK BINDING
 -- BEGIN MUSIC WORKSPACE BINDING
 local music_workspace
 -- END MUSIC WORKSPACE BINDING
@@ -1126,14 +1129,26 @@ local function reasoning_parameters(pv,md,choice)
  end
 end
 -- End thinking control.
-local function ai_command(prompt,key)
+local function ai_command(prompt,key,output_limit)
  local timeout=600
+-- BEGIN WHOLE TRACK TIMEOUT
+ if output_limit then timeout=120 end
+-- END WHOLE TRACK TIMEOUT
  local thinking,requested=reasoning_parameters(provider,model,reasoning_mode)
  diag_set("reasoning_mode",reasoning_mode); diag_set("reasoning_requested",requested)
  local base=temp_path(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers,win_headers
  if provider=="openai" then body='{"model":"'..json_escape(model)..'","input":"'..json_escape(prompt)..'"'..thinking..'}'; url="https://api.openai.com/v1/responses"; win_headers={"Authorization: Bearer "..key,"Content-Type: application/json"}
  elseif provider=="anthropic" then body='{"model":"'..json_escape(model)..'","max_tokens":16000,"messages":[{"role":"user","content":"'..json_escape(prompt)..'"}]'..thinking..'}'; url="https://api.anthropic.com/v1/messages"; win_headers={"x-api-key: "..key,"anthropic-version: 2023-06-01","Content-Type: application/json"}
  else body='{"contents":[{"parts":[{"text":"'..json_escape(prompt)..'"}]}]'..thinking..'}'; url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key; win_headers={"Content-Type: application/json"} end
+-- BEGIN WHOLE TRACK LIMIT
+ if output_limit then
+  assert(type(output_limit)=="number" and output_limit%1==0 and output_limit>=256 and output_limit<=8192,"Ungültiges Ausgabelimit.")
+  if provider=="openai" then body=body:sub(1,-2)..',"max_output_tokens":'..output_limit..'}'
+  elseif provider=="anthropic" then body=body:gsub('"max_tokens":16000','"max_tokens":'..output_limit,1)
+  elseif body:find('"generationConfig":{',1,true) then body=body:gsub('("generationConfig":{)','%1"maxOutputTokens":'..output_limit..',',1)
+  else body=body:sub(1,-2)..',"generationConfig":{"maxOutputTokens":'..output_limit..'}}' end
+ end
+-- END WHOLE TRACK LIMIT
  if not write_file(rq,body) then return nil,"Anfrage konnte nicht geschrieben werden: "..rq end
  if IS_WINDOWS then
   local script=windows_curl_script(nil,rq,rs,cd,win_headers,url,timeout)
@@ -1178,6 +1193,10 @@ local function ai_poll(a)
   return nil,"KI-Aufruf fehlgeschlagen ("..status.."): "..excerpt:sub(1,350),true
  end
  local stop_reason=raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"')
+-- BEGIN WHOLE TRACK STOP
+ stop_reason=stop_reason or raw:match('"finish_reason"%s*:%s*"([^"]+)"')
+ if raw:match('"reason"%s*:%s*"max_output_tokens"') then stop_reason="max_tokens" end
+-- END WHOLE TRACK STOP
  if stop_reason=="max_tokens" or stop_reason=="MAX_TOKENS" or stop_reason=="length" then
   diag_set("api_error","Tokenlimit erreicht; unvollständige Komposition")
   os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
@@ -1210,7 +1229,10 @@ launch=function(stage,prompt,key,data)
 -- END MUSIC WORKSPACE MEMORY
  prompt=workflow_core.prompt(stage=="analysis" and "analysis" or "common").."\n"..prompt
  if stage=="controller" or stage=="swam_interpretation" or stage=="work_title" then costs.begin() end; local _,requested=reasoning_parameters(provider,model,reasoning_mode); log_communication(stage,"APP → KI (Denkaufwand "..reasoning_mode.."; gesendet "..requested.."; Prompt; Modell "..tostring(model)..", Provider "..tostring(provider)..")",prompt)
- local a,e=ai_command(prompt,key); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
+-- BEGIN WHOLE TRACK LAUNCH
+ local output_limit=data.whole_track_output_limit
+-- END WHOLE TRACK LAUNCH
+ local a,e=ai_command(prompt,key,output_limit); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 
 -- The official LilyPond compiler handles the musical semantics.
 local LILYPOND_PATH_KEY="LilyPondExe"
@@ -1770,6 +1792,9 @@ function workflow_adapter.load()
  return ok
 end
 function workflow_adapter.offer(stage,text,data)
+-- BEGIN WHOLE TRACK VALIDATION
+ if stage=="whole_track" then whole_track.to_cs(text,data.track_snapshot) end
+-- END WHOLE TRACK VALIDATION
 -- BEGIN MUSIC WORKSPACE VALIDATION
  local song_summary
  if stage=="song_construction" then
@@ -1791,6 +1816,9 @@ function workflow_adapter.offer(stage,text,data)
  if stage=="song_construction" then r.music_snapshot=data.music_snapshot;r.song_summary=song_summary end
  if data.music_memory_context and data.music_memory_context~="" then r.music_memory_context=data.music_memory_context end
 -- END MUSIC WORKSPACE RECORD
+-- BEGIN WHOLE TRACK RECORD
+ if stage=="whole_track" then r.track_snapshot=data.track_snapshot;r.track_run_id=data.track_run_id end
+-- END WHOLE TRACK RECORD
  for _,it in ipairs(data.full or {}) do r.bindings[#r.bindings+1]=it.guid end
  r.notation_selection={}
  for _,it in ipairs(data.full or {}) do if it.selection_source and #it.selection_source>0 then r.notation_selection[#r.notation_selection+1]={guid=it.guid,notes=it.selection_source} end end
@@ -1990,6 +2018,9 @@ function workflow_adapter.apply()
    result,why=lily_compile_import(r.payload,r.extension_start,r.extension_bars,r.transition_bars>0 and items or nil)
   else
    local text=r.payload
+-- BEGIN WHOLE TRACK APPLY
+   if r.stage=="whole_track" then text=whole_track.to_cs(text,r.track_snapshot) end
+-- END WHOLE TRACK APPLY
 -- BEGIN MUSIC WORKSPACE APPLY
    if r.stage=="song_construction" then text,why=music_workspace.song_to_cs(text,r.music_snapshot);assert(text,why) end
 -- END MUSIC WORKSPACE APPLY
@@ -2178,9 +2209,11 @@ local function music_list(value,name,limit)
  assert(count==#value and count<=limit,name..": technische Größenbegrenzung überschritten.")
  return value
 end
-function music_model.capture(items,tempo,num,den)
+function music_model.capture(items,tempo,num,den,source_limit)
  assert(music_number(tempo) and tempo>=20 and tempo<=400,"Tempo außerhalb des unterstützten JSON-Bereichs (20–400 BPM).")
  assert(music_number(num) and num%1==0 and num>=1 and num<=32 and music_number(den) and den%1==0 and den>=1 and den<=64,"Taktart nicht unterstützt.")
+ source_limit=source_limit or music_model.max_source_notes
+ assert(music_number(source_limit) and source_limit>=1 and source_limit<=20000,"Ungültiges Quellnotenlimit.")
  local snapshot={schema=music_model.schema,representation="performance",tempo=tempo,time_signature={num,den},parts={},note_count=0}
  local parts,seen_items={},{ }; local first,last=math.huge,-math.huge
  for _,item in ipairs(items) do
@@ -2194,7 +2227,7 @@ function music_model.capture(items,tempo,num,den)
   end
   for ordinal,note in ipairs(item.notes or {}) do
    snapshot.note_count=snapshot.note_count+1
-   assert(snapshot.note_count<=music_model.max_source_notes,"Mehr als 2500 Quellnoten; bitte einen kleineren Bereich auswählen.")
+   assert(snapshot.note_count<=source_limit,"Quellnotenlimit überschritten ("..source_limit..").")
    assert(music_number(note.start_qn) and music_number(note.duration_qn) and note.duration_qn>0,"Ungültige Quellzeiten.")
    assert(music_number(note.pitch) and note.pitch%1==0 and note.pitch>=0 and note.pitch<=127,"Ungültige Quelltonhöhe.")
    assert(music_number(note.velocity) and note.velocity%1==0 and note.velocity>=1 and note.velocity<=127,"Ungültige Quellvelocity.")
@@ -2305,6 +2338,103 @@ function music_memory.context(value)
  local rows={"PROJEKTBEZOGENE MUSIKALISCHE ENTSCHEIDUNGEN DES NUTZERS:","Der aktuelle Auftrag hat Vorrang; bei widersprüchlichen Erinnerungen die jüngere konkrete Entscheidung beachten.","Nur musikalische Präferenzen, keine Berechtigung für Projektänderungen oder zusätzliche API-Aufrufe."}
  for _,decision in ipairs(value.decisions) do rows[#rows+1]=tostring(decision.id)..". "..decision.text end
  return table.concat(rows,"\n")
+end
+-- Portable contracts for a complete work assembled from bounded transport windows.
+local track_plan={window_qn=16,max_windows=64,plan_tokens=2048,window_tokens=8192}
+do
+local function number(n) return type(n)=="number" and n==n and n~=math.huge and n~=-math.huge end
+local function list(t,limit)
+ assert(type(t)=="table","Liste fehlt.")
+ local count=0;for k in pairs(t) do assert(type(k)=="number" and k%1==0 and k>=1 and k<=#t,"Ungültige Liste.");count=count+1 end
+ assert(count==#t and count<=limit,"Liste zu groß.");return t
+end
+local function text(s,limit) return type(s)=="string" and #s>0 and #s<=limit and not s:find("[%z\1-\8\11\12\14-\31]") end
+function track_plan.windows(snapshot)
+ local duration=snapshot.bounds.end_qn-snapshot.bounds.start_qn
+ assert(number(duration) and duration>0 and duration<=track_plan.window_qn*track_plan.max_windows,"Trackumfang nicht unterstützt (maximal 1024 QN).")
+ local windows={}
+ for first=0,duration-0.0000001,track_plan.window_qn do windows[#windows+1]={start_qn=first,end_qn=math.min(duration,first+track_plan.window_qn)} end
+ return windows,duration
+end
+function track_plan.validate(plan,duration)
+ assert(type(plan)=="table" and plan.schema=="Composition-TrackPlan-1","Werkplanformat fehlt.")
+ assert(text(plan.title,120) and text(plan.idea,2400),"Titel oder Werkidee fehlt.")
+ local names={};assert(#list(plan.tracks,16)>0,"Werkplan ohne Stimmen.")
+ for _,tr in ipairs(plan.tracks) do
+  assert(type(tr)=="table" and text(tr.name,120) and not tr.name:find("[|\r\n]") and tr.name==tr.name:match("^%s*(.-)%s*$") and not names[tr.name],"Ungültige/doppelte Stimme.")
+  assert(number(tr.program) and tr.program%1==0 and tr.program>=0 and tr.program<=127 and number(tr.channel) and tr.channel%1==0 and tr.channel>=0 and tr.channel<=15,"Ungültiges Instrument/Kanal.")
+  assert(text(tr.role,300),"Stimmenrolle fehlt.");names[tr.name]=tr
+ end
+ local previous=0
+ for _,s in ipairs(list(plan.sections,32)) do
+  assert(type(s)=="table" and text(s.name,120) and text(s.direction,1200),"Abschnittsidee fehlt.")
+  assert(number(s.start_qn) and math.abs(s.start_qn-previous)<0.000001 and number(s.end_qn) and s.end_qn>s.start_qn and s.end_qn<=duration,"Werkplan muss den gesamten Track lückenlos beschreiben.")
+  previous=s.end_qn
+ end
+ assert(math.abs(previous-duration)<0.000001,"Werkplan verkürzt den Track.")
+ return plan,names
+end
+function track_plan.validate_window(result,window,plan,snapshot,duration)
+ local _,names=track_plan.validate(plan,duration)
+ assert(type(result)=="table" and result.schema=="Composition-TrackWindow-1" and number(result.start_qn) and math.abs(result.start_qn-window.start_qn)<0.000001 and number(result.end_qn) and math.abs(result.end_qn-window.end_qn)<0.000001,"Falscher oder fehlender Ergebniszeitraum.")
+ assert(text(result.continuity,1600),"Übergabe zum nächsten Abschnitt fehlt.")
+ assert(result.bpm==snapshot.tempo and type(result.timeSignature)=="table" and result.timeSignature[1]==snapshot.time_signature[1] and result.timeSignature[2]==snapshot.time_signature[2],"Tempo/Taktart verändert.")
+ assert(result.tempoEvents==nil and result.pedalEvents==nil,"Globale Ereignisse im Abschnitt nicht erlaubt.")
+ local seen,count={},0
+ for _,tr in ipairs(list(result.tracks,16)) do
+  local ref=type(tr)=="table" and names[tr.name]
+  assert(ref and not seen[tr.name] and tr.program==ref.program and tr.channel==ref.channel,"Stimmenidentität verändert.");seen[tr.name]=true
+  assert(tr.pitchBend==nil,"Pitch Bend nicht unterstützt.")
+  for _,n in ipairs(list(tr.notes,4000)) do
+   count=count+1
+   assert(type(n)=="table" and #n==4 and number(n[1]) and n[1]>=window.start_qn and n[1]<window.end_qn and number(n[2]) and n[2]>0 and n[1]+n[2]<=duration+0.000001,"Note außerhalb des Arbeitsfensters/Werks.")
+   assert(number(n[3]) and n[3]%1==0 and n[3]>=0 and n[3]<=127 and number(n[4]) and n[4]%1==0 and n[4]>=1 and n[4]<=127,"Ungültige MIDI-Note.")
+  end
+  local pedal_at,pedal=-1,0
+  for _,c in ipairs(list(tr.ccEvents or {},4000)) do
+   assert(type(c)=="table" and number(c.at) and c.at>=window.start_qn and c.at<window.end_qn and number(c.controller) and c.controller%1==0 and c.controller>=0 and c.controller<=127 and number(c.value) and c.value%1==0 and c.value>=0 and c.value<=127,"Ungültiges Controllerereignis.")
+   if c.controller==64 and c.at>=pedal_at then pedal_at=c.at;pedal=c.value end
+  end
+  assert(pedal<64,"Sustain muss innerhalb des Arbeitsfensters gelöst werden.")
+ end
+ assert(count<=4000 and (count>0 or result.rest==true),"Leerer Abschnitt muss ausdrücklich als Pause bezeichnet sein.")
+ return result
+end
+function track_plan.assemble(plan,results,windows,snapshot)
+ local _,duration=track_plan.windows(snapshot)
+ track_plan.validate(plan,duration)
+ assert(#list(results,track_plan.max_windows)==#windows,"Track noch nicht vollständig.")
+ local score={schema="Composition-Song-1",title=plan.title,idea=plan.idea,bpm=snapshot.tempo,timeSignature=snapshot.time_signature,tracks={},sections={}}
+ local by_name={};local count=0
+ for _,ref in ipairs(plan.tracks) do
+  local tr={name=ref.name,role=ref.role,program=ref.program,channel=ref.channel,notes={},ccEvents={}}
+  by_name[tr.name]=tr;score.tracks[#score.tracks+1]=tr
+ end
+ for i,result in ipairs(results) do
+  track_plan.validate_window(result,windows[i],plan,snapshot,duration)
+  for _,part in ipairs(result.tracks) do
+   local tr=by_name[part.name]
+   for _,n in ipairs(part.notes) do tr.notes[#tr.notes+1]={n[1],n[2],n[3],n[4]};count=count+1 end
+   for _,cc in ipairs(part.ccEvents or {}) do tr.ccEvents[#tr.ccEvents+1]={at=cc.at,controller=cc.controller,value=cc.value} end
+  end
+ end
+ assert(count<=20000,"Gesamtergebnis überschreitet 20000 Noten.")
+ for i,s in ipairs(plan.sections) do score.sections[#score.sections+1]={id="s"..i,name=s.name,start_qn=s.start_qn,end_qn=s.end_qn,purpose=s.direction} end
+ for _,tr in ipairs(score.tracks) do assert(#tr.notes>0,"Geplante Stimme fehlt im Gesamtergebnis: "..tr.name) end
+ return score
+end
+function track_plan.excerpt(snapshot,window)
+ local out={schema=snapshot.schema,tempo=snapshot.tempo,time_signature=snapshot.time_signature,parts={}}
+ for _,part in ipairs(snapshot.parts) do
+  local copy={name=part.name,events={}}
+  for _,n in ipairs(part.events) do
+   local at=n.at-snapshot.bounds.start_qn
+   if at<window.end_qn and at+n.duration>window.start_qn then copy.events[#copy.events+1]={at=at,duration=n.duration,pitch=n.pitch,velocity=n.velocity,channel=n.channel} end
+  end
+  out.parts[#out.parts+1]=copy
+ end
+ return out
+end
 end
 music_workspace={memory_key="MusicMemoryV1"}
 workflow_adapter.labels.song_construction="Song-Aufbau"
@@ -2448,6 +2578,195 @@ Gib nur das vollständige JSON zurück. Keine Änderung des Quellmaterials und k
  return true
 end
 
+-- Host coordinator. No partial MIDI commits and no automatic retries.
+whole_track={}
+workflow_adapter.labels.whole_track="Ganzer Track"
+function whole_track.path() return workflow_adapter.history_path()..".whole-track.json" end
+function whole_track.save(state)
+ local path=whole_track.path();local raw=workflow_adapter.encode(state)
+ assert(#raw<=8000000,"Track-Zwischenstand zu groß.")
+ assert(write_file(path..".pending",raw) and read_file(path..".pending")==raw,"Track-Zwischenstand nicht gespeichert.")
+ if read_file(path) then
+  os.remove(path..".bak");assert(os.rename(path,path..".bak"),"Track-Sicherung fehlgeschlagen.")
+ end
+ local ok=os.rename(path..".pending",path)
+ if not ok then os.rename(path..".bak",path);error("Track-Zwischenstand nicht gespeichert.") end
+end
+function whole_track.load()
+ local path=whole_track.path();local raw=read_file(path)
+ if not raw then raw=read_file(path..".bak") end
+ assert(raw and #raw<=8000000,"Kein unterstützter Track-Zwischenstand vorhanden.")
+ local state=decode_engine_json(raw)
+ assert(type(state)=="table" and state.schema=="Composition-TrackJob-1","Track-Zwischenstand nicht lesbar.")
+ return state
+end
+function whole_track.check(state)
+ assert(state.guard==workflow_adapter.guard(),"Projekt/Quelle verändert. Track-Auftrag neu vorbereiten.")
+ assert(state.provider==provider and state.model==model and state.reasoning==reasoning_mode,"Anbieter, Modell oder Denkaufwand verändert. Ursprüngliche Auswahl wiederherstellen oder neu vorbereiten.")
+ assert(not (provider=="google" and model:match("^gemini%-2%.5") and reasoning_mode~="auto"),"Für Gemini 2.5 ist der begrenzte Track-Aufbau nur mit Denkaufwand Automatisch unterstützt; explizite Denkbudgets können das Antwortlimit überschreiten.")
+ local memory,why=music_workspace.context();assert(memory,why)
+ assert(memory==state.memory,"Musikgedächtnis verändert. Track-Auftrag neu vorbereiten.")
+ assert(not workflow_adapter.history_error,"Ergebnisverlauf nicht lesbar.")
+end
+function whole_track.remaining(state)
+ local windows=track_plan.windows(state.snapshot)
+ return #windows-#state.results+(state.plan and 0 or 1)
+end
+function whole_track.preview(state)
+ local windows,duration=track_plan.windows(state.snapshot)
+ local rate=costs.rate(provider,model)
+ local cost_text="Kein hinterlegter Tarif: Start gesperrt, bis ein Tarif in der Kostenübersicht gesetzt ist."
+ if rate then
+  local example=(50000*rate[1]+track_plan.window_tokens*rate[2])/1000000
+  cost_text=string.format("Rechenbeispiel pro Abschnitt bei 50.000 Eingabe- und maximal %d Ausgabetokens: %.3f USD. Tatsächliche Eingabe/Denktokens können abweichen; keine Preisgarantie.",track_plan.window_tokens,example)
+ end
+ add("KI",string.format("Ganzer Track: %.3f QN, %d technische Arbeitsfenster; musikalische Form frei. Noch höchstens %d KI-Aufrufe (Werkplan + Abschnitte), keine automatische Wiederholung. Bereits %d/%d Abschnitte gesichert.\n%s\nBekannte bisherige Kosten: %.4f USD%s.\nKostenfreigabe z. B. 'Track-Aufbau starten: 2 USD'. Das ist ein geschätztes Ausgabenbudget, keine garantierte Rechnungsobergrenze. Vor jedem weiteren Aufruf wird erneut geprüft. Abbrechen: 'Track-Aufbau abbrechen'.",duration,#windows,whole_track.remaining(state),#state.results,#windows,cost_text,state.spent or 0,state.unknown and "; zusätzlich unbekannter Verbrauch" or ""))
+ busy=false
+end
+function whole_track.prepare(request)
+ assert(#request>0,"Auftrag hinter 'Ganzer Track:' fehlt.")
+ -- The explicit full-track command uses complete arrangement items, never selected editor notes.
+ local items=selected_items(true,"items");local tracks=score_context_tracks(items)
+ if #items==0 then tracks=selected_tracks();items=track_context_items(tracks) end
+ local num,den=reaper.TimeMap_GetTimeSigAtTime(0,0)
+ local snapshot=music_model.capture(items,reaper.Master_GetTempo(),num,den,20000)
+ local first,last=math.huge,-math.huge
+ for _,it in ipairs(items) do
+  assert(type(it.start_qn)=="number" and type(it.end_qn)=="number" and it.start_qn>=0 and it.end_qn>it.start_qn,"Ungültige Itemgrenzen.")
+  first=math.min(first,it.start_qn);last=math.max(last,it.end_qn)
+ end
+ assert(snapshot.bounds.start_qn>=0,"Quellnoten vor Projektbeginn nicht unterstützt.")
+ snapshot.bounds.start_qn=math.min(first,snapshot.bounds.start_qn);snapshot.bounds.end_qn=math.max(last,snapshot.bounds.end_qn)
+ track_plan.windows(snapshot)
+ assert(#workflow_adapter.encode(snapshot)<=2000000,"Musikkontext überschreitet die unterstützte Größe; keine Kürzung vorgenommen.")
+ local memory,why=music_workspace.context();assert(memory,why)
+ assert(not workflow_adapter.history_error,"Ergebnisverlauf nicht lesbar.")
+ local state={schema="Composition-TrackJob-1",id=reaper.genGuid(""),request=request,snapshot=snapshot,guard=workflow_adapter.guard(),provider=provider,model=model,reasoning=reasoning_mode,memory=memory,results={},bindings={},track_bindings={},spent=0}
+ for _,it in ipairs(items) do state.bindings[#state.bindings+1]=it.guid end
+ for _,tr in ipairs(tracks) do state.track_bindings[#state.track_bindings+1]=tr.guid end
+ whole_track.save(state);whole_track.preview(state)
+end
+function whole_track.prompt(state)
+ local windows,duration=track_plan.windows(state.snapshot)
+ if not state.plan then
+  local context=track_plan.excerpt(state.snapshot,{start_qn=0,end_qn=duration})
+  return [=[Plane den GESAMTEN vorhandenen Track gemäß Auftrag. Noch KEINE Noten ausgeben.
+Antwort nur JSON: {"schema":"Composition-TrackPlan-1","title":"...","idea":"konkrete motivische/harmonische Werkidee","tracks":[{"name":"...","program":0,"channel":0,"role":"..."}],"sections":[{"name":"...","start_qn":0,"end_qn":16,"direction":"Entwicklung, Harmonik, Motive, Übergang"}]}.
+Maximal 16 Stimmen, 32 frei gewählte musikalische Abschnitte. Abschnitte decken die gesamte vorgegebene Dauer lückenlos ab QN 0 ab. Keine Standardform oder Pflicht zu mehr Komplexität. Technische Fenster sind KEINE musikalischen Phrasengrenzen. Quelle read-only, neue Fassung nur auf neuen Spuren.
+]=].."AUFTRAG: "..state.request.."\nEXAKTE DAUER QN: "..duration.."\nQUELLE (relative QN ab Trackanfang):\n"..workflow_adapter.encode(context),track_plan.plan_tokens,"whole_track_plan"
+ end
+ local index=#state.results+1;local window=windows[index]
+ local previous=state.results[index-1]
+ local tail={}
+ if previous then
+  for _,tr in ipairs(previous.tracks) do
+   local row={name=tr.name,notes={}}
+   for _,n in ipairs(tr.notes) do if n[1]+n[2]>window.start_qn-2 then row.notes[#row.notes+1]=n end end
+   tail[#tail+1]=row
+  end
+ end
+ return [=[Komponiere das folgende technische Arbeitsfenster als Teil EINER zusammenhängenden Fassung des GESAMTEN Tracks. Gemeinsamen Werkplan und vorherige Übergabe beachten; keine unabhängigen Loops, keine erfundene Verkürzung und keine musikalische Zäsur allein wegen Fenstergrenzen. Noten dürfen über eine Fenstergrenze bis maximal zum Werkende klingen; nicht erneut anschlagen, wenn sie schon im vorherigen Fenster beginnen.
+Antwort ausschließlich JSON:
+{"schema":"Composition-TrackWindow-1","start_qn":0,"end_qn":16,"bpm":120,"timeSignature":[4,4],"continuity":"tatsächliche Motive/Harmonik/Entwicklung und Übergabe","tracks":[{"name":"exakt aus Plan","program":0,"channel":0,"notes":[[0,1,60,80]],"ccEvents":[]}]}
+Noten: [StartQN,DauerQN,Pitch,Velocity], ALLE Starts relativ zum Anfang des GESAMTEN Werks, nicht des Fensters. Nur Noten mit Start innerhalb des aktuellen halboffenen Fensters ausgeben. Keine tempoEvents/pedalEvents/pitchBend; Tempo-/Taktkarte unverändert. CC innerhalb des Fensters; Sustain vor Fensterende lösen. Stille Stimmen dürfen fehlen; ganz stilles Fenster nur mit "rest":true und "tracks":[], ausdrücklich im Übergabetext begründen. Maximal 4000 Noten/Fenster und 20000 insgesamt; technische Grenzen, keine musikalischen Zielwerte. Instrument/Kanal/Name exakt beibehalten. Musik und Ausdruck aus Auftrag/Quelle entwickeln.
+]=].."AUFTRAG: "..state.request.."\nWERKPLAN:\n"..workflow_adapter.encode(state.plan).."\nEXAKTES FENSTER:\n"..workflow_adapter.encode(window).."\nTEMPO/TAKT UND QUELLE:\n"..workflow_adapter.encode(track_plan.excerpt(state.snapshot,window)).."\nVORHERIGE ÜBERGABE:\n"..(previous and previous.continuity or "Werkbeginn").."\nVORHERIGE AUSKLINGENDE NOTEN:\n"..workflow_adapter.encode(tail),track_plan.window_tokens,"whole_track_window"
+end
+function whole_track.next(state,key)
+ whole_track.check(state)
+ local windows,duration=track_plan.windows(state.snapshot)
+ if #state.results==#windows then
+  local score=track_plan.assemble(state.plan,state.results,windows,state.snapshot)
+  music_model.validate_song(score,state.snapshot)
+  local raw=workflow_adapter.encode(score);local cs,why=engine_translate_json(raw);assert(cs,why)
+  -- A saved complete proposal is offered once, including after restart.
+  for _,r in ipairs(workflow_adapter.records) do if r.track_run_id==state.id then add("KI","Vollständiger Track bereits im Ergebnisverlauf gespeichert.");busy=false;return end end
+  local items,tracks=workflow_adapter.bindings(state)
+  workflow_adapter.offer("whole_track",raw,{request=state.request,full=items,music_tracks=tracks,workflow_guard=state.guard,workflow_provider=state.provider,workflow_model=state.model,music_memory_context=state.memory,track_snapshot=state.snapshot,track_run_id=state.id})
+  return
+ end
+ if state.plan then
+  track_plan.validate(state.plan,duration)
+  assert(#state.results<=#windows,"Zu viele gespeicherte Abschnitte.")
+  for i,result in ipairs(state.results) do track_plan.validate_window(result,windows[i],state.plan,state.snapshot,duration) end
+ end
+ local prompt,limit,stage=whole_track.prompt(state)
+ local rate=costs.rate(provider,model);assert(rate,"Kein gültiger Tarif für die Kostenplanung hinterlegt.")
+ -- Conservative byte-based estimate plus transport overhead, not a billing guarantee.
+ local input_estimate=#prompt+#state.memory+4096
+ local estimate=(input_estimate*rate[1]+limit*rate[2])/1000000
+ assert(estimate<=state.allowance-(state.spent or 0),string.format("Kostenbudget reicht für den nächsten Aufruf voraussichtlich nicht (%.3f USD). Zwischenstand gesichert; keine weitere Anfrage. 'Track-Aufbau fortsetzen' zeigt den Stand.",estimate))
+ state.inflight=true;whole_track.save(state)
+ update_status=stage=="whole_track_plan" and "Werkplan für ganzen Track …" or string.format("Ganzer Track: Abschnitt %d/%d …",#state.results+1,#windows)
+ local started=launch(stage,prompt,key,{whole_track_state=state,whole_track_output_limit=limit,workflow_guard=state.guard})
+ if not started then state.inflight=false;whole_track.save(state) end
+end
+function whole_track.result(stage,text,data,error_text,key)
+ local state=data.whole_track_state
+ local ok,why=pcall(function()
+  whole_track.check(state)
+  state.inflight=false
+  local usd=tonumber(last_diag.usage_estimated_usd)
+  if usd then state.spent=(state.spent or 0)+usd else state.unknown=true end
+  whole_track.save(state)
+  assert(text,error_text or "KI-Antwort fehlt.")
+  local windows,duration=track_plan.windows(state.snapshot)
+  local value=decode_engine_json(text)
+  if stage=="whole_track_plan" then track_plan.validate(value,duration);state.plan=value
+  else
+   track_plan.validate_window(value,windows[#state.results+1],state.plan,state.snapshot,duration)
+   state.results[#state.results+1]=value
+  end
+  whole_track.save(state)
+  assert(usd,"Verbrauch unbekannt: gültiges Ergebnis gesichert, vor weiteren kostenpflichtigen Aufrufen erneut freigeben.")
+  whole_track.next(state,key)
+ end)
+ if not ok then add("KI",tostring(why).."\nKeine Teilübernahme, keine automatische Wiederholung. Gültige Zwischenstände bleiben gespeichert. 'Track-Aufbau fortsetzen' zeigt Aufwand und Kostenrisiko.");busy=false end
+end
+function whole_track.to_cs(text,snapshot)
+ local score=music_model.validate_song(decode_engine_json(text),snapshot)
+ local origin=snapshot.bounds.start_qn
+ for _,tr in ipairs(score.tracks) do
+  for _,n in ipairs(tr.notes) do n[1]=n[1]+origin end
+  for _,c in ipairs(tr.ccEvents or {}) do c.at=c.at+origin end
+ end
+ local cs,why=engine_translate_json(workflow_adapter.encode(score));assert(cs,why)
+ local rows={};for line in cs:gmatch("[^\r\n]+") do if not line:match("^CSMETA|") then rows[#rows+1]=line end end
+ return table.concat(rows,"\n")
+end
+function whole_track.cancel()
+ if job and (job.stage=="whole_track_plan" or job.stage=="whole_track_window") then
+  -- The detached transport may already incur charges; do not launch any successor.
+  job=nil;busy=false
+  add("KI","Track-Aufbau angehalten. Laufender Anbieteraufruf kann weiter Kosten verursachen; dessen Ergebnis wird nicht übernommen. Bereits gesicherte Abschnitte bleiben erhalten.")
+ end
+end
+function whole_track.try_request(request)
+ local task=request:match("^%s*[Gg]anzer%s+[Tt]rack:%s*(.*)$")
+ local words=request_words(request)
+ local resume=words:match("^%s*track%-aufbau fortsetzen%s*[%.!]?%s*$")
+ local cancel=words:match("^%s*track%-aufbau abbrechen%s*[%.!]?%s*$")
+ local amount=words:match("^%s*track%-aufbau starten:%s*(%d+[.,]?%d*)%s*usd%s*$")
+ if not task and not resume and not cancel and not amount then return false end
+ local ok,why=pcall(function()
+  if task then whole_track.prepare(task)
+  elseif cancel then whole_track.cancel();busy=false;add("KI","Keine weiteren Track-Aufrufe gestartet. Gesicherter Zwischenstand bleibt erhalten.")
+  else
+   local state=whole_track.load();whole_track.check(state)
+   if resume then whole_track.preview(state)
+   else
+    local budget=tonumber((amount:gsub(",",".")));assert(budget and budget>0 and budget<=100,"Budget muss größer 0 und höchstens 100 USD sein.")
+    -- A fresh explicit allowance also acknowledges uncertain cost of an interrupted call.
+    state.allowance=(state.spent or 0)+budget
+    if state.inflight then state.unknown=true;state.inflight=false end
+    local key=get_key();assert(key,"API-Key fehlt.")
+    last_diag={version=VERSION,provider=provider,model=model,request=state.request,composition_engine="Composition Studio whole-track workflow"}
+    whole_track.next(state,key)
+   end
+  end
+ end)
+ if not ok then add("KI",tostring(why));busy=false end
+ return true
+end
 local function begin_continuation(request,bars,tail)
  if type(bars)~="number" or bars~=math.floor(bars) or bars<1 or bars>128 or (tail~=0 and tail~=2 and tail~=3 and tail~=4) then
   add("KI","Bitte eine Verlängerung von 1 bis 128 Takten und gegebenenfalls 2, 3 oder 4 Übergangstakte angeben.");busy=false;return
@@ -2568,6 +2887,9 @@ local function open_score_workspace(mode)
 end
 
 local function begin_process(request)
+-- BEGIN WHOLE TRACK ROUTING
+ if whole_track and whole_track.try_request(request) then return end
+-- END WHOLE TRACK ROUTING
 -- BEGIN MUSIC WORKSPACE ROUTING
  if music_workspace and music_workspace.try_request(request) then return end
 -- END MUSIC WORKSPACE ROUTING
@@ -2692,6 +3014,9 @@ local function begin_process(request)
  launch("controller",prompt,key,{request=request,items=items,tracks=tracks,notation_snapshot=snapshot,reference_context=reference,workflow_guard=(hasSelection or scoreItems) and workflow_adapter.guard() or nil})
 end
 
+-- BEGIN WHOLE TRACK LOCAL_SCOPE
+do
+-- END WHOLE TRACK LOCAL_SCOPE
 local function title_prompt()
  local draft=last_diag.composition_music or ""; local req=last_diag.request or ""
  return [[Gib dieser vorhandenen Komposition einen kurzen, eigenständigen Werktitel. Antworte ausschließlich mit dem Titel, ohne Anführungszeichen, ohne „Titel:“ und ohne Erläuterung. Der Titel soll musikalisch passend sein und nicht bloß Instrumente oder den Auftrag wiederholen.]].."\n\nAUFTRAG:\n"..req.."\n\nFERTIGE KOMPOSITION:\n"..draft
@@ -2706,10 +3031,19 @@ end
 local function summary_prompt(request,comp,made)
  return [[Beschreibe die bereits fertig komponierte MIDI-Komposition kurz, konkret und hörbezogen. Nenne Tempo/BPM, Tonart bzw. falls nicht eindeutig 'tonales Zentrum nicht eindeutig', den Umfang in Takten soweit aus den QN-Daten ableitbar, die prägende musikalische Idee und höchstens eine auffällige klangliche oder satztechnische Eigenheit. Maximal 600 Zeichen. Keine Takt-für-Takt-Analyse, keine Bewertung und keine Verbesserungsvorschläge. Erfinde keine Angaben.]].."\nREAPER-TEMPO: "..string.format("%.2f BPM",reaper.Master_GetTempo()).."\nAUFTRAG: "..request.."\nMIDI-DATEN:\n"..comp
 end
+-- BEGIN WHOLE TRACK LOCAL_SCOPE_END
+end
+-- END WHOLE TRACK LOCAL_SCOPE_END
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
  log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
+-- BEGIN WHOLE TRACK RESULT
+ if stage=="whole_track_plan" or stage=="whole_track_window" then whole_track.result(stage,text,data,e,key);return end
+ if not text and stage=="composition" and last_diag.api_error=="Tokenlimit erreicht; unvollständige Komposition" then
+  add("KI","Für den ganzen Track mit gesicherten Zwischenständen: 'Ganzer Track: '..dein Auftrag. Die Vorbereitung ist lokal und zeigt vor dem Start Aufwand und Kostenrisiko.")
+ end
+-- END WHOLE TRACK RESULT
  if not text then add("KI",e); busy=false; return end; text=trim(text)
 -- BEGIN MUSIC WORKSPACE RESULT
  if stage=="song_construction" then
@@ -2956,6 +3290,12 @@ reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(composition_mode=="concept" and " ✓" or "")) then composition_mode="concept"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Konzeption + Komposition (2 KI-Aufrufe)." end
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
+-- BEGIN WHOLE TRACK MENU
+if reaper.ImGui_MenuItem(ctx,"Ganzer Track: Auftrag vorbereiten") and not busy then
+ if not input:match("^[Gg]anzer%s+[Tt]rack:") then input="Ganzer Track: "..input end
+ update_status="Ganze MIDI-Items oder Quellspuren auswählen, Auftrag ergänzen und Senden. Vorbereitung ohne KI-Aufruf."
+end
+-- END WHOLE TRACK MENU
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Notenansicht vorbereiten") then local ok,msg=open_score_workspace(); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Piano-Roll öffnen") then local ok,msg=open_score_workspace("pianoroll"); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); draw_model_picker(model_width)
@@ -2985,6 +3325,12 @@ if child_visible then
  reaper.ImGui_TextWrapped(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks))
  reaper.ImGui_TextWrapped(ctx,"Auftrag: "..costs.amount(costs.order).." · Gesamt: "..costs.amount(costs.total))
  if busy then reaper.ImGui_TextWrapped(ctx,job and (job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …") or "KI arbeitet …") end
+-- BEGIN WHOLE TRACK STATUS
+ if whole_track and job and (job.stage=="whole_track_plan" or job.stage=="whole_track_window") then
+  reaper.ImGui_TextWrapped(ctx,update_status)
+  if reaper.ImGui_Button(ctx,"Track-Aufbau anhalten") then whole_track.cancel() end
+ end
+-- END WHOLE TRACK STATUS
  draw_workflow_status()
  draw_history()
  reaper.ImGui_EndChild(ctx)

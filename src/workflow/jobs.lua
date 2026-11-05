@@ -1,3 +1,6 @@
+-- BEGIN WHOLE TRACK LOCAL_SCOPE
+do
+-- END WHOLE TRACK LOCAL_SCOPE
 local function title_prompt()
  local draft=last_diag.composition_music or ""; local req=last_diag.request or ""
  return [[Gib dieser vorhandenen Komposition einen kurzen, eigenständigen Werktitel. Antworte ausschließlich mit dem Titel, ohne Anführungszeichen, ohne „Titel:“ und ohne Erläuterung. Der Titel soll musikalisch passend sein und nicht bloß Instrumente oder den Auftrag wiederholen.]].."\n\nAUFTRAG:\n"..req.."\n\nFERTIGE KOMPOSITION:\n"..draft
@@ -12,10 +15,19 @@ end
 local function summary_prompt(request,comp,made)
  return [[Beschreibe die bereits fertig komponierte MIDI-Komposition kurz, konkret und hörbezogen. Nenne Tempo/BPM, Tonart bzw. falls nicht eindeutig 'tonales Zentrum nicht eindeutig', den Umfang in Takten soweit aus den QN-Daten ableitbar, die prägende musikalische Idee und höchstens eine auffällige klangliche oder satztechnische Eigenheit. Maximal 600 Zeichen. Keine Takt-für-Takt-Analyse, keine Bewertung und keine Verbesserungsvorschläge. Erfinde keine Angaben.]].."\nREAPER-TEMPO: "..string.format("%.2f BPM",reaper.Master_GetTempo()).."\nAUFTRAG: "..request.."\nMIDI-DATEN:\n"..comp
 end
+-- BEGIN WHOLE TRACK LOCAL_SCOPE_END
+end
+-- END WHOLE TRACK LOCAL_SCOPE_END
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
  log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
+-- BEGIN WHOLE TRACK RESULT
+ if stage=="whole_track_plan" or stage=="whole_track_window" then whole_track.result(stage,text,data,e,key);return end
+ if not text and stage=="composition" and last_diag.api_error=="Tokenlimit erreicht; unvollständige Komposition" then
+  add("KI","Für den ganzen Track mit gesicherten Zwischenständen: 'Ganzer Track: '..dein Auftrag. Die Vorbereitung ist lokal und zeigt vor dem Start Aufwand und Kostenrisiko.")
+ end
+-- END WHOLE TRACK RESULT
  if not text then add("KI",e); busy=false; return end; text=trim(text)
 -- BEGIN MUSIC WORKSPACE RESULT
  if stage=="song_construction" then

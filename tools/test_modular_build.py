@@ -25,8 +25,9 @@ for unit in manifest['units']:
         previous = subprocess.check_output(['git', 'show', '31b5849af27b67dab488bda72c07c9a2d83e3166:' + unit['path']], cwd=ROOT, text=True)
         legacy_runtime = legacy_runtime.replace(inline(unit), previous, 1)
 for unit in manifest['units']:
-    if unit['id'] in ('music/model', 'music/memory', 'workflow/music_workspace'):
+    if unit['id'] in ('music/model', 'music/memory', 'workflow/music_workspace', 'music/whole_track', 'workflow/whole_track'):
         legacy_runtime = legacy_runtime.replace(inline(unit), '', 1)
+legacy_runtime = re.sub(r'-- BEGIN WHOLE TRACK ([A-Z_]+)\n.*?-- END WHOLE TRACK \1\n', '', legacy_runtime, flags=re.S)
 legacy_runtime = re.sub(r'-- BEGIN MUSIC WORKSPACE ([A-Z]+)\n.*?-- END MUSIC WORKSPACE \1\n', '', legacy_runtime, flags=re.S)
 legacy_runtime = legacy_runtime.replace('if stage=="engine_json" or stage=="song_construction" then', 'if stage=="engine_json" then', 1)
 legacy_runtime = legacy_runtime.replace('add("Arbeitsstand",r.song_summary or workflow_core.readable(r.raw_response))', 'add("Arbeitsstand",workflow_core.readable(r.raw_response))', 1)

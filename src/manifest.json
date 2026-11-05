@@ -954,6 +954,7 @@
         "music_workspace",
         "reasoning_mode",
         "set_reasoning_mode",
+        "whole_track",
         "workflow_adapter_guard"
       ],
       "requires": [
@@ -1033,10 +1034,12 @@
         "launch"
       ],
       "globals": [
+        "assert",
         "ipairs",
         "os",
         "reaper",
-        "tostring"
+        "tostring",
+        "type"
       ],
       "host_apis": [
         "EnumProjects",
@@ -1379,6 +1382,7 @@
         "safe_work_title",
         "track_guid",
         "update_status",
+        "whole_track",
         "work_title",
         "workflow_core",
         "write_file"
@@ -1497,6 +1501,7 @@
         "track_guid",
         "trim",
         "update_status",
+        "whole_track",
         "workflow_adapter",
         "workflow_adapter_guard",
         "workflow_core"
@@ -1624,6 +1629,28 @@
       "host_apis": []
     },
     {
+      "id": "music/whole_track",
+      "path": "src/music/whole_track.lua",
+      "kind": "portable",
+      "exports": [
+        "track_plan"
+      ],
+      "parameters": [],
+      "provides": [
+        "track_plan"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "assert",
+        "ipairs",
+        "math",
+        "pairs",
+        "type"
+      ],
+      "host_apis": []
+    },
+    {
       "id": "workflow/music_workspace",
       "path": "src/workflow/music_workspace.lua",
       "kind": "workflow",
@@ -1682,6 +1709,69 @@
         "SetProjExtState",
         "TimeMap2_timeToQN",
         "TimeMap_GetTimeSigAtTime"
+      ]
+    },
+    {
+      "id": "workflow/whole_track",
+      "path": "src/workflow/whole_track.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [],
+      "requires": [
+        "VERSION",
+        "add",
+        "busy",
+        "costs",
+        "decode_engine_json",
+        "engine_translate_json",
+        "get_key",
+        "job",
+        "last_diag",
+        "launch",
+        "model",
+        "music_model",
+        "music_workspace",
+        "provider",
+        "read_file",
+        "reasoning_mode",
+        "request_words",
+        "score_context_tracks",
+        "selected_items",
+        "selected_tracks",
+        "track_context_items",
+        "track_plan",
+        "update_status",
+        "whole_track",
+        "workflow_adapter",
+        "write_file"
+      ],
+      "writes": [
+        "busy",
+        "job",
+        "last_diag",
+        "update_status",
+        "whole_track",
+        "workflow_adapter"
+      ],
+      "globals": [
+        "assert",
+        "error",
+        "ipairs",
+        "math",
+        "os",
+        "pcall",
+        "reaper",
+        "string",
+        "table",
+        "tonumber",
+        "tostring",
+        "type"
+      ],
+      "host_apis": [
+        "Master_GetTempo",
+        "TimeMap_GetTimeSigAtTime",
+        "genGuid"
       ]
     },
     {
@@ -1831,6 +1921,7 @@
         "score_request_intent",
         "selected_items",
         "selected_tracks",
+        "whole_track",
         "workflow_adapter",
         "write_file"
       ],
@@ -1860,9 +1951,7 @@
       "parameters": [],
       "provides": [
         "poll_job",
-        "submit",
-        "summary_prompt",
-        "title_prompt"
+        "submit"
       ],
       "requires": [
         "EXT_SECTION",
@@ -1905,6 +1994,7 @@
         "track_context_items",
         "trim",
         "update_status",
+        "whole_track",
         "work_title",
         "workflow_adapter",
         "workflow_core"
@@ -2006,6 +2096,7 @@
         "submit",
         "update_job",
         "update_status",
+        "whole_track",
         "workflow_adapter",
         "workflow_core"
       ],
