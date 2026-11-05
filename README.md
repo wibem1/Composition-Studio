@@ -1,5 +1,7 @@
 # Composition Studio
 
+**Separater Entwicklungstest (PR #12):** Der Button **Lesbare Notation erstellen** überträgt notierte Einsätze und Dauern in REAPERs Noteneditor. [Installation, Bedienung und Prüfnachweis](docs/NATIVE-NOTATION-BUTTON.md).
+
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
 Aktueller Stand: **v1.1.10 · 04.11.2026 · TESTFREIGABE**. Modellauswahl in REAPER isoliert geprüft; vollständiger App-/Neustart-/Live-KI-Test ausstehend.

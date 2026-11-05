@@ -96,7 +96,7 @@ local action= {
  SetMediaItemSelected=function() error("display action must not select items") end,
 }
 local avenv={reaper=action,focused_or_last_notation_editor=function() return opened end}
-compile("local function open_score_workspace","local function begin_process",avenv)
+compile("local function open_score_workspace","function workflow_adapter.show_native_notation",avenv)
 local ok,msg=avenv.open_score_workspace()
 assert(ok and edits==2 and commands[1]==100 and commands[2]==200,"notation mode then original shortcut")
 assert(msg:find("vorbereitet"),"positive status")

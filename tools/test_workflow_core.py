@@ -10,7 +10,8 @@ r.globals().TEST_ROOT=temp.name
 module=section('-- BEGIN SHARED WORKFLOW CORE','-- END SHARED WORKFLOW CORE')
 decoder=section('local function decode_engine_json(src)','local function engine_translate_json(answer)')
 adapter=section('-- Host adapter:','-- End shared workflow host adapter.')
-api=r.execute(module+decoder+'''
+parser=section('local function parse_semnotes(', 'local function analysis_prompt(')
+api=r.execute(module+decoder+parser+'''
 local saved={},nil
 local chunk="ORIGINAL"; local write_count=0; local EXT_SECTION="test"
 local MODELS={openai={},anthropic={},google={}}

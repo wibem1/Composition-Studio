@@ -1,5 +1,56 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Lesbare Notation per Button (PR #12)
+
+Die Textanalyse ist keine Voraussetzung für die Bedienung. **Lesbare Notation erstellen** sendet einen vorbereiteten Auftrag und setzt geprüfte Einsätze und Dauern als native Anzeige-Offsets. Der Ablauf bewahrt ursprüngliche MIDI-Ereignisse und manuelle Anzeige-Offsets, überspringt unsichere Vorschläge und schützt gegen veraltete Quellen sowie Schreibfehler. Ergebnis im REAPER-Noteneditor mit proportionalen Abständen und nativer Triolenerkennung. Die isolierte Testfassung ist über den bestehenden Testinstaller installierbar.
+
+**Nachgewiesen:** REAPER 7.84 Linux, echte Anzeige mit vorbereiteter Antwort. Acht verstreute Noten und Zwischenpausen wurden zu zwei gebalkten Achtelgruppen. Alle übrigen MIDI-Ereignisse hatten identische absolute Zeitpunkte, Flags und Bytes. Vollständige Lua-Syntax und 18 lokale Testsuiten erfolgreich. Live-KI-Interpretation und Plattformabnahme stehen aus. Bedienung und Grenzen: [Native Notation per Button](docs/NATIVE-NOTATION-BUTTON.md).
+
+## 04.11.2026 – Testfähiger Abschluss der semantischen Notationsanalyse (PR #12)
+
+Verbindliche globale Standards, Projektanweisungen und aktueller GitHub-Branch gelesen; Ausgangscommit `334a21a2a3bc09ccd6d88b87cbb265840ac2a966`. Vollständige lokale Regression nach Integration erfolgreich: **12 Lua-Dateien mit Lua 5.4 kompiliert, alle vier Lua-Testsuiten und 13 Python-Testsuiten bestanden**, darunter 22 SEMNOTE-Fälle, Produktions-Auftrags-/Antwortpfad mit Provider-Fixture, echte JSON-Speicherung/Neuladen, Quellschutz, externe Änderung während der Analyse, Speicherfehler, isolierte Installation/erster UI-Frame und bestehende 64 Dear-ImGui-Layouts. Echter LilyPond-Compiler mangels Installation ausgelassen. Kein laufendes REAPER, kein echter KI-Aufruf, keine kostenpflichtige API-Nutzung und keine native Windows-/macOS-Abnahme.
+
+Behoben: veraltete Offline-Payload, fehlender Parser im Workflow-Test, veraltete Schlüssel-Fixtures im Transporttest; zusätzlich strenge Rollen/Felder/Kanalgrenzen, echte REAPER-Taktgrenzen im Prompt, vollständiges Quellnoten-Inventar, Unsicherheits-/Abdeckungszahlen, veraltete Quellen und Speicherfehler abgesichert. Markierte Einzelnoten können ohne zusätzlichen Controller-Aufruf analysiert werden. Der separate Python-Planprüfer bleibt unabhängig von der Lua-Laufzeit.
+
+**Installierbar:** `Composition-Studio-Semantic-Test-Install.lua` installiert/registriert eine separat benannte, nur analysierende Testaktion im REAPER-Scripts-Ordner. Kein Austausch der stabilen Datei, kein Autostart, getrennte Einstellungen und Ergebnisse; bestehende Modell-/API-Einstellungen nur als lesender Rückgriff. Keine Anwendung von MIDI-/Notationsänderungen im Kandidaten. Basisversion 1.1.10 unverändert, sichtbares Fenster „Semantik-Test“. **Status: technisch mit Simulation geprüft, musikalischer Live-/REAPER-Test offen. Keine fertige Partiturerzeugung behauptet.**
+
+[Eine verbindliche Installations-/Vier-Takte-Testanleitung und vollständige Prüfgrenzen](docs/SEMANTIC-ANALYSIS-TEST.md), [lokales Prüfprotokoll](docs/SEMANTIC-ANALYSIS-TEST-RESULTS.txt). CI-Gesamtprüfung ergänzt. **GitHub am Quellcommit `7a1a586bac4b8a3b9ea6e9d088efadf424a7d4e1`:** [semantische Gesamtprüfung 41918164902](https://github.com/wibem1/Composition-Studio/actions/runs/41918164902), [Modelle/Layout/Installer 41918164858](https://github.com/wibem1/Composition-Studio/actions/runs/41918164858), [Notenauswahl 41918164815](https://github.com/wibem1/Composition-Studio/actions/runs/41918164815) und [Editorbrücke 41918164796](https://github.com/wibem1/Composition-Studio/actions/runs/41918164796) sämtlich **success**. Programm-/Installerbytes nach Upload durch erneutes GitHub-Lesen und Blob-SHA-Abgleich bestätigt; stabiler Main-Commit weiterhin `cefc7e78a64b5bb2f0c0fc3b7f8e06c450c699db`. **Nächster Schritt ausschließlich beim Nutzer:** ein gebündelter Vier-Takte-Praxistest; erst nach Erfolg endgültige Versions-/Merge-/Updatefreigabe. `main` und produktiver Updater bleiben unangetastet; PR #12 bleibt Draft.
+
+## 04.11.2026 – Testvorbereitung: sichtbar und reproduzierbar
+
+Im Entwicklungsbranch wurde die Auswertung der semantischen Analyse im Chat sichtbar gemacht: Nach einer KI-Analyse erscheinen die Anzahl akzeptierter und verworfener `SEMNOTE`-Zuordnungen (Commit `4a40ba56049ad6ecbc56ccfc3bca2c2b380297cf`). Die Datei `tests/test_semnotes.lua` enthaelt acht reproduzierbare Parser-Regressionsfaelle und laedt die Parserfunktion direkt aus der produktiven Skriptdatei (Commit `bab2dd19b62e9fc5162e29ff72efb286a32c8cd4`). **Pruefstatus:** Beide Dateien auf GitHub gesichert; der neue Test-Harness wurde noch nicht mit Lua ausgefuehrt. Die frueheren sechs isolierten Lua-Funktionstests bleiben separat dokumentiert. Kein REAPER-Laufzeittest, kein echter KI-Aufruf. Keine Versionserhoehung und kein Merge. Fuer die Freigabe fehlt der gemeinsam vereinbarte einzelne Vier-Takte-Praxistest durch den Nutzer.
+
+
+## 04.11.2026 – Lua-Parser-Funktionstests (lokal)
+
+Die in `Composition Studio.lua` vorhandene `parse_semnotes`-Funktion wurde in einem isolierten Lua-5.4-Harness ueber `liblua5.4.so.0` ausgefuehrt. Sechs Tests erfolgreich: gueltiger Notenbezug, doppelte SEMNOTE-Zeile, abweichende Tonhoehe, Sicherheitsstufe UNSICHER, ungueltiger Zahlenwert und doppelte Originalnotenidentitaet. **Pruefgrenze:** Der Funktionskoerper wurde fuer den isolierten Test aus dem zuvor gelesenen GitHub-Stand uebernommen; es wurde nicht die vollstaendige 189-kB-REAPER-Datei kompiliert oder ausgefuehrt. Keine echte KI-Antwort und keine REAPER-Laufzeit. Der abschliessende REAPER-Vier-Takte-Test bleibt beim Nutzer; keine Freigabe/kein Merge vor diesem Test.
+
+
+## 04.11.2026 – Parser-Haertung fuer Vier-Takte-Test
+
+Im Draft-PR #12 wurde die SEMNOTE-Eingangspruefung verschaerft: MIDI-Tonhoehe und Velocity muessen ganzzahlig und im MIDI-Wertebereich liegen; Start und Dauer muessen endlich sein, Start nicht negativ, Dauer positiv; Kanal muss ganzzahlig im tolerierten Bereich liegen. Ungueltige Identitaeten werden nicht als musikalische Notenzuordnung gespeichert. Commit `9b67377481ab2a948ce7e6a604e87fe2f57a7c6b`. **Statisch kontrolliert:** Codeaenderung von GitHub bestaetigt. **Weiterhin offen:** Lua-Laufzeittest, Parser-Grenzfalltests, reale KI-Antwort und REAPER-End-to-End-Test. Keine Freigabe und kein Merge.
+
+
+## 04.11.2026 – Uebergabe zur abschliessenden Integration: Draft-PR #12
+
+[Draft-PR #12](https://github.com/wibem1/Composition-Studio/pull/12) wurde aus `feat/semantic-notation-analysis-20261104` gegen `main` erstellt. Implementiert: semantischer Analyseprompt, `SEMNOTE`-Parser, schreibgeschuetzte Speicherung gueltiger Zuordnungen in `semantic_notes` und Zahl verworfener Zuordnungen in `semantic_invalid_count`. Die produktive Fassung bleibt 1.1.10. **Pruefstatus:** Nur Quellcode-Sichtpruefung; keine GitHub-Workflow-Runs fuer den Head-Commit gemeldet, keine Lua-Laufzeit- oder REAPER-7.83-Pruefung, keine reale KI-Antwort. Ein zusaetzlicher Testdatei-Upload wurde blockiert. **Wichtig:** Die Funktion ist nicht als End-to-End-getestet oder freigegeben zu bezeichnen. **Naechster Schritt:** Lua-Syntax und isolierte Parserfaelle pruefen, dann ein einziger REAPER-Vier-Takte-A/B-Test mit echter KI-Antwort und anschliessendem Vergleich der MIDI-Events; erst danach Merge/Update entscheiden.
+
+
+## 04.11.2026 – SEMNOTE-Parser in Analyse-Speicherung eingebunden
+
+Experimenteller Branch `feat/semantic-notation-analysis-20261104`: `parse_semnotes` wird nun beim Speichern einer KI-Analyse aufgerufen. Eindeutig zugeordnete semantische Hinweise werden als `semantic_notes` im bestehenden Analyse-Datensatz gespeichert; die Anzahl verworfener Zeilen als `semantic_invalid_count`. Es werden keine MIDI- oder Notationsdaten geschrieben. Die vorhandenen `N`-Kontextzeilen verwenden neun Nachkommastellen. **Statisch geprüft:** Parser-Aufruf und Speicherung im Branch vorhanden, Version 1.1.10 unverändert. **Nicht geprüft:** Lua-Interpreter-/REAPER-Laufzeittest und echter KI-Aufruf; keine Freigabe oder Merge. **Offen:** Das Parserformat muss mit realen Modellantworten getestet und die Zuordnungs-/Doppelnotenlogik gegen ein echtes REAPER-Projekt geprüft werden. Naechster Schritt: ein gebuendelter Vier-Takte-End-to-End-Test nach lokalem Lua-Syntaxcheck.
+
+
+## 04.11.2026 – Strukturierte Notenreferenzen fuer KI-Analyse
+
+Im experimentellen Branch wurde `analysis_prompt` erweitert: Notationsanalysen sollen nun `SEMNOTE`-Zeilen mit der exakten Identitaet der vorhandenen `N`-Kontextzeilen (Item-GUID, start_qn, duration_qn, Pitch, Velocity, Kanal), musikalischer Rolle, rhythmischer Deutung, Sicherheitsstufe und Begruendung liefern. Bei mehrdeutiger Zuordnung keine `SEMNOTE`-Zeile. **Status:** Prompt-Vertrag implementiert und statisch auf Vorhandensein geprueft. Es gibt **noch keinen Parser**, keine maschinelle Rueckpruefung gegen den REAPER-Take und keine automatische Anwendung der Zeilen. Ein echter KI-/REAPER-Test steht aus. Keine neue Version, kein Merge, keine produktive Freigabe. Naechster Schritt: einen streng validierenden, nur lesenden Parser in der Lua-Anwendung integrieren; anschliessend einen gemeinsamen Vier-Takte-Test durchfuehren.
+
+
+## 04.11.2026 – Semantische Notationsanalyse (experimenteller Branch)
+
+Branch `feat/semantic-notation-analysis-20261104`, nicht auf `main` veröffentlicht. Nach dokumentierter Vier-Takte-Prüfung wurde `tools/semantic_notation.py` als Sicherheitsbaustein hinzugefügt. Die vorhandene Funktion `analysis_prompt` in `Composition Studio.lua` ergänzt bei Aufträgen mit „Notation“, „notier“, „Partitur“ oder „transkrib“ den bestehenden KI-Analyseprompt um eine explizite taktweise musikalische Interpretation und Unsicherheitskennzeichnung. Keine neue API-Route, keine Änderung von MIDI-Noten, Notationsmetadaten oder UI; Versionsnummer bleibt 1.1.10. **Statische Kontrolle:** Prompt-Text im Branch vorhanden, bestehender `music_context`-Aufruf erhalten, `main` ohne Zusatz. **Nicht geprüft:** Lua-Syntax mit externem Interpreter, vollständiger REAPER-/KI-Livetest, KI-Qualität und tatsächliche Partiturerzeugung. Der Python-Sicherheitsbaustein ist noch nicht an die Lua-Laufzeit gekoppelt; deshalb keine automatische Notationsänderung. Nächster Schritt: Prompt-Antwortformat/Notenidentitäten und sichere Übernahme im bestehenden Lua-Code entwickeln; anschließend ein gemeinsamer Vier-Takte-REAPER-Test.
+
+
 ## 04.11.2026 – Gemini 4 Argon, Testkandidat 1.1.10 (PR #11)
 
 **Ausgangslage:** `main` v1.1.9, Gemini 4 Argon fehlte in `MODELS.google`. Verbindliche Standards, Projektanweisungen, Projektstand und betroffenen Code erneut von GitHub gelesen. Separater Branch `fix/google-argon-featured-20261104` und [PR #11](https://github.com/wibem1/Composition-Studio/pull/11).

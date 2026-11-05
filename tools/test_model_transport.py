@@ -4,7 +4,7 @@ No API keys, provider calls or costs. REAPER calls are replaced, not HTTP parsin
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
-import json,shlex,subprocess,threading
+import json,shlex,subprocess,threading,os
 from urllib.parse import urlsplit,parse_qs
 from lupa.lua54 import LuaRuntime
 s=(Path(__file__).resolve().parents[1]/'Composition Studio.lua').read_text()
@@ -30,7 +30,7 @@ server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
 thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
 try:
  with TemporaryDirectory(prefix="Wilhelm's Studio ä ") as d:
-  folder=Path(d);messages=[];saved={};clock=[0];mode=['normal'];commands=[]
+  folder=Path(d);messages=[];saved={f'key-{pv}':'FIXTURE-KEY' for pv in ('openai','anthropic','google')};clock=[0];mode=['normal'];commands=[]
   r=LuaRuntime(unpack_returned_tuples=True);r.globals().ROOT=d
   def execute(command,timeout):
    argv=shlex.split(command)
@@ -44,7 +44,9 @@ try:
    for original,pv in [('https://api.openai.com/v1/models','openai'),('https://api.anthropic.com/v1/models','anthropic'),('https://generativelanguage.googleapis.com/v1beta/models','google')]:
     script=script.replace(original,f'http://127.0.0.1:{server.server_port}/{pv}')
    path.write_text(script)
-   result=subprocess.run(argv,capture_output=True,timeout=5)
+   # This fixture talks only to its loopback server, including under a session proxy.
+   fixture_env=dict(os.environ,NO_PROXY='127.0.0.1,localhost',no_proxy='127.0.0.1,localhost')
+   result=subprocess.run(argv,capture_output=True,timeout=5,env=fixture_env)
    assert result.returncode==0,result.stderr
    return result.stdout.decode()
   r.globals().reaper=r.table_from({'GetOS':lambda:'OSX64','GetResourcePath':lambda:d,'RecursiveCreateDirectory':lambda p,*_:Path(p).mkdir(exist_ok=True),
@@ -74,7 +76,7 @@ return {models=workflow_adapter.models,lists=MODELS,provider=function(p)provider
    assert api.models.job is None
   for pv,expected in [('openai',1),('anthropic',2),('google',2)]:
    refresh(pv)
-   assert len(api.lists[pv])==expected and 'future' in api.lists[pv][1][2]
+   assert len(api.lists[pv])==expected and 'future' in api.lists[pv][1][2], (pv,api.models.message,requests)
    assert 'FIXTURE-KEY' not in saved['ModelCatalogV1-'+pv]
   assert len(requests)==5
   print('PASS macOS transport: real curl, quoted script path, three provider headers, 5 HTTP pages, filtering and persistent future model IDs')
@@ -85,7 +87,7 @@ return {models=workflow_adapter.models,lists=MODELS,provider=function(p)provider
   mode[0]='hang';api.models.refresh(False);assert api.models.job is not None
   clock[0]=31;api.models.poll();assert api.models.job is None and 'Zeitlimit' in api.models.message
   assert not list(folder.rglob('*.curl-config'))
-  before=len(messages);api.models.refresh(True)
+  before=len(messages);saved.pop('key-openai');api.models.refresh(True)
   assert api.models.job is None and 'API-Key' in api.models.message and len(messages)==before
   saved['key-openai']='FIXTURE-KEY';mode[0]='normal';refresh('openai',True)
   assert 'eingelesen' in api.models.message and len(messages)==before
