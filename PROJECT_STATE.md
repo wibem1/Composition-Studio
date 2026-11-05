@@ -1,5 +1,14 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Verbindliche Zielsetzung: modularer, hostübergreifend nutzbarer Kompositionskern (nur Dokumentation)
+
+**Entscheidung:** Composition Studio wird im bestehenden Repository weiterentwickelt, **kein neues Repository**. Ziel ist die verhaltenserhaltende Modularisierung des bestehenden REAPER-Skripts und anschließend die Ergänzung von Music Model, Music Memory, übergreifender musikalischer Analyse, Arrangement, Workflow, Qualitätsprüfung sowie Song Construction/Musical Form & Development. Dieselbe Architektur soll künftig sinngemäß oder durch kompatible Module in MuseScore und Maestro verwendbar sein. Bestehende `wibem1/Composition-Engine` vor technischer Duplizierung prüfen. Die laufende Notationsentwicklung (PR #12) bleibt vorerst getrennt.
+
+**Verbindliches Konzept:** [docs/MODULAR-ARCHITECTURE-VISION.md](docs/MODULAR-ARCHITECTURE-VISION.md). **Status:** Zielsetzung dokumentiert; keinerlei neue musikalische Module implementiert oder getestet. Keine Versionsnummer, keine Quellcode-/Updater-/MIDI-Änderung und keine Testfreigabe.
+
+**Nächster einzelner Entwicklungsschritt:** Architektur-Audit des tatsächlichen Produktionscodes, Tests, Abhängigkeiten und Composition-Engine-Schnittstellen mit einer konkreten, kleinen ersten Extraktionsaufgabe. Erst danach isolierter Refactoring-Branch und Regressionstests; `main` und die bestehende Notationsarbeit bleiben dabei geschützt.
+
+
 ## 04.11.2026 – Gemini 4 Argon, Testkandidat 1.1.10 (PR #11)
 
 **Ausgangslage:** `main` v1.1.9, Gemini 4 Argon fehlte in `MODELS.google`. Verbindliche Standards, Projektanweisungen, Projektstand und betroffenen Code erneut von GitHub gelesen. Separater Branch `fix/google-argon-featured-20261104` und [PR #11](https://github.com/wibem1/Composition-Studio/pull/11).
