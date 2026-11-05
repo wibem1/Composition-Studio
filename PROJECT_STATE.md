@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Tokenverbrauch geprüft; Konzeptarbeit vor weiterer Umsetzung
+
+**Nutzerentscheidung:** Automatische Steuerung zunächst diskutieren. Die zuvor lokal begonnenen Routing-/UI-Änderungen sind auf `fix/automatic-workload-routing-20261105` pausiert und nicht veröffentlicht. Jetzt ausschließlich Verbrauchsanalyse auf getrenntem Dokumentationsbranch; main-Version 1.3.0 bleibt unverändert. Nachträglich bestätigt: auch der verzögerte fünfte Release-CI-Job aus PR #16 ist erfolgreich beendet.
+
+**Beleg:** Letzte Diagnose 1.3.0: 33932 Eingabetokens, 32768 Ausgabe einschließlich Denken. Geschätzte Kompositionskosten 0,067864 USD Eingabe + 0,327680 USD Ausgabe/Denken (82,84 %); Controller zusätzlich 0,003298 USD. Eingabe enthält 549 Noten, deren lange Quellkennung pro Note wiederholt wird: 20862 von 39144 tatsächlich gesendeten Promptzeichen. Verlustfreie lokale Formatprobe reduziert Promptzeichen rechnerisch um 51,65 % (kurze Quellenreferenzen), mit entfallenden Dezimalnullen um 56,53 %; keine behauptete exakte Tokenersparnis. Zahlen-/Herkunftsgleichheit aller Ereignisse geprüft. Quellformat und Kompositionsprompt unverändert gegenüber 1.1.10.
+
+**Messlücke:** Google-Kandidaten- und Denktokens werden im Code addiert; Export verliert die Aufteilung. Bei MAX_TOKENS wird die unvollständige Antwort gelöscht, bevor Text-/Notenstatistik gesichert wird. Zwei synthetische, mit Produktionsfunktionen geprüfte Verteilungen ergeben denselben Diagnoseexport. Deshalb ist die konkrete Ausgabeverteilung rückwirkend nicht rekonstruierbar. Keine bezahlten API-Aufrufe, keine funktionale Änderung. [Analyse und belegte Grenzen](docs/TOKEN-CONSUMPTION-AUDIT-2026-11-05.md).
+
+**Nächster Schritt zur Diskussion:** Diagnostik getrennt messbar machen und sichtbare Teilantworten erhalten; verlustfreie Eingabedarstellung bewerten. Keine weitere Abschnitts-/Routingimplementierung vor geklärtem Konzept. Erfolgreiche 72-Takte-Läufe ohne damalige Diagnose nicht exakt vergleichbar.
+
 ## 05.11.2026 – 1.3.0-Testfreigabe veröffentlicht
 
 **Veröffentlichung auf ausdrücklichen Auftrag:** [PR #16](https://github.com/wibem1/Composition-Studio/pull/16) regulär ohne Admin-Option gemergt, Merge `f603dcd9eecae34ddeb05d39229d99d9da1d474e`. Header/Laufzeit 1.3.0 auf main. Studio-Blob `fbd6a04afb5fded6a2f847294e40175125e7a40d`, Offline-Installer-Blob `b88cd212032a3f414b1805400b09e0b2e746b59f`, identisch mit geprüftem Kandidaten `ca2d85d009d537b35dd6f8adf1a7e4dd0c77c43f`. Tatsächlichen raw.githubusercontent.com-Update-Download nach Merge bytegenau abgeglichen.
