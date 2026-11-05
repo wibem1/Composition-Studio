@@ -202,5 +202,8 @@ arg.execute(rates + '\nCHECK_RATE=rates["google/gemini-4-argon"]')
 r = arg.globals().CHECK_RATE
 assert (r[1],r[2],r[3],r.expires)==(2,10,0.1,'2026-11-30')
 assert 'id=="gemini-4-argon" then return {4,20,0.2,0,0}' in source
-assert 'local VERSION="1.1.10"' in source and '-- @version 1.1.10' in source
+header_version = re.search(r'^-- @version (\d+\.\d+\.\d+)$', source, re.M).group(1)
+runtime_version = re.search(r'^local VERSION="([^"]+)"$', source, re.M).group(1)
+assert header_version == runtime_version
+assert tuple(map(int, header_version.split('.'))) >= (1, 1, 10), 'Argon registry requires 1.1.10 or later'
 print('PASS real Google Argon model registry, model ID, reasoning levels and API cost estimates')

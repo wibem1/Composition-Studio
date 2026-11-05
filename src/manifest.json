@@ -1,0 +1,1956 @@
+{
+  "schema": 1,
+  "runtime": "Composition Studio.lua",
+  "units": [
+    {
+      "id": "core/header",
+      "path": "src/core/header.lua",
+      "kind": "bootstrap",
+      "exports": [],
+      "parameters": [],
+      "provides": [],
+      "requires": [],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "shared/workflow",
+      "path": "src/shared/workflow.lua",
+      "kind": "portable",
+      "exports": [
+        "workflow_core"
+      ],
+      "parameters": [],
+      "provides": [
+        "create_workflow_core",
+        "workflow_core"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "assert",
+        "error",
+        "ipairs",
+        "tostring",
+        "type"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "core/session",
+      "path": "src/core/session.lua",
+      "kind": "bootstrap",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "COMPOSITION_ENGINE_BUILD",
+        "COMPOSITION_ENGINE_NAME",
+        "COMPOSITION_ENGINE_VERSION",
+        "EXT_SECTION",
+        "FONT_SIZE_KEY",
+        "HISTORY_KEY",
+        "KEY_NAMES",
+        "MODELS",
+        "MODEL_KEY",
+        "PROVIDER_KEY",
+        "SCRIPT_NAME",
+        "SCRIPT_PATH",
+        "TITLE_KEY",
+        "UPDATE_URL",
+        "VERSION",
+        "WINDOW_STATE_KEY",
+        "busy",
+        "chat_start",
+        "ctx",
+        "current_project",
+        "ensure_native_startup_hook",
+        "font",
+        "font_size",
+        "history",
+        "history_mode",
+        "info_visible",
+        "input",
+        "last_diag",
+        "last_made",
+        "model",
+        "open",
+        "pop_font",
+        "provider",
+        "push_font",
+        "restarting",
+        "set_font_size",
+        "swam_last_made",
+        "update_status",
+        "work_title"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "debug",
+        "io",
+        "math",
+        "pcall",
+        "reaper",
+        "tonumber",
+        "tostring",
+        "type"
+      ],
+      "host_apis": [
+        "EnumProjects",
+        "GetExtState",
+        "GetProjExtState",
+        "GetResourcePath",
+        "ImGui_Attach",
+        "ImGui_ConfigFlags_DockingEnable",
+        "ImGui_ConfigVar_DockingNoSplit",
+        "ImGui_CreateContext",
+        "ImGui_CreateFont",
+        "ImGui_PopFont",
+        "ImGui_PushFont",
+        "ImGui_SetConfigVar",
+        "SetExtState",
+        "ShowMessageBox"
+      ]
+    },
+    {
+      "id": "core/text",
+      "path": "src/core/text.lua",
+      "kind": "portable",
+      "exports": [
+        "trim",
+        "safe_work_title",
+        "title_from_draft"
+      ],
+      "parameters": [],
+      "provides": [
+        "safe_work_title",
+        "title_from_draft",
+        "trim"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "tostring"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "platform/process",
+      "path": "src/platform/process.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "IS_WINDOWS",
+        "TEMP_DIR",
+        "ps_launch",
+        "ps_quote",
+        "shell_quote",
+        "temp_path",
+        "temp_seq",
+        "unix_launch_script",
+        "windows_curl_script"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "io",
+        "ipairs",
+        "os",
+        "pcall",
+        "reaper",
+        "table",
+        "tostring"
+      ],
+      "host_apis": [
+        "ExecProcess",
+        "GetOS",
+        "GetResourcePath",
+        "RecursiveCreateDirectory"
+      ]
+    },
+    {
+      "id": "platform/files",
+      "path": "src/platform/files.lua",
+      "kind": "platform",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "json_escape",
+        "read_file",
+        "write_file"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "io",
+        "tostring"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "core/version",
+      "path": "src/core/version.lua",
+      "kind": "version",
+      "exports": [],
+      "parameters": [],
+      "trailing": "\n\n",
+      "provides": [
+        "version_is_newer",
+        "version_parts"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "tonumber",
+        "tostring"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "distribution/update",
+      "path": "src/distribution/update.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "complete_update",
+        "fetch_update",
+        "install_update",
+        "poll_update",
+        "update_job"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "IS_WINDOWS",
+        "SCRIPT_NAME",
+        "SCRIPT_PATH",
+        "UPDATE_URL",
+        "VERSION",
+        "WINDOW_STATE_KEY",
+        "busy",
+        "open",
+        "ps_launch",
+        "read_file",
+        "restarting",
+        "shell_quote",
+        "temp_path",
+        "trim",
+        "unix_launch_script",
+        "update_status",
+        "version_is_newer",
+        "windows_curl_script",
+        "write_file"
+      ],
+      "writes": [
+        "busy",
+        "open",
+        "restarting",
+        "update_status"
+      ],
+      "globals": [
+        "dofile",
+        "ipairs",
+        "load",
+        "os",
+        "pcall",
+        "reaper",
+        "tostring"
+      ],
+      "host_apis": [
+        "SetExtState",
+        "ShowMessageBox",
+        "defer",
+        "time_precise"
+      ]
+    },
+    {
+      "id": "ai/response",
+      "path": "src/ai/response.lua",
+      "kind": "portable",
+      "exports": [
+        "utf8",
+        "read_json_string",
+        "response_text"
+      ],
+      "parameters": [],
+      "provides": [
+        "read_json_string",
+        "response_text",
+        "utf8"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "math",
+        "string",
+        "table",
+        "tonumber"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "ai/credentials",
+      "path": "src/ai/credentials.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "edit_key",
+        "get_key",
+        "model_label",
+        "provider_name",
+        "select_model"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "KEY_NAMES",
+        "MODELS",
+        "MODEL_KEY",
+        "PROVIDER_KEY",
+        "model",
+        "provider",
+        "trim"
+      ],
+      "writes": [
+        "model",
+        "provider"
+      ],
+      "globals": [
+        "ipairs",
+        "reaper"
+      ],
+      "host_apis": [
+        "GetExtState",
+        "GetUserInputs",
+        "SetExtState"
+      ]
+    },
+    {
+      "id": "diagnostics/state",
+      "path": "src/diagnostics/state.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "DIAG_CACHE_PATH",
+        "DIAG_STATE_KEY",
+        "diag_json",
+        "diag_set",
+        "persist_diag",
+        "restore_diag"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "json_escape",
+        "last_diag",
+        "read_file",
+        "write_file"
+      ],
+      "writes": [
+        "last_diag"
+      ],
+      "globals": [
+        "ipairs",
+        "os",
+        "pcall",
+        "reaper",
+        "table"
+      ],
+      "host_apis": [
+        "GetExtState",
+        "GetResourcePath",
+        "SetExtState"
+      ]
+    },
+    {
+      "id": "host/reaper/save_export",
+      "path": "src/host/reaper/save_export.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "be16",
+        "be32",
+        "begin_save_panel",
+        "ensure_title_then",
+        "export_last_midi",
+        "finish_save_panel",
+        "midi_track_chunk",
+        "recover_last_made",
+        "save_diagnosis",
+        "save_panel",
+        "vlq",
+        "write_last_midi_to"
+      ],
+      "requires": [
+        "DIAG_CACHE_PATH",
+        "EXT_SECTION",
+        "IS_WINDOWS",
+        "diag_json",
+        "last_made",
+        "persist_diag",
+        "ps_launch",
+        "ps_quote",
+        "read_file",
+        "safe_work_title",
+        "shell_quote",
+        "swam_last_made",
+        "temp_path",
+        "trim",
+        "update_status",
+        "work_title",
+        "write_file"
+      ],
+      "writes": [
+        "update_status"
+      ],
+      "globals": [
+        "ipairs",
+        "math",
+        "os",
+        "reaper",
+        "string",
+        "table",
+        "tostring"
+      ],
+      "host_apis": [
+        "CountMediaItems",
+        "CountTempoTimeSigMarkers",
+        "GetActiveTake",
+        "GetMediaItem",
+        "GetProjExtState",
+        "GetSetMediaItemInfo_String",
+        "GetSetMediaItemTakeInfo_String",
+        "GetTempoTimeSigMarker",
+        "MIDI_CountEvts",
+        "MIDI_GetCC",
+        "MIDI_GetNote",
+        "MIDI_GetProjTimeFromPPQPos",
+        "Master_GetTempo",
+        "TakeIsMIDI",
+        "TimeMap2_timeToQN",
+        "ValidatePtr2"
+      ]
+    },
+    {
+      "id": "music/swam",
+      "path": "src/music/swam.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "begin_swam_interpretation",
+        "export_swam_midi",
+        "launch",
+        "swam_interpretation_prompt",
+        "swam_source_context",
+        "swam_translation_prompt"
+      ],
+      "requires": [
+        "begin_save_panel",
+        "busy",
+        "get_key",
+        "last_diag",
+        "last_made",
+        "recover_last_made",
+        "swam_last_made",
+        "update_status",
+        "work_title"
+      ],
+      "writes": [
+        "busy",
+        "swam_last_made",
+        "update_status"
+      ],
+      "globals": [
+        "ipairs",
+        "reaper",
+        "string",
+        "table",
+        "tostring"
+      ],
+      "host_apis": [
+        "GetActiveTake",
+        "GetSetMediaItemTakeInfo_String",
+        "MIDI_CountEvts",
+        "MIDI_GetNote",
+        "MIDI_GetProjTimeFromPPQPos",
+        "TakeIsMIDI",
+        "TimeMap2_timeToQN",
+        "ValidatePtr2"
+      ]
+    },
+    {
+      "id": "workflow/chat",
+      "path": "src/workflow/chat.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "add",
+        "clear_saved_history",
+        "dec",
+        "enc",
+        "first_text_field",
+        "load_history",
+        "save_history"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "HISTORY_KEY",
+        "chat_start",
+        "current_project",
+        "history",
+        "history_mode",
+        "info_visible",
+        "read_json_string"
+      ],
+      "writes": [
+        "chat_start",
+        "history",
+        "history_mode",
+        "info_visible"
+      ],
+      "globals": [
+        "ipairs",
+        "reaper",
+        "string",
+        "table",
+        "tonumber",
+        "tostring"
+      ],
+      "host_apis": [
+        "GetProjExtState",
+        "SetProjExtState"
+      ]
+    },
+    {
+      "id": "host/reaper/context",
+      "path": "src/host/reaper/context.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "compact_context",
+        "editor_reference_excerpt",
+        "focused_or_last_notation_editor",
+        "item_guid",
+        "last_notation_editor",
+        "music_context",
+        "notation_selection_items",
+        "notation_visible_items",
+        "recent_dialog",
+        "score_context_tracks",
+        "score_request_intent",
+        "selected_items",
+        "selected_tracks",
+        "time_selection_context",
+        "track_context_items",
+        "track_guid"
+      ],
+      "requires": [
+        "history"
+      ],
+      "writes": [],
+      "globals": [
+        "ipairs",
+        "math",
+        "pcall",
+        "reaper",
+        "string",
+        "table",
+        "tostring"
+      ],
+      "host_apis": [
+        "CountSelectedMediaItems",
+        "CountSelectedTracks",
+        "CountTrackMediaItems",
+        "GetActiveTake",
+        "GetMediaItemInfo_Value",
+        "GetMediaItemTake_Item",
+        "GetMediaItem_Track",
+        "GetMediaTrackInfo_Value",
+        "GetSelectedMediaItem",
+        "GetSelectedTrack",
+        "GetSetMediaItemInfo_String",
+        "GetSetMediaItemTakeInfo_String",
+        "GetSet_LoopTimeRange",
+        "GetTrackGUID",
+        "GetTrackMediaItem",
+        "GetTrackName",
+        "MIDIEditor_EnumTakes",
+        "MIDIEditor_GetActive",
+        "MIDIEditor_GetTake",
+        "MIDI_CountEvts",
+        "MIDI_EnumSelNotes",
+        "MIDI_GetNote",
+        "MIDI_GetProjTimeFromPPQPos",
+        "Master_GetTempo",
+        "TakeIsMIDI",
+        "TimeMap2_timeToBeats",
+        "TimeMap2_timeToQN",
+        "ValidatePtr2"
+      ]
+    },
+    {
+      "id": "host/reaper/instruments",
+      "path": "src/host/reaper/instruments.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "find_halions",
+        "first_program_changes_on_track",
+        "halion_program_param",
+        "initialize_halion_project",
+        "initialize_halion_track",
+        "source_tracks_for_halion"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "ipairs",
+        "pairs",
+        "reaper"
+      ],
+      "host_apis": [
+        "CountTrackMediaItems",
+        "CountTracks",
+        "GetActiveTake",
+        "GetTrack",
+        "GetTrackMediaItem",
+        "GetTrackNumSends",
+        "GetTrackSendInfo_Value",
+        "MIDI_CountEvts",
+        "MIDI_GetCC",
+        "MIDI_GetProjTimeFromPPQPos",
+        "TakeIsMIDI",
+        "TrackFX_GetCount",
+        "TrackFX_GetFXName",
+        "TrackFX_GetNumParams",
+        "TrackFX_GetParamName",
+        "TrackFX_SetParamNormalized"
+      ]
+    },
+    {
+      "id": "workflow/controller",
+      "path": "src/workflow/controller.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "CONTROLLER",
+        "execute_action",
+        "parse_action"
+      ],
+      "requires": [
+        "diag_set",
+        "initialize_halion_project",
+        "selected_tracks",
+        "trim"
+      ],
+      "writes": [],
+      "globals": [
+        "debug",
+        "error",
+        "ipairs",
+        "math",
+        "reaper",
+        "string",
+        "tonumber",
+        "xpcall"
+      ],
+      "host_apis": [
+        "AddMediaItemToTrack",
+        "GetItemStateChunk",
+        "GetMediaItemInfo_Value",
+        "GetSetMediaTrackInfo_String",
+        "MIDI_CountEvts",
+        "MIDI_GetNote",
+        "MIDI_SetNote",
+        "MIDI_Sort",
+        "SetItemStateChunk",
+        "SetMediaItemInfo_Value",
+        "SetMediaItemSelected",
+        "TimeMap2_QNToTime",
+        "TimeMap2_timeToQN",
+        "Undo_BeginBlock2",
+        "Undo_DoUndo2",
+        "Undo_EndBlock2",
+        "UpdateArrange"
+      ]
+    },
+    {
+      "id": "music/cs_notes",
+      "path": "src/music/cs_notes.lua",
+      "kind": "portable",
+      "exports": [
+        "parse_notes"
+      ],
+      "parameters": [],
+      "provides": [
+        "parse_notes"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "tonumber"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "host/reaper/tracks",
+      "path": "src/host/reaper/tracks.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "create_track",
+        "existing_program"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "reaper"
+      ],
+      "host_apis": [
+        "CountTrackMediaItems",
+        "CountTracks",
+        "GetActiveTake",
+        "GetSetMediaTrackInfo_String",
+        "GetTrack",
+        "GetTrackMediaItem",
+        "InsertTrackAtIndex",
+        "MIDI_CountEvts",
+        "MIDI_GetCC",
+        "TakeIsMIDI",
+        "ValidatePtr2"
+      ]
+    },
+    {
+      "id": "music/programs",
+      "path": "src/music/programs.lua",
+      "kind": "portable",
+      "exports": [
+        "program_for_name"
+      ],
+      "parameters": [],
+      "provides": [
+        "program_for_name"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "ipairs",
+        "math",
+        "tonumber"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "music/cs_plan",
+      "path": "src/music/cs_plan.lua",
+      "kind": "factory",
+      "exports": [
+        "plan_composition"
+      ],
+      "parameters": [
+        "trim",
+        "parse_notes",
+        "program_for_name"
+      ],
+      "provides": [
+        "plan_composition"
+      ],
+      "requires": [
+        "parse_notes",
+        "program_for_name",
+        "trim"
+      ],
+      "writes": [],
+      "globals": [
+        "ipairs",
+        "math",
+        "table",
+        "tonumber"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "host/reaper/commit",
+      "path": "src/host/reaper/commit.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "apply_composition",
+        "create_midi"
+      ],
+      "requires": [
+        "begin_save_panel",
+        "create_track",
+        "ensure_title_then",
+        "existing_program",
+        "export_last_midi",
+        "last_made",
+        "plan_composition",
+        "recover_last_made",
+        "safe_work_title",
+        "update_status",
+        "work_title"
+      ],
+      "writes": [
+        "export_last_midi",
+        "update_status"
+      ],
+      "globals": [
+        "debug",
+        "error",
+        "ipairs",
+        "math",
+        "reaper",
+        "table",
+        "xpcall"
+      ],
+      "host_apis": [
+        "CountTempoTimeSigMarkers",
+        "CreateNewMIDIItemInProj",
+        "DeleteTempoTimeSigMarker",
+        "GetActiveTake",
+        "GetMediaTrackInfo_Value",
+        "GetSetMediaItemTakeInfo_String",
+        "MIDI_GetPPQPosFromProjTime",
+        "MIDI_InsertCC",
+        "MIDI_InsertNote",
+        "MIDI_Sort",
+        "Master_GetTempo",
+        "SetTempoTimeSigMarker",
+        "TimeMap2_QNToTime",
+        "Undo_BeginBlock2",
+        "Undo_DoUndo2",
+        "Undo_EndBlock2",
+        "UpdateArrange",
+        "ValidatePtr2"
+      ]
+    },
+    {
+      "id": "music/prompts",
+      "path": "src/music/prompts.lua",
+      "kind": "factory",
+      "exports": [
+        "analysis_prompt",
+        "composition_prompt",
+        "midi_translation_prompt",
+        "numbered_measure_count",
+        "chunk_prompt",
+        "check_translation_chunk"
+      ],
+      "parameters": [
+        "music_context",
+        "parse_notes",
+        "trim"
+      ],
+      "provides": [
+        "analysis_prompt",
+        "check_translation_chunk",
+        "chunk_prompt",
+        "composition_prompt",
+        "midi_translation_prompt",
+        "numbered_measure_count"
+      ],
+      "requires": [
+        "music_context",
+        "parse_notes",
+        "trim"
+      ],
+      "writes": [],
+      "globals": [
+        "ipairs",
+        "math",
+        "table",
+        "tonumber",
+        "tostring"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "workflow/translation_chunk",
+      "path": "src/workflow/translation_chunk.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "start_translation_chunk"
+      ],
+      "requires": [
+        "chunk_prompt",
+        "diag_set",
+        "launch",
+        "update_status"
+      ],
+      "writes": [
+        "update_status"
+      ],
+      "globals": [
+        "math"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "ai/costs",
+      "path": "src/ai/costs.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "costs"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "SCRIPT_NAME",
+        "busy",
+        "diag_set",
+        "model",
+        "provider",
+        "read_json_string",
+        "trim",
+        "update_status"
+      ],
+      "writes": [
+        "update_status"
+      ],
+      "globals": [
+        "ipairs",
+        "math",
+        "os",
+        "pairs",
+        "reaper",
+        "select",
+        "string",
+        "table",
+        "tonumber",
+        "tostring",
+        "type"
+      ],
+      "host_apis": [
+        "GetExtState",
+        "GetUserInputs",
+        "SetExtState",
+        "ShowMessageBox"
+      ]
+    },
+    {
+      "id": "ai/request_state",
+      "path": "src/ai/request_state.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "REASONING_KEY",
+        "REASONING_LABELS",
+        "job",
+        "reasoning_mode",
+        "set_reasoning_mode",
+        "workflow_adapter_guard"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "busy"
+      ],
+      "writes": [],
+      "globals": [
+        "reaper"
+      ],
+      "host_apis": [
+        "GetExtState",
+        "SetExtState"
+      ]
+    },
+    {
+      "id": "ai/reasoning",
+      "path": "src/ai/reasoning.lua",
+      "kind": "factory",
+      "exports": [
+        "reasoning_parameters"
+      ],
+      "parameters": [
+        "REASONING_LABELS"
+      ],
+      "provides": [
+        "reasoning_parameters"
+      ],
+      "requires": [
+        "REASONING_LABELS"
+      ],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "ai/requests",
+      "path": "src/ai/requests.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "ai_command",
+        "ai_poll",
+        "log_communication"
+      ],
+      "requires": [
+        "IS_WINDOWS",
+        "add",
+        "busy",
+        "costs",
+        "diag_set",
+        "first_text_field",
+        "job",
+        "json_escape",
+        "last_diag",
+        "launch",
+        "model",
+        "provider",
+        "ps_launch",
+        "read_file",
+        "reasoning_mode",
+        "reasoning_parameters",
+        "response_text",
+        "shell_quote",
+        "temp_path",
+        "trim",
+        "windows_curl_script",
+        "workflow_adapter_guard",
+        "workflow_core",
+        "write_file"
+      ],
+      "writes": [
+        "busy",
+        "job",
+        "launch"
+      ],
+      "globals": [
+        "ipairs",
+        "os",
+        "reaper",
+        "tostring"
+      ],
+      "host_apis": [
+        "EnumProjects",
+        "time_precise"
+      ]
+    },
+    {
+      "id": "host/reaper/lilypond_config",
+      "path": "src/host/reaper/lilypond_config.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "LILYPOND_PATH_KEY",
+        "lily_exe",
+        "midi_score",
+        "set_lily_exe"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "trim",
+        "update_status"
+      ],
+      "writes": [
+        "update_status"
+      ],
+      "globals": [
+        "os",
+        "reaper",
+        "string"
+      ],
+      "host_apis": [
+        "GetExtState",
+        "GetUserInputs",
+        "SetExtState",
+        "file_exists"
+      ]
+    },
+    {
+      "id": "music/continuation_request",
+      "path": "src/music/continuation_request.lua",
+      "kind": "portable",
+      "exports": [
+        "request_words",
+        "continuation_bars",
+        "request_transition"
+      ],
+      "parameters": [],
+      "provides": [
+        "continuation_bars",
+        "request_transition",
+        "request_words"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "pairs",
+        "tonumber",
+        "tostring"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "host/reaper/continuation_context",
+      "path": "src/host/reaper/continuation_context.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "compact_music_excerpt"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "ipairs",
+        "math",
+        "reaper",
+        "string",
+        "table",
+        "tostring"
+      ],
+      "host_apis": [
+        "Master_GetTempo"
+      ]
+    },
+    {
+      "id": "music/continuation_prompt",
+      "path": "src/music/continuation_prompt.lua",
+      "kind": "factory",
+      "exports": [
+        "continuation_prompt"
+      ],
+      "parameters": [
+        "compact_music_excerpt"
+      ],
+      "provides": [
+        "continuation_prompt"
+      ],
+      "requires": [
+        "compact_music_excerpt"
+      ],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "host/reaper/lilypond_commit",
+      "path": "src/host/reaper/lilypond_commit.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "lily_compile_import"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "IS_WINDOWS",
+        "diag_set",
+        "item_guid",
+        "last_made",
+        "lily_exe",
+        "midi_score",
+        "shell_quote",
+        "temp_path",
+        "trim",
+        "write_file"
+      ],
+      "writes": [
+        "last_made"
+      ],
+      "globals": [
+        "assert",
+        "ipairs",
+        "math",
+        "pcall",
+        "reaper",
+        "string",
+        "table",
+        "tonumber",
+        "tostring",
+        "type"
+      ],
+      "host_apis": [
+        "AddMediaItemToTrack",
+        "CountTrackMediaItems",
+        "CountTracks",
+        "ExecProcess",
+        "GetActiveTake",
+        "GetCursorPosition",
+        "GetItemStateChunk",
+        "GetMediaItemInfo_Value",
+        "GetMediaTrackInfo_Value",
+        "GetTrack",
+        "GetTrackMediaItem",
+        "InsertMedia",
+        "SetEditCurPos",
+        "SetItemStateChunk",
+        "SetMediaItemInfo_Value",
+        "SetProjExtState",
+        "TakeIsMIDI",
+        "TimeMap2_QNToTime",
+        "TimeMap2_timeToQN",
+        "TimeMap_GetTimeSigAtTime",
+        "Undo_BeginBlock2",
+        "Undo_DoUndo2",
+        "Undo_EndBlock2",
+        "UpdateArrange",
+        "file_exists",
+        "genGuid"
+      ]
+    },
+    {
+      "id": "music/json_direct_prompt",
+      "path": "src/music/json_direct_prompt.lua",
+      "kind": "portable",
+      "exports": [
+        "engine_json_prompt"
+      ],
+      "parameters": [],
+      "provides": [
+        "JSON_ENGINE_VERSION",
+        "engine_json_prompt"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "workflow/composition_mode",
+      "path": "src/workflow/composition_mode.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "COMPOSITION_MODE_KEY",
+        "composition_mode"
+      ],
+      "requires": [
+        "EXT_SECTION"
+      ],
+      "writes": [],
+      "globals": [
+        "reaper"
+      ],
+      "host_apis": [
+        "GetExtState"
+      ]
+    },
+    {
+      "id": "music/json_framework_prompts",
+      "path": "src/music/json_framework_prompts.lua",
+      "kind": "portable",
+      "exports": [
+        "concept_prompt",
+        "composed_json_prompt"
+      ],
+      "parameters": [],
+      "provides": [
+        "composed_json_prompt",
+        "concept_prompt"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "workflow/json_launch",
+      "path": "src/workflow/json_launch.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "launch_new_json"
+      ],
+      "requires": [
+        "composition_mode",
+        "concept_prompt",
+        "diag_set",
+        "engine_json_prompt",
+        "launch",
+        "update_status"
+      ],
+      "writes": [
+        "update_status"
+      ],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "music/json_codec",
+      "path": "src/music/json_codec.lua",
+      "kind": "portable",
+      "exports": [
+        "decode_engine_json"
+      ],
+      "parameters": [],
+      "provides": [
+        "decode_engine_json"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [
+        "_G",
+        "error",
+        "string",
+        "table",
+        "tonumber",
+        "tostring"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "music/json_score",
+      "path": "src/music/json_score.lua",
+      "kind": "factory",
+      "exports": [
+        "engine_translate_json"
+      ],
+      "parameters": [
+        "decode_engine_json"
+      ],
+      "provides": [
+        "engine_translate_json"
+      ],
+      "requires": [
+        "decode_engine_json"
+      ],
+      "writes": [],
+      "globals": [
+        "ipairs",
+        "math",
+        "pcall",
+        "string",
+        "table",
+        "tonumber",
+        "tostring",
+        "type"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "music/lilypond_prompt",
+      "path": "src/music/lilypond_prompt.lua",
+      "kind": "portable",
+      "exports": [
+        "lily_composition_prompt"
+      ],
+      "parameters": [],
+      "provides": [
+        "lily_composition_prompt"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "workflow/proposals",
+      "path": "src/workflow/proposals.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "workflow_adapter"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "TITLE_KEY",
+        "add",
+        "busy",
+        "decode_engine_json",
+        "diag_set",
+        "item_guid",
+        "model",
+        "provider",
+        "read_file",
+        "safe_work_title",
+        "track_guid",
+        "update_status",
+        "work_title",
+        "workflow_core",
+        "write_file"
+      ],
+      "writes": [
+        "busy",
+        "update_status",
+        "work_title"
+      ],
+      "globals": [
+        "assert",
+        "error",
+        "ipairs",
+        "math",
+        "os",
+        "pairs",
+        "pcall",
+        "reaper",
+        "string",
+        "table",
+        "tostring",
+        "type"
+      ],
+      "host_apis": [
+        "CountMediaItems",
+        "CountTempoTimeSigMarkers",
+        "CountTrackMediaItems",
+        "CountTracks",
+        "GetActiveTake",
+        "GetItemStateChunk",
+        "GetMediaItem",
+        "GetMediaItem_Track",
+        "GetProjExtState",
+        "GetResourcePath",
+        "GetTempoTimeSigMarker",
+        "GetTrack",
+        "GetTrackMediaItem",
+        "GetTrackName",
+        "MIDI_CountEvts",
+        "MIDI_GetCC",
+        "MIDI_GetProjTimeFromPPQPos",
+        "Master_GetTempo",
+        "RecursiveCreateDirectory",
+        "SetProjExtState",
+        "TimeMap2_QNToTime",
+        "TimeMap2_timeToQN",
+        "TimeMap_GetTimeSigAtTime",
+        "TimeMap_QNToMeasures",
+        "genGuid"
+      ]
+    },
+    {
+      "id": "host/reaper/note_commit",
+      "path": "src/host/reaper/note_commit.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "apply_notation_patch",
+        "apply_notation_transpose"
+      ],
+      "requires": [
+        "workflow_adapter"
+      ],
+      "writes": [],
+      "globals": [
+        "assert",
+        "debug",
+        "ipairs",
+        "math",
+        "pairs",
+        "reaper",
+        "tonumber",
+        "type",
+        "xpcall"
+      ],
+      "host_apis": [
+        "MIDI_CountEvts",
+        "MIDI_GetNote",
+        "MIDI_SetNote",
+        "MIDI_Sort",
+        "TakeIsMIDI",
+        "Undo_BeginBlock2",
+        "Undo_DoUndo2",
+        "Undo_EndBlock2",
+        "UpdateArrange"
+      ]
+    },
+    {
+      "id": "workflow/apply_review",
+      "path": "src/workflow/apply_review.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "provides": [],
+      "requires": [
+        "EXT_SECTION",
+        "add",
+        "apply_composition",
+        "apply_notation_patch",
+        "apply_notation_transpose",
+        "busy",
+        "composition_prompt",
+        "diag_set",
+        "engine_translate_json",
+        "get_key",
+        "initialize_halion_project",
+        "input",
+        "item_guid",
+        "last_made",
+        "launch",
+        "lily_compile_import",
+        "swam_last_made",
+        "track_context_items",
+        "track_guid",
+        "trim",
+        "update_status",
+        "workflow_adapter",
+        "workflow_adapter_guard",
+        "workflow_core"
+      ],
+      "writes": [
+        "busy",
+        "last_made",
+        "swam_last_made",
+        "update_status",
+        "workflow_adapter",
+        "workflow_adapter_guard"
+      ],
+      "globals": [
+        "assert",
+        "ipairs",
+        "math",
+        "pcall",
+        "reaper",
+        "table",
+        "tostring"
+      ],
+      "host_apis": [
+        "GetTrackName",
+        "MIDI_GetProjTimeFromPPQPos",
+        "SetProjExtState",
+        "TimeMap2_timeToQN"
+      ]
+    },
+    {
+      "id": "ai/catalog",
+      "path": "src/ai/catalog.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [],
+      "requires": [
+        "EXT_SECTION",
+        "IS_WINDOWS",
+        "KEY_NAMES",
+        "MODELS",
+        "SCRIPT_NAME",
+        "busy",
+        "decode_engine_json",
+        "enc",
+        "provider",
+        "ps_launch",
+        "read_file",
+        "shell_quote",
+        "temp_path",
+        "trim",
+        "unix_launch_script",
+        "update_status",
+        "windows_curl_script",
+        "workflow_adapter"
+      ],
+      "writes": [
+        "MODELS",
+        "update_status",
+        "workflow_adapter"
+      ],
+      "globals": [
+        "assert",
+        "io",
+        "ipairs",
+        "os",
+        "pcall",
+        "reaper",
+        "table",
+        "tostring",
+        "type"
+      ],
+      "host_apis": [
+        "GetExtState",
+        "SetExtState",
+        "ShowMessageBox",
+        "time_precise"
+      ]
+    },
+    {
+      "id": "workflow/continuation",
+      "path": "src/workflow/continuation.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "begin_continuation"
+      ],
+      "requires": [
+        "COMPOSITION_ENGINE_BUILD",
+        "COMPOSITION_ENGINE_NAME",
+        "COMPOSITION_ENGINE_VERSION",
+        "VERSION",
+        "add",
+        "busy",
+        "compact_context",
+        "continuation_prompt",
+        "diag_set",
+        "get_key",
+        "last_diag",
+        "launch",
+        "model",
+        "notation_visible_items",
+        "provider",
+        "provider_name",
+        "score_context_tracks",
+        "score_request_intent",
+        "selected_items",
+        "selected_tracks",
+        "track_context_items",
+        "workflow_adapter",
+        "workflow_core"
+      ],
+      "writes": [
+        "busy",
+        "last_diag"
+      ],
+      "globals": [
+        "ipairs",
+        "math",
+        "pcall",
+        "tostring",
+        "type"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "editing/selected_notes_prompt",
+      "path": "src/editing/selected_notes_prompt.lua",
+      "kind": "factory",
+      "exports": [
+        "notation_patch_prompt"
+      ],
+      "parameters": [
+        "editor_reference_excerpt"
+      ],
+      "provides": [
+        "notation_patch_prompt"
+      ],
+      "requires": [
+        "editor_reference_excerpt"
+      ],
+      "writes": [],
+      "globals": [
+        "ipairs",
+        "string",
+        "table",
+        "tostring"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "host/reaper/workspace",
+      "path": "src/host/reaper/workspace.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "open_score_workspace"
+      ],
+      "requires": [
+        "focused_or_last_notation_editor"
+      ],
+      "writes": [],
+      "globals": [
+        "reaper",
+        "tostring"
+      ],
+      "host_apis": [
+        "CountSelectedMediaItems",
+        "GetActiveTake",
+        "GetSelectedMediaItem",
+        "MIDIEditor_OnCommand",
+        "Main_OnCommand",
+        "SectionFromUniqueID",
+        "TakeIsMIDI",
+        "kbd_enumerateActions"
+      ]
+    },
+    {
+      "id": "workflow/router",
+      "path": "src/workflow/router.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "begin_process"
+      ],
+      "requires": [
+        "COMPOSITION_ENGINE_BUILD",
+        "COMPOSITION_ENGINE_NAME",
+        "COMPOSITION_ENGINE_VERSION",
+        "CONTROLLER",
+        "DIAG_CACHE_PATH",
+        "JSON_ENGINE_VERSION",
+        "VERSION",
+        "add",
+        "analysis_prompt",
+        "begin_continuation",
+        "busy",
+        "compact_context",
+        "continuation_bars",
+        "diag_json",
+        "diag_set",
+        "editor_reference_excerpt",
+        "get_key",
+        "last_diag",
+        "launch",
+        "launch_new_json",
+        "model",
+        "music_context",
+        "notation_patch_prompt",
+        "notation_selection_items",
+        "notation_visible_items",
+        "open_score_workspace",
+        "persist_diag",
+        "provider",
+        "provider_name",
+        "recent_dialog",
+        "request_transition",
+        "request_words",
+        "score_context_tracks",
+        "score_request_intent",
+        "selected_items",
+        "selected_tracks",
+        "workflow_adapter",
+        "write_file"
+      ],
+      "writes": [
+        "busy",
+        "last_diag"
+      ],
+      "globals": [
+        "ipairs",
+        "math",
+        "pcall",
+        "reaper",
+        "select",
+        "tonumber",
+        "tostring"
+      ],
+      "host_apis": [
+        "CountSelectedMediaItems",
+        "GetMediaTrackInfo_Value"
+      ]
+    },
+    {
+      "id": "workflow/jobs",
+      "path": "src/workflow/jobs.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "poll_job",
+        "submit",
+        "summary_prompt",
+        "title_prompt"
+      ],
+      "requires": [
+        "EXT_SECTION",
+        "TITLE_KEY",
+        "add",
+        "ai_poll",
+        "analysis_prompt",
+        "begin_continuation",
+        "begin_process",
+        "begin_swam_interpretation",
+        "busy",
+        "check_translation_chunk",
+        "composed_json_prompt",
+        "composition_prompt",
+        "continuation_bars",
+        "costs",
+        "diag_set",
+        "ensure_title_then",
+        "execute_action",
+        "export_last_midi",
+        "get_key",
+        "history_mode",
+        "info_visible",
+        "input",
+        "job",
+        "last_diag",
+        "launch",
+        "launch_new_json",
+        "log_communication",
+        "midi_translation_prompt",
+        "numbered_measure_count",
+        "parse_action",
+        "request_transition",
+        "safe_work_title",
+        "save_diagnosis",
+        "selected_items",
+        "start_translation_chunk",
+        "swam_translation_prompt",
+        "title_from_draft",
+        "track_context_items",
+        "trim",
+        "update_status",
+        "work_title",
+        "workflow_adapter",
+        "workflow_core"
+      ],
+      "writes": [
+        "busy",
+        "ensure_title_then",
+        "history_mode",
+        "info_visible",
+        "input",
+        "job",
+        "last_diag",
+        "update_status",
+        "work_title"
+      ],
+      "globals": [
+        "ipairs",
+        "math",
+        "pcall",
+        "reaper",
+        "string",
+        "table",
+        "tonumber",
+        "tostring"
+      ],
+      "host_apis": [
+        "EnumProjects",
+        "Master_GetTempo",
+        "SetProjExtState"
+      ]
+    },
+    {
+      "id": "ui/reaper",
+      "path": "src/ui/reaper.lua",
+      "kind": "ui",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "check_project_change",
+        "clipboard_get",
+        "clipboard_set",
+        "draw_history",
+        "draw_model_picker",
+        "draw_workflow_status",
+        "fit_label",
+        "info_text",
+        "loop",
+        "remember_closed",
+        "text_context_menu",
+        "wrap_text"
+      ],
+      "requires": [
+        "COMPOSITION_MODE_KEY",
+        "EXT_SECTION",
+        "MODELS",
+        "REASONING_LABELS",
+        "VERSION",
+        "WINDOW_STATE_KEY",
+        "add",
+        "busy",
+        "chat_start",
+        "clear_saved_history",
+        "composition_mode",
+        "costs",
+        "ctx",
+        "current_project",
+        "edit_key",
+        "export_last_midi",
+        "export_swam_midi",
+        "finish_save_panel",
+        "focused_or_last_notation_editor",
+        "font_size",
+        "history",
+        "history_mode",
+        "info_visible",
+        "input",
+        "install_update",
+        "job",
+        "load_history",
+        "model",
+        "model_label",
+        "open",
+        "open_score_workspace",
+        "poll_job",
+        "poll_update",
+        "pop_font",
+        "provider",
+        "push_font",
+        "reasoning_mode",
+        "restarting",
+        "save_diagnosis",
+        "save_history",
+        "select_model",
+        "selected_items",
+        "selected_tracks",
+        "set_font_size",
+        "set_lily_exe",
+        "set_reasoning_mode",
+        "submit",
+        "update_job",
+        "update_status",
+        "workflow_adapter",
+        "workflow_core"
+      ],
+      "writes": [
+        "chat_start",
+        "composition_mode",
+        "current_project",
+        "history_mode",
+        "info_visible",
+        "input",
+        "open",
+        "update_status",
+        "workflow_adapter"
+      ],
+      "globals": [
+        "ipairs",
+        "math",
+        "reaper",
+        "select",
+        "string",
+        "table",
+        "tostring",
+        "type"
+      ],
+      "host_apis": [
+        "EnumProjects",
+        "ImGui_Begin",
+        "ImGui_BeginChild",
+        "ImGui_BeginPopup",
+        "ImGui_BeginPopupContextItem",
+        "ImGui_Button",
+        "ImGui_CalcTextSize",
+        "ImGui_ChildFlags_Borders",
+        "ImGui_Cond_FirstUseEver",
+        "ImGui_End",
+        "ImGui_EndChild",
+        "ImGui_EndPopup",
+        "ImGui_GetClipboardText",
+        "ImGui_GetContentRegionAvail",
+        "ImGui_GetFrameHeight",
+        "ImGui_GetStyleVar",
+        "ImGui_InputText",
+        "ImGui_InputTextFlags_NoHorizontalScroll",
+        "ImGui_InputTextFlags_ReadOnly",
+        "ImGui_InputTextMultiline",
+        "ImGui_MenuItem",
+        "ImGui_OpenPopup",
+        "ImGui_SameLine",
+        "ImGui_Separator",
+        "ImGui_SetClipboardText",
+        "ImGui_SetNextWindowSize",
+        "ImGui_SetNextWindowSizeConstraints",
+        "ImGui_Spacing",
+        "ImGui_StyleVar_ItemSpacing",
+        "ImGui_Text",
+        "ImGui_TextWrapped",
+        "SetExtState",
+        "defer"
+      ]
+    }
+  ]
+}
