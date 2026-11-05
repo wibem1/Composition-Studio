@@ -17,23 +17,9 @@ def embedded_block(module):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--check', action='store_true', help='Fail on stale embedding without writing files')
-    args = parser.parse_args()
-    target = ROOT / 'Composition Studio.lua'
-    source = target.read_text(encoding='utf-8')
-    assert source.count(START) == source.count(END) == 1, 'Version module markers must be unique'
-    first = source.index(START)
-    last = source.index(END, first) + len(END)
-    block = embedded_block((ROOT / 'src/core/version.lua').read_text(encoding='utf-8'))
-    updated = source[:first] + block + source[last:]
-    if args.check:
-        if updated != source:
-            raise SystemExit('Stale version module: run python tools/build_version_module.py')
-        print('Version module embedding is current')
-    else:
-        target.write_text(updated, encoding='utf-8', newline='\n')
-        print('Embedded src/core/version.lua in Composition Studio.lua')
+    # Preserve the M1 command; src is now authoritative for the complete runtime.
+    from build_studio import main as build_all
+    build_all()
 
 
 if __name__ == '__main__':

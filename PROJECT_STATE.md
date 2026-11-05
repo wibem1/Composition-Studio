@@ -1,5 +1,11 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Bestehende Entwicklungsquellen vollständig aufgegliedert
+
+Alle 43 Quellbereiche des bestehenden Studios liegen jetzt in `src/`, mit versioniertem Manifest für Bindungen, Import-/Exportverträge, externe Abhängigkeiten und Hostzugriffe. Zwölf portable Module sind ohne REAPER/IO/Netz ladbar; Host-/Workflow-/UI-Einheiten bleiben geordnet in derselben Sitzung verknüpft. `tools/build_studio.py` erzeugt alle drei eigenständigen Laufzeit-/Installerartefakte, `--check` schreibt nichts. Der erzeugte Gesamtcode ist bytegleich zu M2 `b35301c`. Nicht mit einer vollständigen Entkopplung des veränderlichen Hostzustands oder bereits implementierten Zukunftsmodulen verwechseln.
+
+Vollständiger Offline-Runner: 13 Python-Suiten und drei Lua-Dateien bestanden, inklusive reparierter HTTP-Fixture, portablem Kontext-/JSON-/CC-/Tempo-/Sustain-/Scopevertrag, Originalschutz, UI, Installer und Rollback. Echter Compiler ausdrücklich SKIP; REAPER nicht installiert. [Build-/Schnittstellenanleitung](docs/MODULARIZATION-DEVELOPMENT.md), [Quellkarte](docs/MODULARIZATION-SOURCE-MAP.md). Keine Version, Veröffentlichung, Engineänderung oder Notationsintegration. Nächster interner Schritt vor Abschluss des Refactoring-PR: reine CS-Operationsplanung aus dem nativen Commit herauslösen und gegen die bisherige Ausführung differenziell prüfen.
+
 ## 05.11.2026 – M2: zwei Auditbefunde gezielt abgesichert
 
 Transporttest erhält explizite lokale Fixture-Schlüssel; der Test für fehlende Schlüssel entfernt sie gezielt. Fünf lokale HTTP-Seiten, Authheader, Pagination, Filter, Cache und Fehlerpfade bestanden. Keine echten Providerzugänge. JSON-Decoder verwendet ausdrücklich die Lua-Standardbibliothek `_G.utf8.char`, statt die gleichnamige lokale Antworthelper-Funktion zu indizieren. Regression im realen lexikalischen Umfeld: literales/escaped Unicode, Surrogatpaar und ungültige Escapes bestanden. Versions-Differentialtest weiterhin bestanden; Offline-Payload synchronisiert. Diese Fehlerkorrektur ist getrennt von den folgenden Quellenextraktionen. Keine Änderung von Prompts, musikalischen Algorithmen, Version oder main. Nächster Schritt: bestehende Entwicklungsquellen vollständig nach Audit-Verantwortlichkeiten aufteilen und gemeinsame portable Module sowie Ein-Datei-Build absichern.

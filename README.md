@@ -2,6 +2,10 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
+**Entwicklung:** Die bearbeitbaren Quellen liegen nach Verantwortlichkeiten in
+`src/`; `python tools/build_studio.py` erzeugt weiterhin dieselben eigenständigen
+Lua-Dateien für Studio und Installation. [Modulgrenzen, Build und Prüfungen](docs/MODULARIZATION-DEVELOPMENT.md).
+
 **Langfristige Architektur-Zielsetzung (05.11.2026):** [Modularer, später für REAPER, MuseScore und Maestro nutzbarer Kompositionskern](docs/MODULAR-ARCHITECTURE-VISION.md). Zunächst verhaltenserhaltende Neustrukturierung; Song Construction später, laufende Notationsentwicklung vorerst getrennt. **Konzept, noch keine implementierte Funktion.**
 
 

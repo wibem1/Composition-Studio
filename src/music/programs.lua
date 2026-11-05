@@ -1,0 +1,3 @@
+local function program_for_name(name,proposed) local n=(name or ""):lower(); local map={{"violin",40},{"violine",40},{"geige",40},{"viola",41},{"bratsche",41},{"cello",42},{"violoncello",42},{"kontrabass",43},{"double bass",43},{"gitarre",24},{"guitar",24},{"harfe",46},{"harp",46},{"flöte",73},{"floete",73},{"flute",73},{"oboe",68},{"klarinette",71},{"clarinet",71},{"fagott",70},{"bassoon",70},{"trompete",56},{"trumpet",56},{"horn",60},{"posaune",57},{"trombone",57},{"sax",65},{"klavier",0},{"piano",0},{"orgel",19},{"organ",19}}; for _,p in ipairs(map) do if n:find(p[1],1,true) then return p[2] end end; local v=tonumber(proposed); if v and v>=0 and v<=127 then return math.floor(v) end; return 0 end
+-- BEGIN MODULE EXPORTS
+return {program_for_name=program_for_name}

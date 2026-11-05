@@ -4,7 +4,7 @@ No API keys, provider calls or costs. REAPER calls are replaced, not HTTP parsin
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from http.server import ThreadingHTTPServer,BaseHTTPRequestHandler
-import json,shlex,subprocess,threading
+import json,os,shlex,subprocess,threading
 from urllib.parse import urlsplit,parse_qs
 from lupa.lua54 import LuaRuntime
 s=(Path(__file__).resolve().parents[1]/'Composition Studio.lua').read_text()
@@ -44,7 +44,11 @@ try:
    for original,pv in [('https://api.openai.com/v1/models','openai'),('https://api.anthropic.com/v1/models','anthropic'),('https://generativelanguage.googleapis.com/v1beta/models','google')]:
     script=script.replace(original,f'http://127.0.0.1:{server.server_port}/{pv}')
    path.write_text(script)
-   result=subprocess.run(argv,capture_output=True,timeout=5)
+   # Only the local fixture bypasses inherited external HTTP proxies.
+   fixture_env=os.environ.copy()
+   for proxy_key in ('NO_PROXY','no_proxy'):
+    fixture_env[proxy_key]=','.join(filter(None,[fixture_env.get(proxy_key,''),'127.0.0.1','localhost']))
+   result=subprocess.run(argv,capture_output=True,timeout=5,env=fixture_env)
    assert result.returncode==0,result.stderr
    return result.stdout.decode()
   r.globals().reaper=r.table_from({'GetOS':lambda:'OSX64','GetResourcePath':lambda:d,'RecursiveCreateDirectory':lambda p,*_:Path(p).mkdir(exist_ok=True),
