@@ -17,14 +17,15 @@ def main():
             failures.append(suite.name)
     # Each file runs in a fresh Lua 5.4 state, matching separate CLI invocations.
     from lupa.lua54 import LuaRuntime
-    for suite in sorted((ROOT / 'tests').glob('*.lua')):
+    lua_suites = sorted((ROOT / 'tests').glob('*.lua'))
+    for suite in lua_suites:
         print('\nRUN ' + suite.name, flush=True)
         try:
             LuaRuntime().execute(suite.read_text(encoding='utf-8'))
         except Exception as error:
             print(error, file=sys.stderr)
             failures.append(suite.name)
-    print(f'\nCompleted {len(suites)} Python suites and 3 Lua files; failed: {failures}', flush=True)
+    print(f'\nCompleted {len(suites)} Python suites and {len(lua_suites)} Lua files; failed: {failures}', flush=True)
     return bool(failures)
 
 

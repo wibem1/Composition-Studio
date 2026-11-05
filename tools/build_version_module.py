@@ -1,8 +1,4 @@
-"""Embed the pure version module in the existing single-file runtime."""
-import argparse
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
+"""Render the version block; preserve the M1 CLI through the full source build."""
 START = '-- BEGIN VERSION MODULE'
 END = '-- END VERSION MODULE'
 

@@ -750,6 +750,35 @@
       "host_apis": []
     },
     {
+      "id": "music/cs_plan",
+      "path": "src/music/cs_plan.lua",
+      "kind": "factory",
+      "exports": [
+        "plan_composition"
+      ],
+      "parameters": [
+        "trim",
+        "parse_notes",
+        "program_for_name"
+      ],
+      "provides": [
+        "plan_composition"
+      ],
+      "requires": [
+        "parse_notes",
+        "program_for_name",
+        "trim"
+      ],
+      "writes": [],
+      "globals": [
+        "ipairs",
+        "math",
+        "table",
+        "tonumber"
+      ],
+      "host_apis": []
+    },
+    {
       "id": "host/reaper/commit",
       "path": "src/host/reaper/commit.lua",
       "kind": "host",
@@ -766,11 +795,9 @@
         "existing_program",
         "export_last_midi",
         "last_made",
-        "parse_notes",
-        "program_for_name",
+        "plan_composition",
         "recover_last_made",
         "safe_work_title",
-        "trim",
         "update_status",
         "work_title"
       ],
@@ -785,7 +812,6 @@
         "math",
         "reaper",
         "table",
-        "tonumber",
         "xpcall"
       ],
       "host_apis": [
@@ -916,31 +942,71 @@
       ]
     },
     {
-      "id": "ai/requests",
-      "path": "src/ai/requests.lua",
+      "id": "ai/request_state",
+      "path": "src/ai/request_state.lua",
       "kind": "host",
       "exports": [],
       "parameters": [],
       "provides": [
         "REASONING_KEY",
         "REASONING_LABELS",
-        "ai_command",
-        "ai_poll",
         "job",
-        "log_communication",
         "reasoning_mode",
-        "reasoning_parameters",
         "set_reasoning_mode",
         "workflow_adapter_guard"
       ],
       "requires": [
         "EXT_SECTION",
+        "busy"
+      ],
+      "writes": [],
+      "globals": [
+        "reaper"
+      ],
+      "host_apis": [
+        "GetExtState",
+        "SetExtState"
+      ]
+    },
+    {
+      "id": "ai/reasoning",
+      "path": "src/ai/reasoning.lua",
+      "kind": "factory",
+      "exports": [
+        "reasoning_parameters"
+      ],
+      "parameters": [
+        "REASONING_LABELS"
+      ],
+      "provides": [
+        "reasoning_parameters"
+      ],
+      "requires": [
+        "REASONING_LABELS"
+      ],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "ai/requests",
+      "path": "src/ai/requests.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "ai_command",
+        "ai_poll",
+        "log_communication"
+      ],
+      "requires": [
         "IS_WINDOWS",
         "add",
         "busy",
         "costs",
         "diag_set",
         "first_text_field",
+        "job",
         "json_escape",
         "last_diag",
         "launch",
@@ -948,16 +1014,20 @@
         "provider",
         "ps_launch",
         "read_file",
+        "reasoning_mode",
+        "reasoning_parameters",
         "response_text",
         "shell_quote",
         "temp_path",
         "trim",
         "windows_curl_script",
+        "workflow_adapter_guard",
         "workflow_core",
         "write_file"
       ],
       "writes": [
         "busy",
+        "job",
         "launch"
       ],
       "globals": [
@@ -968,8 +1038,6 @@
       ],
       "host_apis": [
         "EnumProjects",
-        "GetExtState",
-        "SetExtState",
         "time_precise"
       ]
     },
@@ -1036,8 +1104,7 @@
       "exports": [],
       "parameters": [],
       "provides": [
-        "compact_music_excerpt",
-        "continuation_prompt"
+        "compact_music_excerpt"
       ],
       "requires": [],
       "writes": [],
@@ -1052,6 +1119,26 @@
       "host_apis": [
         "Master_GetTempo"
       ]
+    },
+    {
+      "id": "music/continuation_prompt",
+      "path": "src/music/continuation_prompt.lua",
+      "kind": "factory",
+      "exports": [
+        "continuation_prompt"
+      ],
+      "parameters": [
+        "compact_music_excerpt"
+      ],
+      "provides": [
+        "continuation_prompt"
+      ],
+      "requires": [
+        "compact_music_excerpt"
+      ],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
     },
     {
       "id": "host/reaper/lilypond_commit",
@@ -1120,35 +1207,83 @@
       ]
     },
     {
-      "id": "music/json_composition",
-      "path": "src/music/json_composition.lua",
-      "kind": "workflow",
+      "id": "music/json_direct_prompt",
+      "path": "src/music/json_direct_prompt.lua",
+      "kind": "portable",
+      "exports": [
+        "engine_json_prompt"
+      ],
+      "parameters": [],
+      "provides": [
+        "JSON_ENGINE_VERSION",
+        "engine_json_prompt"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "workflow/composition_mode",
+      "path": "src/workflow/composition_mode.lua",
+      "kind": "host",
       "exports": [],
       "parameters": [],
       "provides": [
         "COMPOSITION_MODE_KEY",
-        "JSON_ENGINE_VERSION",
-        "composed_json_prompt",
-        "composition_mode",
-        "concept_prompt",
-        "engine_json_prompt",
-        "launch_new_json"
+        "composition_mode"
       ],
       "requires": [
-        "EXT_SECTION",
-        "diag_set",
-        "launch",
-        "update_status"
+        "EXT_SECTION"
       ],
-      "writes": [
-        "update_status"
-      ],
+      "writes": [],
       "globals": [
         "reaper"
       ],
       "host_apis": [
         "GetExtState"
       ]
+    },
+    {
+      "id": "music/json_framework_prompts",
+      "path": "src/music/json_framework_prompts.lua",
+      "kind": "portable",
+      "exports": [
+        "concept_prompt",
+        "composed_json_prompt"
+      ],
+      "parameters": [],
+      "provides": [
+        "composed_json_prompt",
+        "concept_prompt"
+      ],
+      "requires": [],
+      "writes": [],
+      "globals": [],
+      "host_apis": []
+    },
+    {
+      "id": "workflow/json_launch",
+      "path": "src/workflow/json_launch.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "provides": [
+        "launch_new_json"
+      ],
+      "requires": [
+        "composition_mode",
+        "concept_prompt",
+        "diag_set",
+        "engine_json_prompt",
+        "launch",
+        "update_status"
+      ],
+      "writes": [
+        "update_status"
+      ],
+      "globals": [],
+      "host_apis": []
     },
     {
       "id": "music/json_codec",

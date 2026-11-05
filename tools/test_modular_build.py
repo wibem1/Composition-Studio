@@ -7,15 +7,26 @@ import sys
 from tempfile import TemporaryDirectory
 
 from lupa.lua54 import LuaRuntime
-from build_studio import ROOT, artifacts, load_manifest, render
+from build_studio import ROOT, artifacts, inline, load_manifest, render
 
 manifest = load_manifest()
 subprocess.run([sys.executable, str(ROOT / 'tools/build_studio.py'), '--check'], check=True)
 
 # The full extraction must preserve the audited M2 runtime byte for byte.
 # Later deliberate behavior changes require a reviewed update of this reference.
-baseline = subprocess.check_output(['git', 'show', 'b35301c:Composition Studio.lua'], cwd=ROOT)
-assert render().encode('utf-8') == baseline, 'Unexpected runtime change during source modularization'
+baseline = subprocess.check_output(['git', 'show', 'b35301c:Composition Studio.lua'], cwd=ROOT).decode('utf-8')
+runtime = render()
+planner = next(unit for unit in manifest['units'] if unit['id'] == 'music/cs_plan')
+signature = 'local function apply_composition(text,items,tracks,force_single_piano)'
+commit = ' reaper.Undo_BeginBlock2(0); local made'
+old_prefix = baseline[baseline.index(signature):baseline.index(commit, baseline.index(signature))]
+assert inline(planner) == old_prefix.replace('local function apply_composition(', 'local function plan_composition(', 1) + ' return jobs,musical_map,controls,src,targets\nend\n\n'
+restored = runtime.replace(inline(planner), '', 1)
+first = restored.index(signature)
+last = restored.index(commit, first)
+assert restored[first:last] == signature + ' local jobs,musical_map,controls,src,targets=plan_composition(text,items,tracks,force_single_piano); if not jobs then return nil,musical_map end;'
+restored = restored[:first] + old_prefix + restored[last:]
+assert restored == baseline, 'Unexpected runtime change outside the mechanically extracted planner'
 
 lua = LuaRuntime(unpack_returned_tuples=True)
 load_portable = lua.eval('''function(source)
@@ -79,6 +90,19 @@ patch = modules['editing/selected_notes_prompt'](
 assert 'READ ONLY REFERENCE' in patch.notation_patch_prompt('Probe', lua.table())
 assert '\\score' in modules['music/lilypond_prompt'].lily_composition_prompt('Probe')
 assert modules['ai/response'].read_json_string('"\\u00e4"', 1) == 'ä'
+labels = lua.table_from({'low': 'Kurz', 'medium': 'Mittel', 'high': 'Hoch', 'auto': 'Automatisch'})
+reasoning = modules['ai/reasoning'](labels)
+assert '"effort":"medium"' in reasoning.reasoning_parameters('openai', 'test', 'medium')[0]
+assert reasoning.reasoning_parameters('openai', 'test', 'auto') == ('', 'provider_default')
+assert 'Probe' in modules['music/json_direct_prompt'].engine_json_prompt('Probe')
+assert 'Rahmen' in modules['music/json_framework_prompts'].composed_json_prompt('Probe', 'Rahmen')
+continuation = modules['music/continuation_prompt'](lua.eval('function() return "SOURCE EXCERPT" end'))
+assert 'SOURCE EXCERPT' in continuation.continuation_prompt('Probe', lua.table(), lua.table(), 8, 16)
+plan = modules['music/cs_plan'](text.trim, modules['music/cs_notes'].parse_notes,
+                              modules['music/programs'].program_for_name)
+jobs, musical_map, controls, sources, targets = plan.plan_composition(
+    cs, lua.table(), lua.table(), False)
+assert len(jobs) == 1 and jobs[1].notes[1].pitch == 48 and len(controls) == 3
 print(f'PASS {len(modules)} standalone modules without REAPER, files, network or global writes')
 
 original = artifacts()

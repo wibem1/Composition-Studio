@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Quellmodularisierung und CS-Plan-/Commit-Grenze umgesetzt
+
+**Aktueller Umfang:** 50 registrierte Quellen unter `src/`, davon 17 eigenständig ladbare portable Module/Factories. KI-Requestparameter, musikalische Prompts, JSON-/CS-Datenverarbeitung und Operationsplanung haben explizite portable Schnittstellen. Hostzugriff, Persistenz, Freigabe, Undo, UI und Jobsteuerung sind nach Verantwortung gegliedert. REAPER-Sitzungszustand bleibt bewusst über deklarierte lexikalische Bindungen verknüpft; keine Behauptung einer vollständigen Laufzeitentkopplung oder neuer musikalischer Zukunftsmodule.
+
+**Tatsächliche neue Grenze:** `music/cs_plan` validiert und plant ohne REAPER/IO; `host/reaper/commit` führt den gültigen Plan mit bestehendem Undo/Rollback aus. Keine geänderten musikalischen Regeln oder Prompts. Struktureller Test rekonstruiert nach Rücksetzen dieser mechanischen Extraktion exakt den separat geprüften M2-Code; 60 Differentialfälle vergleichen Ausgaben und Host-Aufrufreihenfolge mit M2, inklusive Fehler/Rollback.
+
+**Prüfung:** Gesamtbuild/Artefaktsynchronität und deterministische Wiederholung, 14 Python-Suiten sowie drei Lua-Dateien bestanden; darunter alle bisher vorhandenen Tests, Unicode-/Transportfehlerabsicherung, portable Modulgrenzen und die neue Plan-/Commit-Differentialprüfung. Compiler ohne `LILYPOND_EXE` ausdrücklich SKIP, kein installierter REAPER, kein nativer Windows-/macOS-/Hör-/Liveprovider-Nachweis. [Build und aktuelle Grenzen](docs/MODULARIZATION-DEVELOPMENT.md), [Modulkarte](docs/MODULARIZATION-SOURCE-MAP.md). CI führt nun den vollständigen Runner aus.
+
+**Übergabe:** Umsetzung wird im bestehenden Review-PR #13 gesichert. `main`, Produktversion 1.1.10, Engine und Notations-PR #12 unverändert; kein Merge/Release. Nächste Abnahme: Review des Refactoring-Diffs und eine gebündelte native REAPER-Gegenprüfung an Projektkopie (Auswahl/Referenzschutz, Apply/Undo, Reload und Update/Rückfall), bevor eine Produktfreigabe behauptet wird. Neue Engine-/Musikmodell-/Memory-/Songfunktionen sind keine Voraussetzung dieses Bestandsrefactorings.
+
 ## 05.11.2026 – Bestehende Entwicklungsquellen vollständig aufgegliedert
 
 Alle 43 Quellbereiche des bestehenden Studios liegen jetzt in `src/`, mit versioniertem Manifest für Bindungen, Import-/Exportverträge, externe Abhängigkeiten und Hostzugriffe. Zwölf portable Module sind ohne REAPER/IO/Netz ladbar; Host-/Workflow-/UI-Einheiten bleiben geordnet in derselben Sitzung verknüpft. `tools/build_studio.py` erzeugt alle drei eigenständigen Laufzeit-/Installerartefakte, `--check` schreibt nichts. Der erzeugte Gesamtcode ist bytegleich zu M2 `b35301c`. Nicht mit einer vollständigen Entkopplung des veränderlichen Hostzustands oder bereits implementierten Zukunftsmodulen verwechseln.

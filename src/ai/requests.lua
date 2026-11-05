@@ -1,34 +1,3 @@
-local job=nil
-local workflow_adapter_guard=function() return "" end
--- Thinking control: persisted UI choice and native provider request parameters.
-local REASONING_KEY="ReasoningEffortV1"
-local REASONING_LABELS={low="Kurz",medium="Mittel",high="Hoch",auto="Automatisch"}
-local reasoning_mode=reaper.GetExtState(EXT_SECTION,REASONING_KEY)
-if not REASONING_LABELS[reasoning_mode] then reasoning_mode="medium" end
-local function set_reasoning_mode(value)
- if busy or not REASONING_LABELS[value] then return end
- reasoning_mode=value
- reaper.SetExtState(EXT_SECTION,REASONING_KEY,value,true)
-end
-local function reasoning_parameters(pv,md,choice)
- if choice=="auto" then return "","provider_default" end
- local effort=REASONING_LABELS[choice] and choice or "medium"
- if pv=="openai" then
-  local value='"reasoning":{"effort":"'..effort..'"}'
-  return ","..value,value
- elseif pv=="anthropic" then
-  local value='"output_config":{"effort":"'..effort..'"}'
-  return ","..value,value
- elseif md:match("^gemini%-2%.5") then
-  local budget=({low=2048,medium=8192,high=24576})[effort]
-  local value='"generationConfig":{"thinkingConfig":{"thinkingBudget":'..budget..'}}'
-  return ","..value,value
- else
-  local value='"generationConfig":{"thinkingConfig":{"thinkingLevel":"'..effort..'"}}'
-  return ","..value,value
- end
-end
--- End thinking control.
 local function ai_command(prompt,key)
  local thinking,requested=reasoning_parameters(provider,model,reasoning_mode)
  diag_set("reasoning_mode",reasoning_mode); diag_set("reasoning_requested",requested)

@@ -38,7 +38,19 @@ Installerprüfungen erforderlich; ein flacher Clone reicht nicht für alle Tests
 - `core/version`: `parts(v)`, `is_newer(remote,localv)`; unveränderte Updateordnung.
 - `core/text`: Trim/Titel-Helfer; `ai/response`: bestehende Antwortstring-Decoder.
 - `music/cs_notes`, `music/programs`: vorhandene Notendaten und Programmauswahl.
-- `music/continuation_request`: vorhandene Text-/Takt-/Übergangserkennung.
+- `music/continuation_request`: vorhandene Text-/Takt-/Übergangserkennung;
+  `music/continuation_prompt(compact_music_excerpt)`: Prompt mit explizitem Kontextport.
+- `music/json_direct_prompt` und `music/json_framework_prompts`: unveränderte
+  direkte bzw. zweistufige Kompositionsprompts; der persistente Modus und der
+  Jobstart liegen getrennt unter `workflow/`.
+- `ai/reasoning(REASONING_LABELS)`: native Providerparameter ohne Hostpersistenz.
+- `music/cs_plan(trim,parse_notes,program_for_name)`: reine Operationsplanung.
+  `plan_composition(text,items,tracks,force_single_piano)` liefert
+  `jobs,musical_map,controls,src,targets` oder `nil,error`. Die Jobs sind die
+  bisherigen `new/revised/target/track`-Operationen, keine neue Musikrepräsentation.
+  Der REAPER-Commit erhält nur validierte Pläne; er behält native Erzeugung,
+  Tempo-/Taktkartenoperationen, CC und Undo/Rollback. Die übergeordneten
+  Freigabe-/Sourceguard-/Scopeprüfungen bleiben vorgeschaltet.
 - `music/json_codec`: `decode_engine_json(text)`; native UTF-8-Bibliothek ausdrücklich
   gegen lokale Namensverschattung abgesichert, keine musikalischen Korrekturen.
 - `music/json_score(decode_engine_json)`: Lua-Adapter des bestehenden JSON-Schemas
@@ -71,9 +83,14 @@ nicht verändert. Der Default-Kompositionsablauf, Prompts und musikalische
 Algorithmen werden beim Refactoring nicht an einen anderen Enginevertrag
 angepasst.
 
-Der strukturelle Gesamtbuild ist bytegleich zum separat geprüften M2-Stand
-`b35301c`. Zusätzlich werden die originalen Vergleichs-/Auswahl-/Quellschutz-/
-Rollback-/Installationsfälle und die portablen Schnittstellen ausgeführt.
+Die erste vollständige Quellaufteilung erzeugte exakt die Bytes des separat
+geprüften M2-Stands `b35301c`. Danach wurde ausschließlich die bestehende
+CS-Vorprüfung mechanisch in `plan_composition` verschoben. Ein Test setzt diese
+Extraktion strukturell zurück und verlangt wieder vollständige Gleichheit mit
+M2: keine anderen Runtimeänderungen sind erlaubt. Zusätzlich vergleichen 60
+Fälle die alte und neue Planung samt Host-Aufrufreihenfolge und Rollback.
+Die originalen Vergleichs-/Auswahl-/Quellschutz-/Rollback-/Installationsfälle
+und die portablen Schnittstellen werden weiterhin ausgeführt.
 Der bekannte Transport-Fixturefehler wurde mit expliziten Testschlüsseln und
 eigenem Missing-Key-Fall korrigiert. Der Unicodefehler wurde separat behoben.
 
@@ -83,3 +100,21 @@ verhaltenserhaltenden Umstrukturierung. Native Windows-/macOS-/REAPER-Abnahme,
 Hörtests und die Windows-LilyPond-Integration sind in der Linux-Cloud nicht belegt.
 Ein bestandener Offlinebuild ist keine Veröffentlichung oder vollständige
 Produktfreigabe.
+
+## Abschluss dieses Refactorings
+
+50 registrierte Quellbereiche, davon 17 als eigenständig ladbare portable Module
+bzw. Factories. Vollständige Offline-Regression: 14 Python-Suiten und drei
+Lua-Dateien, einschließlich 60 Plan-/Commit-Differentialfällen. Die bekannte
+Compilerprüfung bleibt ohne `LILYPOND_EXE` ausdrücklich ausgelassen; REAPER ist
+in dieser Cloud nicht installiert. Die CI führt den gesamten Runner aus, statt
+nur einige UI-/Installersuiten. Source-/Artefaktgleichheit und Abnahmegrenzen
+stehen auch im aktuellen `PROJECT_STATE.md`.
+
+Die Quellmodularisierung und die isolierte Plan-/Commit-Grenze des Bestands sind
+implementiert. Eine vollständige Auflösung jedes gemeinsam veränderlichen
+Hostzustands ist damit nicht behauptet: `workflow_adapter`, `job`, `busy`,
+Provider-/Modellwahl und UI-Sitzung bleiben über die im Manifest deklarierten
+Bindungen verbunden. Eine weitere Laufzeitentkopplung oder eine Engineumstellung
+braucht eigene Verhaltensverträge und native Prüfung. Die langfristige Vision
+mit neuen musikalischen Fähigkeiten bleibt davon getrennt.
