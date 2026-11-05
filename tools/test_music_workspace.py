@@ -169,6 +169,7 @@ return {
                    lambda s: s['relationships'][0].update(to='unknown'),
                    lambda s: s['tracks'][0]['notes'][0].__setitem__(2, 128),
                    lambda s: s['tracks'].append(copy.deepcopy(s['tracks'][0])),
+                   lambda s: s['tracks'].append({'name': 'Empty', 'notes': [], 'ccEvents': [{'at': 0, 'controller': 11, 'value': 80}]}),
                    lambda s: s.update(pedalEvents=[{'at': 0, 'value': 127}]),
                    lambda s: s['tracks'][0]['ccEvents'][0].update(at=9000),
                    lambda s: s['tracks'][0].update(pitchBend=[[0, 100]]),

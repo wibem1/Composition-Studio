@@ -2162,7 +2162,9 @@ function music_model.validate_song(song,snapshot)
   assert(not track.name:find("[|\r\n]") and track.name==track.name:match("^%s*(.-)%s*$") and not names[track.name],"Spurnamen müssen eindeutig und ohne Steuerzeichen sein.")
   names[track.name]=true
   assert(track.role==nil or type(track.role)=="string" and #track.role<=300,"Ungültige musikalische Rollenbeschreibung.")
-  for _,note in ipairs(music_list(track.notes,"Noten",music_model.max_result_notes)) do
+  local notes=music_list(track.notes,"Noten",music_model.max_result_notes)
+  assert(#notes>0,"Leere Songspuren können nicht übernommen werden; bitte im Ergebnis weglassen.")
+  for _,note in ipairs(notes) do
    count=count+1
    assert(count<=music_model.max_result_notes,"Song hat mehr als 20000 Noten.")
    assert(type(note)=="table" and music_number(note[1]) and note[1]>=0 and music_number(note[2]) and note[2]>0,"Ungültige Songzeiten.")
