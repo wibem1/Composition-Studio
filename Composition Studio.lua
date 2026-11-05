@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.1.11
+-- @version 1.2.0
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.1.11"
+local VERSION="1.2.0"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -1039,6 +1039,9 @@ do
  end
 end
 -- End cost accounting.
+-- BEGIN MUSIC WORKSPACE BINDING
+local music_workspace
+-- END MUSIC WORKSPACE BINDING
 local job=nil
 local workflow_adapter_guard=function() return "" end
 -- Thinking control: persisted UI choice and native provider request parameters.
@@ -1136,6 +1139,13 @@ local function log_communication(stage,kind,body)
 end
 launch=function(stage,prompt,key,data)
  data=data or {}; data.workflow_guard=data.workflow_guard or workflow_adapter_guard(); data.workflow_provider=provider; data.workflow_model=model
+-- BEGIN MUSIC WORKSPACE MEMORY
+ if music_workspace and stage~="controller" and stage~="work_title" then
+  local memory,why=music_workspace.context()
+  if not memory then add("KI",why);busy=false;job=nil;return false end
+  if memory~="" then prompt=prompt.."\n\n"..memory;data.music_memory_context=memory end
+ end
+-- END MUSIC WORKSPACE MEMORY
  prompt=workflow_core.prompt(stage=="analysis" and "analysis" or "common").."\n"..prompt
  if stage=="controller" or stage=="swam_interpretation" or stage=="work_title" then costs.begin() end; local _,requested=reasoning_parameters(provider,model,reasoning_mode); log_communication(stage,"APP → KI (Denkaufwand "..reasoning_mode.."; gesendet "..requested.."; Prompt; Modell "..tostring(model)..", Provider "..tostring(provider)..")",prompt)
  local a,e=ai_command(prompt,key); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
@@ -1698,8 +1708,14 @@ function workflow_adapter.load()
  return ok
 end
 function workflow_adapter.offer(stage,text,data)
+-- BEGIN MUSIC WORKSPACE VALIDATION
+ local song_summary
+ if stage=="song_construction" then
+  local cs,why=music_workspace.song_to_cs(text,data.music_snapshot);assert(cs,why);song_summary=why
+ end
+-- END MUSIC WORKSPACE VALIDATION
  diag_set(stage=="analysis" and "analysis_answer" or "composition_answer",text)
- if stage=="engine_json" then
+ if stage=="engine_json" or stage=="song_construction" then
   diag_set("composition_music",text)
   local ok,score=pcall(decode_engine_json,text)
   if ok and type(score)=="table" then
@@ -1709,6 +1725,10 @@ function workflow_adapter.offer(stage,text,data)
  end
  assert(not workflow_adapter.history_error,"Verlauf ist nicht lesbar. Bitte Projektkopie und Diagnose sichern.")
  local r={format=workflow_core.format,core_version=workflow_core.version,id=tostring(os.time()).."-"..tostring(#workflow_adapter.records+1),created=os.date("%Y-%m-%d %H:%M"),stage=stage,request=data.request or "",raw_response=text,payload=text,state=stage=="analysis" and "draft" or workflow_core.advance("draft","propose"),source_guard=data.workflow_guard or workflow_adapter.guard(),provider=data.workflow_provider or provider,model=data.workflow_model or model,bindings={},track_bindings={},extension_start=data.extension_start,extension_bars=data.extension_bars,transition_bars=data.transition_bars or 0,chunk_piano=data.chunk_piano or false}
+-- BEGIN MUSIC WORKSPACE RECORD
+ if stage=="song_construction" then r.music_snapshot=data.music_snapshot;r.song_summary=song_summary end
+ if data.music_memory_context and data.music_memory_context~="" then r.music_memory_context=data.music_memory_context end
+-- END MUSIC WORKSPACE RECORD
  for _,it in ipairs(data.full or {}) do r.bindings[#r.bindings+1]=it.guid end
  r.notation_selection={}
  for _,it in ipairs(data.full or {}) do if it.selection_source and #it.selection_source>0 then r.notation_selection[#r.notation_selection+1]={guid=it.guid,notes=it.selection_source} end end
@@ -1721,6 +1741,9 @@ function workflow_adapter.offer(stage,text,data)
  if stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
  update_status=stage=="analysis" and "Analyse gespeichert. Zur Umsetzung zum Beispiel eingeben: Überarbeite anhand dieser Analyse." or "Vorschlag gespeichert. Mit Änderungen anwenden übernehmen."
  add("KI",stage=="analysis" and workflow_core.readable(text) or update_status)
+-- BEGIN MUSIC WORKSPACE SUMMARY
+ if song_summary then add("KI · Songstruktur",song_summary) end
+-- END MUSIC WORKSPACE SUMMARY
  busy=false
 end
 function workflow_adapter.bindings(r)
@@ -1905,6 +1928,9 @@ function workflow_adapter.apply()
    result,why=lily_compile_import(r.payload,r.extension_start,r.extension_bars,r.transition_bars>0 and items or nil)
   else
    local text=r.payload
+-- BEGIN MUSIC WORKSPACE APPLY
+   if r.stage=="song_construction" then text,why=music_workspace.song_to_cs(text,r.music_snapshot);assert(text,why) end
+-- END MUSIC WORKSPACE APPLY
    if r.stage=="engine_json" then text,why=engine_translate_json(text); assert(text,why) end
    local items,tracks=workflow_adapter.bindings(r)
    result,why=apply_composition(text,items,tracks,r.chunk_piano)
@@ -2076,6 +2102,290 @@ end
 
 -- End shared workflow host adapter.
 
+local music_model={schema="Composition-Music-1",song_schema="Composition-Song-1",max_source_notes=2500,max_result_notes=20000}
+local function music_number(value)
+ return type(value)=="number" and value==value and value~=math.huge and value~=-math.huge
+end
+local function music_list(value,name,limit)
+ assert(type(value)=="table",name..": Liste fehlt.")
+ local count=0
+ for key in pairs(value) do
+  assert(type(key)=="number" and key%1==0 and key>=1 and key<=#value,name..": ungültige Liste.")
+  count=count+1
+ end
+ assert(count==#value and count<=limit,name..": technische Größenbegrenzung überschritten.")
+ return value
+end
+function music_model.capture(items,tempo,num,den)
+ assert(music_number(tempo) and tempo>=20 and tempo<=400,"Tempo außerhalb des unterstützten JSON-Bereichs (20–400 BPM).")
+ assert(music_number(num) and num%1==0 and num>=1 and num<=32 and music_number(den) and den%1==0 and den>=1 and den<=64,"Taktart nicht unterstützt.")
+ local snapshot={schema=music_model.schema,representation="performance",tempo=tempo,time_signature={num,den},parts={},note_count=0}
+ local parts,seen_items={},{ }; local first,last=math.huge,-math.huge
+ for _,item in ipairs(items) do
+  assert(type(item.guid)=="string" and item.guid~="","Quell-Item ohne Identität.")
+  assert(not seen_items[item.guid],"Doppeltes Quell-Item im Musikkontext.");seen_items[item.guid]=true
+  local id=(type(item.track_guid)=="string" and item.track_guid~="" and item.track_guid) or item.guid
+  if not parts[id] then
+   assert(#snapshot.parts<32,"Mehr als 32 Quellspuren; bitte einen kleineren Bereich auswählen.")
+   parts[id]={id=id,name=item.track_name or "Instrument",events={}}
+   snapshot.parts[#snapshot.parts+1]=parts[id]
+  end
+  for ordinal,note in ipairs(item.notes or {}) do
+   snapshot.note_count=snapshot.note_count+1
+   assert(snapshot.note_count<=music_model.max_source_notes,"Mehr als 2500 Quellnoten; bitte einen kleineren Bereich auswählen.")
+   assert(music_number(note.start_qn) and music_number(note.duration_qn) and note.duration_qn>0,"Ungültige Quellzeiten.")
+   assert(music_number(note.pitch) and note.pitch%1==0 and note.pitch>=0 and note.pitch<=127,"Ungültige Quelltonhöhe.")
+   assert(music_number(note.velocity) and note.velocity%1==0 and note.velocity>=1 and note.velocity<=127,"Ungültige Quellvelocity.")
+   assert(music_number(note.channel) and note.channel%1==0 and note.channel>=0 and note.channel<=15,"Ungültiger Quellkanal.")
+   local event={id=item.guid..":"..ordinal,source_item=item.guid,source_ordinal=ordinal,
+    at=note.start_qn,duration=note.duration_qn,pitch=note.pitch,velocity=note.velocity,channel=note.channel}
+   parts[id].events[#parts[id].events+1]=event
+   first=math.min(first,event.at); last=math.max(last,event.at+event.duration)
+  end
+ end
+ assert(snapshot.note_count>0,"Keine MIDI-Noten als Ausgangsmaterial vorhanden.")
+ snapshot.bounds={start_qn=first,end_qn=last}
+ return snapshot
+end
+function music_model.validate_song(song,snapshot)
+ assert(type(snapshot)=="table" and snapshot.schema==music_model.schema,"Gesicherter Musikkontext fehlt.")
+ assert(type(song)=="table" and song.schema==music_model.song_schema,"Song-Antwort benötigt Composition-Song-1.")
+ assert(music_number(song.bpm) and math.abs(song.bpm-snapshot.tempo)<0.000001,"Der Song darf das Projekttempo nicht ändern.")
+ assert(type(song.timeSignature)=="table" and song.timeSignature[1]==snapshot.time_signature[1] and song.timeSignature[2]==snapshot.time_signature[2],"Der Song darf die Projekttaktart nicht ändern.")
+ assert(song.tempoEvents==nil or #music_list(song.tempoEvents,"Tempoereignisse",0)==0,"Die vorhandene Tempokarte bleibt erhalten.")
+ assert(type(song.title)=="string" and #song.title>0 and #song.title<=120,"Songtitel fehlt oder ist zu lang.")
+ local tracks=music_list(song.tracks,"Spuren",32)
+ assert(#tracks>0,"Song ohne Spuren.")
+ local names,count,last={ },0,0
+ for _,track in ipairs(tracks) do
+  assert(type(track)=="table" and type(track.name)=="string" and #track.name>0 and #track.name<=120,"Ungültiger Spurname.")
+  assert(not track.name:find("[|\r\n]") and track.name==track.name:match("^%s*(.-)%s*$") and not names[track.name],"Spurnamen müssen eindeutig und ohne Steuerzeichen sein.")
+  names[track.name]=true
+  assert(track.role==nil or type(track.role)=="string" and #track.role<=300,"Ungültige musikalische Rollenbeschreibung.")
+  local notes=music_list(track.notes,"Noten",music_model.max_result_notes)
+  assert(#notes>0,"Leere Songspuren können nicht übernommen werden; bitte im Ergebnis weglassen.")
+  for _,note in ipairs(notes) do
+   count=count+1
+   assert(count<=music_model.max_result_notes,"Song hat mehr als 20000 Noten.")
+   assert(type(note)=="table" and music_number(note[1]) and note[1]>=0 and music_number(note[2]) and note[2]>0,"Ungültige Songzeiten.")
+   last=math.max(last,note[1]+note[2])
+  end
+ end
+ assert(count>0,"Song enthält keine Noten.")
+ local sections=music_list(song.sections,"Abschnitte",32)
+ assert(#sections>0,"Song benötigt mindestens einen beschriebenen Abschnitt.")
+ local ids,previous={},0
+ for _,section in ipairs(sections) do
+  assert(type(section)=="table" and type(section.id)=="string" and #section.id>0 and #section.id<=80 and not ids[section.id],"Abschnittskennungen fehlen oder sind doppelt.")
+  assert(type(section.name)=="string" and #section.name>0 and #section.name<=120,"Abschnittsname fehlt.")
+  assert(music_number(section.start_qn) and math.abs(section.start_qn-previous)<0.000001 and music_number(section.end_qn) and section.end_qn>section.start_qn and section.end_qn<=4096,"Abschnitte müssen den Song lückenlos ab QN 0 beschreiben (maximal 4096 QN).")
+  assert(section.purpose==nil or type(section.purpose)=="string" and #section.purpose<=600,"Ungültige Abschnittsbeschreibung.")
+  ids[section.id]=true;previous=section.end_qn
+ end
+ assert(last<=previous+0.000001,"Songnoten reichen über den beschriebenen Werkumfang hinaus.")
+ local pedal=music_list(song.pedalEvents or {},"Pedalereignisse",20000)
+ local controls=0
+ for _,track in ipairs(tracks) do
+  local pedal_at,pedal_value=-1,0
+  for _,event in ipairs(pedal) do
+   controls=controls+1
+   assert(type(event)=="table" and music_number(event.at) and event.at>=0 and event.at<=previous,"Pedalereignis außerhalb des Songumfangs.")
+   assert(music_number(event.value) and event.value%1==0 and event.value>=0 and event.value<=127,"Ungültiger Pedalwert.")
+   if event.at>=pedal_at then pedal_at=event.at;pedal_value=event.value end
+  end
+  for _,event in ipairs(music_list(track.ccEvents or {},"Controllerereignisse",20000)) do
+   controls=controls+1
+   assert(type(event)=="table" and music_number(event.at) and event.at>=0 and event.at<=previous,"Controllerereignis außerhalb des Songumfangs.")
+   assert(music_number(event.controller) and event.controller%1==0 and event.controller>=0 and event.controller<=127 and music_number(event.value) and event.value%1==0 and event.value>=0 and event.value<=127,"Ungültiger Controllerwert.")
+   if event.controller==64 and event.at>=pedal_at then pedal_at=event.at;pedal_value=event.value end
+  end
+  assert(controls<=20000,"Zu viele Controllerereignisse im Song.")
+  assert(music_number(pedal_value) and pedal_value>=0 and pedal_value<64,"Sustain-Pedal muss innerhalb des Songs wieder gelöst werden.")
+  assert(track.pitchBend==nil or #music_list(track.pitchBend,"Pitch Bend",0)==0,"Pitch Bend ist im bestehenden Lua-JSON-Adapter nicht unterstützt.")
+ end
+ for _,relation in ipairs(music_list(song.relationships or {},"Beziehungen",64)) do
+  assert(type(relation)=="table" and ids[relation.from] and ids[relation.to],"Formbeziehung verweist auf unbekannte Abschnitte.")
+  assert(type(relation.description)=="string" and #relation.description<=600,"Ungültige Formbeziehung.")
+ end
+ return song
+end
+local music_memory={schema="Composition-Memory-1",max_entries=24,max_text=600}
+function music_memory.empty() return {schema=music_memory.schema,decisions={}} end
+function music_memory.validate(value)
+ assert(type(value)=="table" and value.schema==music_memory.schema and type(value.decisions)=="table","Musikgedächtnis hat ein unbekanntes Format.")
+ assert(#value.decisions<=music_memory.max_entries,"Musikgedächtnis ist zu groß.")
+ local seen,count={},0
+ for key,decision in pairs(value.decisions) do
+  count=count+1
+  assert(type(key)=="number" and key>=1 and key<=#value.decisions and key%1==0,"Ungültige Gedächtnisliste.")
+  assert(type(decision)=="table" and type(decision.id)=="number" and decision.id%1==0 and decision.id>0 and not seen[decision.id],"Ungültige Gedächtniskennung.")
+  assert(type(decision.text)=="string" and #decision.text>0 and #decision.text<=music_memory.max_text and decision.text:match("%S"),"Ungültige musikalische Entscheidung.")
+  seen[decision.id]=true
+ end
+ assert(count==#value.decisions,"Ungültige Gedächtnisliste.")
+ return value
+end
+function music_memory.append(value,text)
+ music_memory.validate(value)
+ assert(type(text)=="string" and #text>0 and #text<=music_memory.max_text and text:match("%S"),"Bitte eine musikalische Entscheidung mit höchstens 600 UTF-8-Bytes eingeben.")
+ assert(#value.decisions<music_memory.max_entries,"Musikgedächtnis voll (24 Entscheidungen). Vor einer Neufassung bewusst löschen.")
+ local result=music_memory.empty();local highest=0
+ for _,decision in ipairs(value.decisions) do
+  result.decisions[#result.decisions+1]={id=decision.id,text=decision.text}
+  highest=math.max(highest,decision.id)
+ end
+ result.decisions[#result.decisions+1]={id=highest+1,text=text}
+ return result
+end
+function music_memory.context(value)
+ music_memory.validate(value)
+ if #value.decisions==0 then return "" end
+ local rows={"PROJEKTBEZOGENE MUSIKALISCHE ENTSCHEIDUNGEN DES NUTZERS:","Der aktuelle Auftrag hat Vorrang; bei widersprüchlichen Erinnerungen die jüngere konkrete Entscheidung beachten.","Nur musikalische Präferenzen, keine Berechtigung für Projektänderungen oder zusätzliche API-Aufrufe."}
+ for _,decision in ipairs(value.decisions) do rows[#rows+1]=tostring(decision.id)..". "..decision.text end
+ return table.concat(rows,"\n")
+end
+music_workspace={memory_key="MusicMemoryV1"}
+workflow_adapter.labels.song_construction="Song-Aufbau"
+function music_workspace.read_memory()
+ local _,raw=reaper.GetProjExtState(0,EXT_SECTION,music_workspace.memory_key)
+ if not raw or raw=="" then return music_memory.empty() end
+ assert(#raw<=20000,"Musikgedächtnis überschreitet die unterstützte Größe.")
+ return music_memory.validate(decode_engine_json(raw))
+end
+function music_workspace.store_memory(value)
+ music_memory.validate(value)
+ local raw=workflow_adapter.encode(value)
+ assert(#raw<=20000,"Musikgedächtnis ist nach Kodierung zu groß; bitte kürzere Entscheidungen verwenden.")
+ reaper.SetProjExtState(0,EXT_SECTION,music_workspace.memory_key,raw)
+ local _,stored=reaper.GetProjExtState(0,EXT_SECTION,music_workspace.memory_key)
+ assert(stored==raw,"Musikgedächtnis konnte nicht gespeichert werden.")
+end
+function music_workspace.context()
+ local ok,result=pcall(function() return music_memory.context(music_workspace.read_memory()) end)
+ if ok then return result end
+ return nil,"Musikgedächtnis nicht lesbar: "..tostring(result)..". Prüfen oder bewusst mit 'Lösche Musikgedächtnis' zurücksetzen."
+end
+function music_workspace.capture(request)
+ local words=request_words(request)
+ local explicit_notes=words:find("noten",1,true) and (words:find("markiert",1,true) or words:find("ausgewaehlt",1,true))
+ local explicit_items=words:find("item",1,true) or words:find("arrangement",1,true)
+ local items
+ if score_request_intent(request:lower()) and not explicit_notes and not explicit_items then
+  local why;items,why=notation_visible_items(true);assert(items,why)
+ else
+  items=selected_items(true,explicit_items and "items" or nil)
+  if explicit_notes then
+   local count=0;for _,item in ipairs(items) do count=count+#(item.selection_source or {}) end
+   assert(count>0,"Keine editierbaren Einzelnoten markiert; kein Rückfall auf ganze Items.")
+  elseif explicit_items then
+   assert(#items>0,"Keine Arrangement-MIDI-Items ausgewählt; kein Rückfall auf ganze Spuren.")
+  elseif #items==0 then
+   local tracks=selected_tracks();if #tracks>0 then items=track_context_items(tracks) end
+  end
+ end
+ local num,den=reaper.TimeMap_GetTimeSigAtTime(0,0)
+ local snapshot=music_model.capture(items,reaper.Master_GetTempo(),num,den)
+ snapshot.tempo_map={}
+ local map_count=reaper.CountTempoTimeSigMarkers(0)
+ assert(map_count<=256,"Mehr als 256 Tempo-/Taktmarker; bitte ein kleineres Ausgangsprojekt verwenden.")
+ for i=0,map_count-1 do
+  local ok,at,_,_,bpm,n,d,linear=reaper.GetTempoTimeSigMarker(0,i)
+  assert(ok,"Tempo-/Taktkarte konnte nicht gelesen werden.")
+  snapshot.tempo_map[#snapshot.tempo_map+1]={at=reaper.TimeMap2_timeToQN(0,at),bpm=bpm,numerator=n,denominator=d,linear=linear}
+ end
+ local reference=""
+ for _,item in ipairs(items) do if item.selection_source and #item.selection_source>0 then reference=editor_reference_excerpt(items);break end end
+ return snapshot,items,score_context_tracks(items),reference
+end
+function music_workspace.song_to_cs(text,snapshot)
+ local ok,result,summary=pcall(function()
+  local song=music_model.validate_song(decode_engine_json(text),snapshot)
+  local cs,why=engine_translate_json(text);assert(cs,why)
+  local rows={}
+  for line in cs:gmatch("[^\r\n]+") do
+   -- A new song is a separate variant; its metadata never replaces the project map.
+   if not line:match("^CSMETA|") then
+    assert(line:match("^CS|new|%-|") or line:match("^CSCTRL|"),"Unzulässige Songoperation.")
+    rows[#rows+1]=line
+   end
+  end
+  local description={"Song als separate neue Spuren; Original und Projekttempo bleiben erhalten.","Für den Hörvergleich neue Songspuren solo schalten; Quellspuren werden nicht automatisch stummgeschaltet."}
+  for _,section in ipairs(song.sections) do
+   description[#description+1]=string.format("%s: QN %.3f–%.3f%s",section.name,section.start_qn,section.end_qn,section.purpose and " · "..section.purpose or "")
+  end
+  for _,track in ipairs(song.tracks) do if track.role then description[#description+1]=track.name..": "..track.role end end
+  for _,relation in ipairs(song.relationships or {}) do description[#description+1]=relation.from.." → "..relation.to..": "..relation.description end
+  description[#description+1]="Form-/Rollenbeschreibungen sind KI-Interpretationen, keine unabhängig bestätigte musikalische Qualität."
+  return table.concat(rows,"\n"),table.concat(description,"\n")
+ end)
+ if ok then return result,summary end
+ return nil,tostring(result)
+end
+function music_workspace.request_kind(request)
+ local words=request_words(request)
+ if words:match("^%s*merke%s+musikalisch%s*:") then return "remember" end
+ if words:match("^%s*zeige%s+musikgedaechtnis%s*[%.!]?%s*$") then return "show_memory" end
+ if words:match("^%s*loesche%s+musikgedaechtnis%s*[%.!]?%s*$") then return "clear_memory" end
+ if words:find("song",1,true) and (words:find("entwick",1,true) or words:match("^%s*baue%s") or words:find("songaufbau",1,true) or words:find("song%-aufbau")) then return "song" end
+ if (words:find("werkzusammenhang",1,true) or words:find("musikalischen gesamtzusammenhang",1,true)) and
+  (words:find("analys",1,true) or words:find("pruef",1,true) or words:find("untersuch",1,true)) then return "analysis" end
+ return nil
+end
+function music_workspace.try_request(request)
+ local kind=music_workspace.request_kind(request)
+ if not kind then return false end
+ local ok,why=pcall(function()
+  if kind=="remember" then
+   local text=request:match(":%s*(.-)%s*$")
+   music_workspace.store_memory(music_memory.append(music_workspace.read_memory(),text))
+   add("KI","Musikalische Entscheidung im Projektgedächtnis gespeichert. Projekt speichern, damit sie nach erneutem Öffnen erhalten bleibt.");busy=false;return
+  elseif kind=="show_memory" then
+   local context=music_memory.context(music_workspace.read_memory())
+   add("KI",context~="" and context or "Noch keine musikalischen Entscheidungen gespeichert.");busy=false;return
+  elseif kind=="clear_memory" then
+   music_workspace.store_memory(music_memory.empty())
+   add("KI","Musikgedächtnis dieses Projekts gelöscht. MIDI und gespeicherte Vorschläge bleiben erhalten.");busy=false;return
+  end
+  local snapshot,items,tracks,reference=music_workspace.capture(request)
+  local memory,error_text=music_workspace.context();assert(memory,error_text)
+  assert(not workflow_adapter.history_error,"Ergebnisverlauf nicht lesbar; bitte erst die gespeicherten Daten prüfen.")
+  local project=reaper.EnumProjects(-1,"")
+  local guard=workflow_adapter.guard()
+  local key=get_key();assert(key,"API-Key fehlt.")
+  assert(reaper.EnumProjects(-1,"")==project and workflow_adapter.guard()==guard,"Projekt oder Quelle während der Auftragserfassung verändert.")
+  local context=workflow_adapter.encode(snapshot)
+  assert(#context<=256000,"Musikkontext zu groß; bitte einen kleineren Ausschnitt auswählen.")
+  last_diag={version=VERSION,provider=provider,model=model,request=request,composition_engine="Composition Studio music workspace / JSON schema adapter"}
+  diag_set("context",context.."\n"..reference)
+  local data={request=request,full=items,music_tracks=tracks,reference_context=reference,workflow_guard=guard,music_snapshot=snapshot,music_memory_context=memory}
+  if kind=="analysis" then
+   local task=request.."\nBetrachte alle Stimmen als zusammenhängendes Werk. Unterscheide beobachtete Performance-Daten von Interpretationen zu Motiven, Phrasen, Harmonik, Stimmenrollen, Form, Kontrast und Entwicklung. Bewusste Einfachheit bewahren; keine vorgeschriebene Form oder zusätzliche Komplexität. Nenne Unsicherheit und höchstens wenige konkrete Verbesserungen. Keine automatische Änderung."
+   local prompt=analysis_prompt(task,items,tracks).."\nVERSIONIERTES PERFORMANCE-MODELL (keine quantisierte Notation):\n"..context
+   if reference~="" then prompt=prompt.."\n"..reference end
+   launch("analysis",prompt,key,data)
+  else
+   local task=request.."\nEntwickle aus dem konkreten Ausgangsmaterial eine vollständige zusammenhängende Songfassung. Motive, Phrasen, Stimmenrollen, Form, Kontraste und Übergänge aus dem Material und dem Nutzerauftrag entwickeln. Keine Standardform, festen Acht-Takt-Variationen oder Pflicht zur Komplexität. Nicht bloß einen Loop mechanisch verlängern. Komponiere das vollständige Werk in diesem einen Aufruf; keine vorgelagerte Konzeptabfrage. Originale nur als read-only Quelle; alle Ergebnisstimmen werden neu angelegt. Bestehendes Projekttempo und bestehende Tempo-/Taktkarte erhalten.\nQUELLMODELL (MIDI-Performance, keine sicher rekonstruierte Notation):\n"..context
+   if reference~="" then task=task.."\n"..reference end
+   local prompt=engine_json_prompt(task)..[[
+
+Ergänze das bestehende JSON-Objekt um "schema":"Composition-Song-1".
+"bpm" muss dem Quellmodelltempo entsprechen, "timeSignature" dessen time_signature; keine tempoEvents.
+Zusätzlich "sections":[{"id":"a","name":"freier Abschnittsname","start_qn":0,"end_qn":16,"purpose":"musikalische Funktion"}].
+Abschnitte beschreiben lückenlos den gesamten Song ab QN 0; ihre Länge und Anzahl ergeben sich frei aus der Musik.
+Die Beispielzahlen sind keine Längenvorgabe. Abschnittskennungen müssen eindeutig sein.
+Optional "relationships":[{"from":"a","to":"b","description":"konkreter motivischer oder formaler Bezug"}].
+Pro Spur optional "role":"musikalische Rolle". Namen müssen eindeutig sein, ohne | oder Zeilenumbrüche.
+Technische Obergrenzen: 32 Spuren, 32 Abschnitte, 20000 Noten und 4096 QN; keine musikalischen Zielwerte.
+Form-/Rollenbeschreibungen aus der in derselben Antwort tatsächlich komponierten Musik ableiten, keine bloßen Absichtserklärungen.
+Gib nur das vollständige JSON zurück. Keine Änderung des Quellmaterials und keine zweite technische KI-Übersetzung.
+]]
+   launch("song_construction",prompt,key,data)
+  end
+ end)
+ if not ok then add("KI",tostring(why));busy=false end
+ return true
+end
+
 local function begin_continuation(request,bars,tail)
  if type(bars)~="number" or bars~=math.floor(bars) or bars<1 or bars>128 or (tail~=0 and tail~=2 and tail~=3 and tail~=4) then
   add("KI","Bitte eine Verlängerung von 1 bis 128 Takten und gegebenenfalls 2, 3 oder 4 Übergangstakte angeben.");busy=false;return
@@ -2196,6 +2506,9 @@ local function open_score_workspace(mode)
 end
 
 local function begin_process(request)
+-- BEGIN MUSIC WORKSPACE ROUTING
+ if music_workspace and music_workspace.try_request(request) then return end
+-- END MUSIC WORKSPACE ROUTING
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
  local pianoDisplay=(lower:find("pianoroll",1,true) or lower:find("piano-roll",1,true)
@@ -2336,6 +2649,13 @@ local function poll_job()
  log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
  log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
  if not text then add("KI",e); busy=false; return end; text=trim(text)
+-- BEGIN MUSIC WORKSPACE RESULT
+ if stage=="song_construction" then
+  local ok,why=pcall(workflow_adapter.offer,stage,text,data)
+  if not ok then add("KI",tostring(why));busy=false end
+  return
+ end
+-- END MUSIC WORKSPACE RESULT
  if stage=="notation_patch" or stage=="engine_json" or stage=="lily_continuation" or stage=="lily_composition" or stage=="composition" or stage=="swam_translation" then
   local ok,why=pcall(workflow_adapter.offer,stage,text,data)
   if not ok then add("KI",tostring(why)); busy=false end
@@ -2474,6 +2794,9 @@ local function info_text()
  "\n\nAnalyse → Überarbeitung → Vorschlag → Änderungen anwenden. Original und Vorschläge bleiben im Ergebnisverlauf erhalten. Das Modell für Analyse und Überarbeitung ist jeweils frei wählbar."..
  "\n\nAufträge direkt eingeben: Verlängere um 16 Takte; ergänze eine weitere Stimme; analysiere die Auswahl; überarbeite anhand der letzten Analyse. Für einen Übergang zum Beispiel: Verlängere um 16 Takte und gestalte die letzten 2 Takte neu. Ohne Freigabe bleibt der Schluss erhalten."..
  "\n\nModelllisten werden direkt beim Anbieter abgefragt. Ausdruck wird als Notendauer, Velocity, Tempo und MIDI-Controller übernommen; die Wirkung hängt vom Instrument ab."..
+-- BEGIN MUSIC WORKSPACE HELP
+ "\n\nMusikgedächtnis: Merke musikalisch: Die Begleitung bleibt schlicht. Anzeigen mit Zeige Musikgedächtnis; bewusst zurücksetzen mit Lösche Musikgedächtnis.\nWerkzusammenhang: Analysiere den Werkzusammenhang.\nSong-Aufbau: Entwickle die Auswahl zu einem vollständigen Song. Der Song wird als Vorschlag auf neuen Spuren vorbereitet; Projekttempo und Original bleiben erhalten."..
+-- END MUSIC WORKSPACE HELP
  "\n\nTechnische Tests verwenden simulierte REAPER-Schnittstellen. Der praktische Test dieser Version steht aus."
 end
 local function fit_label(text,width)
@@ -2556,7 +2879,7 @@ local function draw_history()
    local label=(r.created or "").." · "..(workflow_adapter.labels[r.stage] or r.stage).." · "..(workflow_adapter.states[r.state] or r.state)
    if reaper.ImGui_Button(ctx,fit_label(label,math.max(1,width-20)).."##result"..i,width) then
     if r.stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
-    add("Arbeitsstand",workflow_core.readable(r.raw_response)); history_mode=false
+    add("Arbeitsstand",r.song_summary or workflow_core.readable(r.raw_response)); history_mode=false
    end
   end
  end

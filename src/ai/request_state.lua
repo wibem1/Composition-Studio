@@ -1,3 +1,6 @@
+-- BEGIN MUSIC WORKSPACE BINDING
+local music_workspace
+-- END MUSIC WORKSPACE BINDING
 local job=nil
 local workflow_adapter_guard=function() return "" end
 -- Thinking control: persisted UI choice and native provider request parameters.

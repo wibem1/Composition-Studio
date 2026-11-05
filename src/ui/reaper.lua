@@ -18,6 +18,9 @@ local function info_text()
  "\n\nAnalyse → Überarbeitung → Vorschlag → Änderungen anwenden. Original und Vorschläge bleiben im Ergebnisverlauf erhalten. Das Modell für Analyse und Überarbeitung ist jeweils frei wählbar."..
  "\n\nAufträge direkt eingeben: Verlängere um 16 Takte; ergänze eine weitere Stimme; analysiere die Auswahl; überarbeite anhand der letzten Analyse. Für einen Übergang zum Beispiel: Verlängere um 16 Takte und gestalte die letzten 2 Takte neu. Ohne Freigabe bleibt der Schluss erhalten."..
  "\n\nModelllisten werden direkt beim Anbieter abgefragt. Ausdruck wird als Notendauer, Velocity, Tempo und MIDI-Controller übernommen; die Wirkung hängt vom Instrument ab."..
+-- BEGIN MUSIC WORKSPACE HELP
+ "\n\nMusikgedächtnis: Merke musikalisch: Die Begleitung bleibt schlicht. Anzeigen mit Zeige Musikgedächtnis; bewusst zurücksetzen mit Lösche Musikgedächtnis.\nWerkzusammenhang: Analysiere den Werkzusammenhang.\nSong-Aufbau: Entwickle die Auswahl zu einem vollständigen Song. Der Song wird als Vorschlag auf neuen Spuren vorbereitet; Projekttempo und Original bleiben erhalten."..
+-- END MUSIC WORKSPACE HELP
  "\n\nTechnische Tests verwenden simulierte REAPER-Schnittstellen. Der praktische Test dieser Version steht aus."
 end
 local function fit_label(text,width)
@@ -100,7 +103,7 @@ local function draw_history()
    local label=(r.created or "").." · "..(workflow_adapter.labels[r.stage] or r.stage).." · "..(workflow_adapter.states[r.state] or r.state)
    if reaper.ImGui_Button(ctx,fit_label(label,math.max(1,width-20)).."##result"..i,width) then
     if r.stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
-    add("Arbeitsstand",workflow_core.readable(r.raw_response)); history_mode=false
+    add("Arbeitsstand",r.song_summary or workflow_core.readable(r.raw_response)); history_mode=false
    end
   end
  end

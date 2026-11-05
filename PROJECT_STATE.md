@@ -1,5 +1,26 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – 1.2.0 zur ausdrücklich beauftragten Testveröffentlichung vorbereitet
+
+**Nutzerfreigabe:** „veröffentlichen!“ autorisiert die Veröffentlichung der neuen musikalischen Funktionen aus PR #14 über den bestehenden main-Updater. Wegen neuer Fähigkeiten Minor-Version **1.2.0**; Header und Laufzeitkennung in den modularen Quellen synchronisiert, Installer aus Gesamtbuild erzeugt. Letzter veröffentlichter Stand 1.1.11 bleibt unter `2742b497de4e2e15c95d86972bb8c6617fd4a3fd` reproduzierbar. Der Offline-Installertest prüft jetzt auch exakt diesen Ausgangsstand mit bytegenauem Backup.
+
+**Freigabeart:** Testfreigabe. Die Funktionstests nutzen simulierte Anbieter/native Schnittstellen; keine musikalische Hör-/Liveprovider-/native REAPER-Abnahme. Vor Merge vollständigen Release-Runner und CI am endgültigen Kandidaten prüfen; danach veröffentlichte Skript-/Installerbytes und tatsächlichen Update-Download abgleichen. [Releaseumfang und Grenzen](docs/RELEASE-1.2.0.md). Keine Änderung an Composition-Engine oder Notations-PR #12, keine automatische Verbesserungsschleife und kein kostenpflichtiger Live-Test.
+
+**Release-Kandidat lokal geprüft:** Alle 15 Python-Suiten und drei Lua-Dateien bestanden, Gesamtbuild aktuell und Offline-Installation aus exakt 1.1.11 mit Backup erfolgreich. Die endgültige CI wird am anschließend gesicherten Release-Commit geprüft.
+
+## 05.11.2026 – Musikalische Erweiterung: Projektgedächtnis, Werkzusammenhang und erster Song-Aufbau
+
+**Auftrag:** Nach Veröffentlichung der Quellmodularisierung fordert der Nutzer neue musikalische Funktionen und bestätigt die Fortsetzung. Umsetzung auf `feat/music-workspace-20261105`, Basis `main` `2742b497de4e2e15c95d86972bb8c6617fd4a3fd`. Keine Veröffentlichung, keine neue Versionsnummer und keine Integration von Notations-PR #12.
+
+**Implementiert:** `Composition-Music-1` als reines Performance-Modell mit Quellenreferenzen und unveränderten expressiven Zeiten; `Composition-Memory-1` für explizite musikalische Nutzerentscheidungen pro Projekt. Kostenfreie Befehle `Merke musikalisch: …`, `Zeige Musikgedächtnis`, `Lösche Musikgedächtnis`. Entscheidungen ergänzen musikalische Folgeaufträge, aber keine Controller-/Titelanfragen; der aktuelle Auftrag hat Vorrang. `Analysiere den Werkzusammenhang` und `Prüfe den musikalischen Gesamtzusammenhang` nutzen die bestehende Analyse mit strukturiertem mehrstimmigem Kontext. `Entwickle die Auswahl zu einem vollständigen Song` erzeugt mit genau einem Anbieteraufruf eine vollständige JSON-Fassung samt validierten Abschnitten, Stimmenrollen und Formbeziehungen. Vorschlag inklusive Quell-/Präferenzsnapshot wird gespeichert, nach explizitem Apply ausschließlich auf neuen Spuren geschrieben; Projekttempo/-taktkarte bleiben erhalten. Die bestehende Engine-JSON-Übersetzung und Commit-/Undo-/Originalschutzlogik werden wiederverwendet.
+
+**Prüfung:** Vollständiger Offline-Runner: 15 Python-Suiten und drei Lua-Dateien bestanden. Neuer Funktionstest nutzt tatsächliche Modell-/Gedächtnis-/Routing-/Launch-/Poll-/Store-/Applyfunktionen mit Provider- und nativen Schreibmocks: Projekttrennung, Präferenzübergabe, präzise Auswahl, expressive Zeitwerte, Übergröße, ungültige Formreferenzen/Noten/Controller, offene Pedale, Save/Reload, stale Quelle, einmalige Freigabe, Fehler und Projektwechsel ohne Teilübernahme/Retry. Alle bisherigen Regressionen und der gezielt isolierte Legacy-Rückvergleich bleiben grün; Source-/Artefaktsynchronität geprüft. Kein bezahlter KI-Aufruf, kein Live-/Hör-/nativer REAPER-Test; echter LilyPond-Compiler SKIP.
+
+**Grenzen:** Das Gedächtnis speichert zunächst Nutzerentscheidungen, keine automatisch erkannten Motivgraphen. Form-/Rollenbezüge sind gespeicherte KI-Interpretationen, keine unabhängig bestätigte Qualität. Erster Songpfad mit einem begrenzten Aufruf, noch kein mehrstufiger Song-Agent oder automatische Verbesserungsschleife. Tempo-/Taktwechsel und Pitch Bend im neuen Songpfad sind nicht freigegeben. [Befehle, Datenverträge und Grenzen](docs/MUSIC-WORKSPACE.md). Composition-Engine main `8b062ea6deea9e7421c62b0dd415cf652b47828a` erneut geprüft und unverändert.
+
+**Nächste Abnahme:** Feature-PR prüfen und native Gegenprobe an Projektkopie mit repräsentativer Anbieterantwort, Hörvergleich sowie Apply/Undo/Neuladen. Erst nach gesonderter Freigabe neue Versionsnummer und Veröffentlichung; installierte 1.1.11 bleibt bis dahin unverändert. Weitere musikalische Ausbauschritte werden auf Basis dieser tatsächlich benutzbaren Schnittstellen eingegrenzt.
+
+
 ## 05.11.2026 – 1.1.11 als Testfreigabe veröffentlicht
 
 **Veröffentlicht auf ausdrücklichen Nutzerauftrag:** [PR #13](https://github.com/wibem1/Composition-Studio/pull/13) gemergt, Merge-Commit `4bae6c519dee0eb45501eee8b30db4740f5b6b0f`. Header und Laufzeit **1.1.11** auf `main`. Studio-Blob `9da856d5fe70140e9298d95483ce91b71aa2d363`, Offline-Installer-Blob `6f3783aa3863b3a536e4485c0dfc384362f5843a`; beide unverändert gegenüber dem geprüften Release-Commit `913ce95139fc5a691319238c5f1bbf2bcbd71a73`. Die tatsächliche raw.githubusercontent.com-Updateadresse nach Merge heruntergeladen und bytegenau mit dem Kandidaten verglichen.

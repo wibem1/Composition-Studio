@@ -17,6 +17,9 @@ function workflow_adapter.apply()
    result,why=lily_compile_import(r.payload,r.extension_start,r.extension_bars,r.transition_bars>0 and items or nil)
   else
    local text=r.payload
+-- BEGIN MUSIC WORKSPACE APPLY
+   if r.stage=="song_construction" then text,why=music_workspace.song_to_cs(text,r.music_snapshot);assert(text,why) end
+-- END MUSIC WORKSPACE APPLY
    if r.stage=="engine_json" then text,why=engine_translate_json(text); assert(text,why) end
    local items,tracks=workflow_adapter.bindings(r)
    result,why=apply_composition(text,items,tracks,r.chunk_piano)
