@@ -6,6 +6,11 @@ Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAP
 `src/`; `python tools/build_studio.py` erzeugt weiterhin dieselben eigenständigen
 Lua-Dateien für Studio und Installation. [Modulgrenzen, Build und Prüfungen](docs/MODULARIZATION-DEVELOPMENT.md).
 
+**Neue Funktionen auf diesem Entwicklungsbranch:** projektbezogene musikalische
+Entscheidungen merken, Werkzusammenhang analysieren und einen ersten Song-Aufbau
+als gesicherten Vorschlag erzeugen. [Befehle, Umfang und Grenzen](docs/MUSIC-WORKSPACE.md).
+Diese Erweiterung ist noch nicht veröffentlicht; die installierte 1.1.11 bleibt unverändert.
+
 **Langfristige Architektur-Zielsetzung (05.11.2026):** [Modularer, später für REAPER, MuseScore und Maestro nutzbarer Kompositionskern](docs/MODULAR-ARCHITECTURE-VISION.md). Quellmodularisierung umgesetzt; neue musikalische Fähigkeiten und Song Construction folgen später. Die laufende Notationsentwicklung bleibt getrennt.
 
 

@@ -951,6 +951,7 @@
         "REASONING_KEY",
         "REASONING_LABELS",
         "job",
+        "music_workspace",
         "reasoning_mode",
         "set_reasoning_mode",
         "workflow_adapter_guard"
@@ -1011,6 +1012,7 @@
         "last_diag",
         "launch",
         "model",
+        "music_workspace",
         "provider",
         "ps_launch",
         "read_file",
@@ -1371,6 +1373,7 @@
         "diag_set",
         "item_guid",
         "model",
+        "music_workspace",
         "provider",
         "read_file",
         "safe_work_title",
@@ -1488,6 +1491,7 @@
         "last_made",
         "launch",
         "lily_compile_import",
+        "music_workspace",
         "swam_last_made",
         "track_context_items",
         "track_guid",
@@ -1569,6 +1573,115 @@
         "SetExtState",
         "ShowMessageBox",
         "time_precise"
+      ]
+    },
+    {
+      "id": "music/model",
+      "path": "src/music/model.lua",
+      "kind": "portable",
+      "exports": [
+        "music_model"
+      ],
+      "parameters": [],
+      "requires": [],
+      "provides": [
+        "music_list",
+        "music_model",
+        "music_number"
+      ],
+      "writes": [],
+      "globals": [
+        "assert",
+        "ipairs",
+        "math",
+        "pairs",
+        "type"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "music/memory",
+      "path": "src/music/memory.lua",
+      "kind": "portable",
+      "exports": [
+        "music_memory"
+      ],
+      "parameters": [],
+      "requires": [],
+      "provides": [
+        "music_memory"
+      ],
+      "writes": [],
+      "globals": [
+        "assert",
+        "ipairs",
+        "math",
+        "pairs",
+        "table",
+        "tostring",
+        "type"
+      ],
+      "host_apis": []
+    },
+    {
+      "id": "workflow/music_workspace",
+      "path": "src/workflow/music_workspace.lua",
+      "kind": "workflow",
+      "exports": [],
+      "parameters": [],
+      "requires": [
+        "EXT_SECTION",
+        "VERSION",
+        "add",
+        "analysis_prompt",
+        "busy",
+        "decode_engine_json",
+        "diag_set",
+        "editor_reference_excerpt",
+        "engine_json_prompt",
+        "engine_translate_json",
+        "get_key",
+        "last_diag",
+        "launch",
+        "model",
+        "music_memory",
+        "music_model",
+        "music_workspace",
+        "notation_visible_items",
+        "provider",
+        "request_words",
+        "score_context_tracks",
+        "score_request_intent",
+        "selected_items",
+        "selected_tracks",
+        "track_context_items",
+        "workflow_adapter"
+      ],
+      "provides": [],
+      "writes": [
+        "busy",
+        "last_diag",
+        "music_workspace",
+        "workflow_adapter"
+      ],
+      "globals": [
+        "assert",
+        "ipairs",
+        "pcall",
+        "reaper",
+        "string",
+        "table",
+        "tostring"
+      ],
+      "host_apis": [
+        "CountTempoTimeSigMarkers",
+        "EnumProjects",
+        "GetProjExtState",
+        "GetTempoTimeSigMarker",
+        "Master_GetTempo",
+        "SetProjExtState",
+        "TimeMap2_timeToQN",
+        "TimeMap_GetTimeSigAtTime"
       ]
     },
     {
@@ -1703,6 +1816,7 @@
         "launch_new_json",
         "model",
         "music_context",
+        "music_workspace",
         "notation_patch_prompt",
         "notation_selection_items",
         "notation_visible_items",

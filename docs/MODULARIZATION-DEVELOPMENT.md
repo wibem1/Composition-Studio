@@ -119,3 +119,14 @@ Provider-/Modellwahl und UI-Sitzung bleiben über die im Manifest deklarierten
 Bindungen verbunden. Eine weitere Laufzeitentkopplung oder eine Engineumstellung
 braucht eigene Verhaltensverträge und native Prüfung. Die langfristige Vision
 mit neuen musikalischen Fähigkeiten bleibt davon getrennt.
+
+## Musikalischer Entwicklungszweig
+
+Der anschließende Entwicklungszweig ergänzt `music/model`, `music/memory` und
+`workflow/music_workspace`. Damit sind 53 Quellbereiche und 19 portable Module
+registriert. [Funktionaler Umfang](MUSIC-WORKSPACE.md). Neue Integrationspunkte
+sind im Code markiert und werden für den Legacy-Rückvergleich gezielt entfernt;
+die bestehenden Funktionen bleiben danach identisch mit dem bisherigen
+Refactoring-/Releasepfad. Die neuen Abläufe haben einen eigenen Funktionstest.
+Dies ist eine Funktionserweiterung auf separatem Branch, keine nachträgliche
+Änderung der veröffentlichten 1.1.11.

@@ -1,4 +1,7 @@
 local function begin_process(request)
+-- BEGIN MUSIC WORKSPACE ROUTING
+ if music_workspace and music_workspace.try_request(request) then return end
+-- END MUSIC WORKSPACE ROUTING
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
  local pianoDisplay=(lower:find("pianoroll",1,true) or lower:find("piano-roll",1,true)

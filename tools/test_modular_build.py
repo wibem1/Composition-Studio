@@ -17,12 +17,20 @@ subprocess.run([sys.executable, str(ROOT / 'tools/build_studio.py'), '--check'],
 # Later deliberate behavior changes require a reviewed update of this reference.
 baseline = subprocess.check_output(['git', 'show', 'b35301c:Composition Studio.lua'], cwd=ROOT).decode('utf-8')
 runtime = render()
+# Feature integration is explicit; the pre-existing 1.1.11 musical paths stay intact.
+legacy_runtime = runtime
+for unit in manifest['units']:
+    if unit['id'] in ('music/model', 'music/memory', 'workflow/music_workspace'):
+        legacy_runtime = legacy_runtime.replace(inline(unit), '', 1)
+legacy_runtime = re.sub(r'-- BEGIN MUSIC WORKSPACE ([A-Z]+)\n.*?-- END MUSIC WORKSPACE \1\n', '', legacy_runtime, flags=re.S)
+legacy_runtime = legacy_runtime.replace('if stage=="engine_json" or stage=="song_construction" then', 'if stage=="engine_json" then', 1)
+legacy_runtime = legacy_runtime.replace('add("Arbeitsstand",r.song_summary or workflow_core.readable(r.raw_response))', 'add("Arbeitsstand",workflow_core.readable(r.raw_response))', 1)
 planner = next(unit for unit in manifest['units'] if unit['id'] == 'music/cs_plan')
 signature = 'local function apply_composition(text,items,tracks,force_single_piano)'
 commit = ' reaper.Undo_BeginBlock2(0); local made'
 old_prefix = baseline[baseline.index(signature):baseline.index(commit, baseline.index(signature))]
 assert inline(planner) == old_prefix.replace('local function apply_composition(', 'local function plan_composition(', 1) + ' return jobs,musical_map,controls,src,targets\nend\n\n'
-restored = runtime.replace(inline(planner), '', 1)
+restored = legacy_runtime.replace(inline(planner), '', 1)
 first = restored.index(signature)
 last = restored.index(commit, first)
 assert restored[first:last] == signature + ' local jobs,musical_map,controls,src,targets=plan_composition(text,items,tracks,force_single_piano); if not jobs then return nil,musical_map end;'

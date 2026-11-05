@@ -77,8 +77,14 @@ function workflow_adapter.load()
  return ok
 end
 function workflow_adapter.offer(stage,text,data)
+-- BEGIN MUSIC WORKSPACE VALIDATION
+ local song_summary
+ if stage=="song_construction" then
+  local cs,why=music_workspace.song_to_cs(text,data.music_snapshot);assert(cs,why);song_summary=why
+ end
+-- END MUSIC WORKSPACE VALIDATION
  diag_set(stage=="analysis" and "analysis_answer" or "composition_answer",text)
- if stage=="engine_json" then
+ if stage=="engine_json" or stage=="song_construction" then
   diag_set("composition_music",text)
   local ok,score=pcall(decode_engine_json,text)
   if ok and type(score)=="table" then
@@ -88,6 +94,10 @@ function workflow_adapter.offer(stage,text,data)
  end
  assert(not workflow_adapter.history_error,"Verlauf ist nicht lesbar. Bitte Projektkopie und Diagnose sichern.")
  local r={format=workflow_core.format,core_version=workflow_core.version,id=tostring(os.time()).."-"..tostring(#workflow_adapter.records+1),created=os.date("%Y-%m-%d %H:%M"),stage=stage,request=data.request or "",raw_response=text,payload=text,state=stage=="analysis" and "draft" or workflow_core.advance("draft","propose"),source_guard=data.workflow_guard or workflow_adapter.guard(),provider=data.workflow_provider or provider,model=data.workflow_model or model,bindings={},track_bindings={},extension_start=data.extension_start,extension_bars=data.extension_bars,transition_bars=data.transition_bars or 0,chunk_piano=data.chunk_piano or false}
+-- BEGIN MUSIC WORKSPACE RECORD
+ if stage=="song_construction" then r.music_snapshot=data.music_snapshot;r.song_summary=song_summary end
+ if data.music_memory_context and data.music_memory_context~="" then r.music_memory_context=data.music_memory_context end
+-- END MUSIC WORKSPACE RECORD
  for _,it in ipairs(data.full or {}) do r.bindings[#r.bindings+1]=it.guid end
  r.notation_selection={}
  for _,it in ipairs(data.full or {}) do if it.selection_source and #it.selection_source>0 then r.notation_selection[#r.notation_selection+1]={guid=it.guid,notes=it.selection_source} end end
@@ -100,6 +110,9 @@ function workflow_adapter.offer(stage,text,data)
  if stage=="analysis" then workflow_adapter.analysis=r else workflow_adapter.pending=r end
  update_status=stage=="analysis" and "Analyse gespeichert. Zur Umsetzung zum Beispiel eingeben: Überarbeite anhand dieser Analyse." or "Vorschlag gespeichert. Mit Änderungen anwenden übernehmen."
  add("KI",stage=="analysis" and workflow_core.readable(text) or update_status)
+-- BEGIN MUSIC WORKSPACE SUMMARY
+ if song_summary then add("KI · Songstruktur",song_summary) end
+-- END MUSIC WORKSPACE SUMMARY
  busy=false
 end
 function workflow_adapter.bindings(r)

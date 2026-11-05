@@ -64,6 +64,13 @@ local function log_communication(stage,kind,body)
 end
 launch=function(stage,prompt,key,data)
  data=data or {}; data.workflow_guard=data.workflow_guard or workflow_adapter_guard(); data.workflow_provider=provider; data.workflow_model=model
+-- BEGIN MUSIC WORKSPACE MEMORY
+ if music_workspace and stage~="controller" and stage~="work_title" then
+  local memory,why=music_workspace.context()
+  if not memory then add("KI",why);busy=false;job=nil;return false end
+  if memory~="" then prompt=prompt.."\n\n"..memory;data.music_memory_context=memory end
+ end
+-- END MUSIC WORKSPACE MEMORY
  prompt=workflow_core.prompt(stage=="analysis" and "analysis" or "common").."\n"..prompt
  if stage=="controller" or stage=="swam_interpretation" or stage=="work_title" then costs.begin() end; local _,requested=reasoning_parameters(provider,model,reasoning_mode); log_communication(stage,"APP → KI (Denkaufwand "..reasoning_mode.."; gesendet "..requested.."; Prompt; Modell "..tostring(model)..", Provider "..tostring(provider)..")",prompt)
  local a,e=ai_command(prompt,key); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end

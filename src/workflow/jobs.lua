@@ -17,6 +17,13 @@ local function poll_job()
  log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
  log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
  if not text then add("KI",e); busy=false; return end; text=trim(text)
+-- BEGIN MUSIC WORKSPACE RESULT
+ if stage=="song_construction" then
+  local ok,why=pcall(workflow_adapter.offer,stage,text,data)
+  if not ok then add("KI",tostring(why));busy=false end
+  return
+ end
+-- END MUSIC WORKSPACE RESULT
  if stage=="notation_patch" or stage=="engine_json" or stage=="lily_continuation" or stage=="lily_composition" or stage=="composition" or stage=="swam_translation" then
   local ok,why=pcall(workflow_adapter.offer,stage,text,data)
   if not ok then add("KI",tostring(why)); busy=false end
