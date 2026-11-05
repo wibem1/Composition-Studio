@@ -6,7 +6,7 @@ Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAP
 `src/`; `python tools/build_studio.py` erzeugt weiterhin dieselben eigenständigen
 Lua-Dateien für Studio und Installation. [Modulgrenzen, Build und Prüfungen](docs/MODULARIZATION-DEVELOPMENT.md).
 
-**In Entwicklung:** vollständigen Track mit begrenzten KI-Aufrufen und gesicherten Zwischenständen bearbeiten. Noch nicht im veröffentlichten Update enthalten. [Ablauf und Kostengrenzen](docs/WHOLE-TRACK-WORKFLOW.md).
+**Neu ab 1.3.0:** vollständigen Track mit begrenzten KI-Aufrufen und gesicherten Zwischenständen bearbeiten. [Ablauf und Kostengrenzen](docs/WHOLE-TRACK-WORKFLOW.md).
 
 **Neu ab 1.2.0:** projektbezogene musikalische
 Entscheidungen merken, Werkzusammenhang analysieren und einen ersten Song-Aufbau
@@ -16,7 +16,7 @@ Installation über **Studio-Menü → Update**, anschließend Studio neu starten
 **Langfristige Architektur-Zielsetzung (05.11.2026):** [Modularer, später für REAPER, MuseScore und Maestro nutzbarer Kompositionskern](docs/MODULAR-ARCHITECTURE-VISION.md). Quellmodularisierung, Projektgedächtnis und erster begrenzter Song-Aufbau umgesetzt; weitere musikalische Fähigkeiten folgen schrittweise. Die laufende Notationsentwicklung bleibt getrennt.
 
 
-Aktueller Stand: **v1.2.1 · 05.11.2026 · TESTFREIGABE**. KI-Zeitlimit auf zehn Minuten erhöht und veraltete Verbrauchswerte nach fehlgeschlagenen Aufrufen korrigiert. Musikalische Funktionen aus 1.2.0 bleiben erhalten. Native Windows-/REAPER-Gegenprobe ausstehend. [Änderungen und Prüfgrenzen](docs/RELEASE-1.2.1.md).
+Aktueller Stand: **v1.3.0 · 05.11.2026 · TESTFREIGABE**. Ganzer Track mit Werkplan, gesicherten Abschnitten und geschätztem Ausgabenbudget. Native Windows-/REAPER-/Hörabnahme ausstehend. [Änderungen und Prüfgrenzen](docs/RELEASE-1.3.0.md).
 
 Update: **Studio-Menü → Update**, anschließend Studio neu starten. Der bestehende Updater sichert die vorherige Skriptdatei. Einstellungen und Projektdaten werden nicht migriert; der REAPER-Sitzungszustand bleibt teilweise gemeinsam.
 

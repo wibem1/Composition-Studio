@@ -1,5 +1,11 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – 1.3.0 zur ausdrücklich beauftragten Veröffentlichung vorbereitet
+
+**Auftrag:** „veröffentlichen!“ autorisiert den Ganztrack-Ablauf aus PR #16 als Testfreigabe. Neue Funktion, daher Minor-Version 1.3.0; Header und Laufzeit synchronisiert, Installer neu aus Quellen erzeugt. Letzter veröffentlichter Stand 1.2.1 bleibt unter `d9610ae22dfa26e4ec55dab0b65805fdee8f87f9` reproduzierbar; Offline-Installertest ergänzt diesen exakten Stand mit Backup.
+
+**Nachweis:** Implementierungscommit `82bc716fa00ec43d48a33ba9136b832cecc77b57` mit fünf erfolgreichen CI-Jobs, einschließlich [vollständigem Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42092481764). Release-Kandidat lokal vollständig bestanden: 17 Python-Suiten und drei Lua-Dateien, einschließlich exakter Offline-Installation aus 1.2.1 mit Backup. Vor Merge CI prüfen; danach main-Artefakte und tatsächlichen Update-Download bytegenau vergleichen. Keine bezahlten KI-Aufrufe, keine native Windows-/REAPER-/Hörabnahme. Kosten-/Zeitersparnis und harte Rechnungsobergrenze nicht zugesichert. [Releaseumfang](docs/RELEASE-1.3.0.md). Engine und Notations-PR #12 unverändert.
+
 ## 05.11.2026 – Vollständiger Track: begrenzte Aufrufe und gesicherte Zwischenstände
 
 **Auftrag:** Nutzer lehnt Verkürzung des Tracks ab, bestätigt Ganztrack-Ablauf und bemängelt lange, kostenpflichtige Aufrufe ohne verwertbares Ergebnis. Zweite Diagnose 1.2.1: Google Argon beendet mit MAX_TOKENS nach 4:27 Minuten, 33961/32768 Tokens, geschätzte 0,395602 USD. Google-Einzelaufruf enthält kein appseitiges Ausgabelimit; höhere Modellkapazität hier nicht belegt.

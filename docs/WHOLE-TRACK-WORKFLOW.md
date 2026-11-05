@@ -1,12 +1,12 @@
 # Vollständiger Track mit gesicherten Zwischenständen
 
-Entwicklungsstand auf separatem Branch, noch nicht veröffentlicht. Die installierte 1.2.1 bekommt diese Erweiterung erst nach einer späteren Releasefreigabe.
+Für die ausdrücklich beauftragte Testfreigabe 1.3.0 vorbereitet. Installation nach Veröffentlichung über Studio-Menü → Update, danach Studio neu starten.
 
 ## Anlass und belegte Ursache
 
 Die zweite Nutzerdiagnose aus 1.2.1 meldet HTTP 200 und `MAX_TOKENS` bei Google/Gemini 4 Argon, Denkaufwand high. Controller erfolgreich, Komposition nach 4:27 Minuten unvollständig; 33961 Eingabetokens, 32768 Ausgabetokens einschließlich gegebenenfalls gemeldeter Denktokens, geschätzte 0,395602 USD. Keine MIDI-Übernahme. Google bekommt im bisherigen Einzelaufruf kein appseitiges `maxOutputTokens`. Ein höheres unterstütztes Modelllimit ist hier nicht belegt; es wird kein erfundener Maximalwert eingestellt. Rohdiagnose, Quellnoten und lokale Nutzerpfade werden nicht eingecheckt.
 
-## Bedienung nach Veröffentlichung
+## Bedienung
 
 1. Vollständige MIDI-Items im Arrangement auswählen. Alternativ ohne Itemauswahl die Quellspuren auswählen; dann werden deren gesamte MIDI-Items erfasst. Eine Zeitmarkierung beschneidet diese Quelle nicht. Der explizite Ganztrack-Befehl verwendet keine Einzelnotenauswahl aus dem Editor.
 2. Im Menü **Ganzer Track: Auftrag vorbereiten** wählen und den Auftrag ergänzen, beispielsweise: `Ganzer Track: Erstelle eine Techno-Version dieser beiden Tracks mit Synthie, Bass und Drums.` Anschließend Senden. Alternativ den gesamten Befehl direkt eingeben. Diese Vorbereitung erfolgt lokal ohne Controller oder Anbieteraufruf.
