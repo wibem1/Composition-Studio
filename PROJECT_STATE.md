@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Architektur-Audit und konkreter Modularisierungsplan (nur Dokumentation)
+
+**Basis:** GitHub `main` `4743491d7081cf009f144a88b70c373047febeab`, Studio **1.1.10**. Zentrale Standards vollständig gelesen; Engine `main` `8b062ea6deea9e7421c62b0dd415cf652b47828a` lesend geprüft. Separater Branch `docs/modularization-audit-20261105`; kein Merge, keine Version, keine Quell-/Installeränderung, keine Integration oder Änderung von PR #12.
+
+**Ergebnis:** [Architektur-Audit und Plan](docs/MODULARIZATION-AUDIT-2026-11-05.md) mit [Funktionsinventar](docs/MODULARIZATION-FUNCTION-INVENTORY-2026-11-05.md), Modulverantwortungen, Aufrufketten, Host-/Musikgrenzen, Daten-/Portverträgen, Engineabgrenzung, Risiken und messbaren Zwischenzielen. Studio nutzt einen Lua-JSON-Kompatibilitätsadapter und den bereits gemeinsamen Workflow-Kern; keine aktive JavaScript-Engine im Standardpfad. Engine-Docs/Manifest/Runtime und Studioabläufe divergieren; kein stilles Upgrade. Ein-Datei-Update-/Repairvertrag muss erhalten bleiben.
+
+**Aktuell geprüft:** 9 von 10 vorhandenen Studio-Python-Suiten bestanden (u. a. 64 Dear-ImGui-Layouts, 6 Picker-Interaktionen, 32 Kostenprüfungen, 28 Reasoning-Fixtures); drei Lua-Dateien unter Lua 5.4 via lupa bestanden; Engine-Node-Regression bestanden. Echter LilyPond-Compiler ausdrücklich SKIP. `test_model_transport.py` nach Aufhebung des Sandbox-Socketblocks weiterhin fehlgeschlagen: leere Schlüssel-Fixture, 0 HTTP-Requests; bestätigt, nicht repariert. Zusätzlich Unicode-Bestandsfehler isoliert reproduziert: lokale Funktion `utf8` verdeckt `utf8.char` im JSON-Decoder bei `\u`-Escapes; extrahierte Tests übersehen den Scope. Keine neuen REAPER-/Liveprovider-/Hörtests, keine vollständige Produktfreigabe. Details und Grenzen im Audit.
+
+**Nächster einzelner Entwicklungsschritt (erst nach Folgeauftrag):** Nur `version_parts`/`version_is_newer` als internes Modul mit unveränderter Semantik und weiterhin einer ausgelieferten Datei isolieren; Differentialtests sowie bestehende Update-/Offline-/Rollbackprüfungen. Transport-Fixture und Unicodefehler als getrennte Folgeaufgaben, nicht nebenbei beheben. Die eigentliche Modularisierung ist noch nicht begonnen.
+
+
 ## 05.11.2026 – Verbindliche Zielsetzung: modularer, hostübergreifend nutzbarer Kompositionskern (nur Dokumentation)
 
 **Entscheidung:** Composition Studio wird im bestehenden Repository weiterentwickelt, **kein neues Repository**. Ziel ist die verhaltenserhaltende Modularisierung des bestehenden REAPER-Skripts und anschließend die Ergänzung von Music Model, Music Memory, übergreifender musikalischer Analyse, Arrangement, Workflow, Qualitätsprüfung sowie Song Construction/Musical Form & Development. Dieselbe Architektur soll künftig sinngemäß oder durch kompatible Module in MuseScore und Maestro verwendbar sein. Bestehende `wibem1/Composition-Engine` vor technischer Duplizierung prüfen. Die laufende Notationsentwicklung (PR #12) bleibt vorerst getrennt.
