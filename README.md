@@ -2,6 +2,9 @@
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 
+**Langfristige Architektur-Zielsetzung (05.11.2026):** [Modularer, später für REAPER, MuseScore und Maestro nutzbarer Kompositionskern](docs/MODULAR-ARCHITECTURE-VISION.md). Zunächst verhaltenserhaltende Neustrukturierung; Song Construction später, laufende Notationsentwicklung vorerst getrennt. **Konzept, noch keine implementierte Funktion.**
+
+
 Aktueller Stand: **v1.1.10 · 04.11.2026 · TESTFREIGABE**. Modellauswahl in REAPER isoliert geprüft; vollständiger App-/Neustart-/Live-KI-Test ausstehend.
 
 Denkaufwand im Hauptfenster: **Kurz / Mittel / Hoch / Automatisch**, mit **Mittel** als Voreinstellung. Die Auswahl wird dauerhaft gespeichert und gilt für die KI-Aufrufe des Auftrags einschließlich Konzeption und Komposition. Während eines laufenden Auftrags ist sie gesperrt. Automatisch sendet keine Denksteuerung und verwendet die Modellvorgabe.
