@@ -1,5 +1,9 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – M2: zwei Auditbefunde gezielt abgesichert
+
+Transporttest erhält explizite lokale Fixture-Schlüssel; der Test für fehlende Schlüssel entfernt sie gezielt. Fünf lokale HTTP-Seiten, Authheader, Pagination, Filter, Cache und Fehlerpfade bestanden. Keine echten Providerzugänge. JSON-Decoder verwendet ausdrücklich die Lua-Standardbibliothek `_G.utf8.char`, statt die gleichnamige lokale Antworthelper-Funktion zu indizieren. Regression im realen lexikalischen Umfeld: literales/escaped Unicode, Surrogatpaar und ungültige Escapes bestanden. Versions-Differentialtest weiterhin bestanden; Offline-Payload synchronisiert. Diese Fehlerkorrektur ist getrennt von den folgenden Quellenextraktionen. Keine Änderung von Prompts, musikalischen Algorithmen, Version oder main. Nächster Schritt: bestehende Entwicklungsquellen vollständig nach Audit-Verantwortlichkeiten aufteilen und gemeinsame portable Module sowie Ein-Datei-Build absichern.
+
 ## 05.11.2026 – Modularisierung begonnen: Versionsvergleich isoliert (M1)
 
 **Auftrag:** Nutzer beauftragt jetzt die Umsetzung der Modularisierung. Erster begrenzter Schritt gemäß Audit auf `refactor/version-module-20261105`, ausgehend vom Auditbranch und produktivem `main` `4743491d7081cf009f144a88b70c373047febeab`. Produktversion bleibt **1.1.10**, kein Merge/Release, keine Engineänderung oder Übernahme aus PR #12.

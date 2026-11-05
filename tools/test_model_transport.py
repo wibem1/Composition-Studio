@@ -30,7 +30,7 @@ server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
 thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
 try:
  with TemporaryDirectory(prefix="Wilhelm's Studio ä ") as d:
-  folder=Path(d);messages=[];saved={};clock=[0];mode=['normal'];commands=[]
+  folder=Path(d);messages=[];saved={f'key-{pv}':'FIXTURE-KEY' for pv in ('openai','anthropic','google')};clock=[0];mode=['normal'];commands=[]
   r=LuaRuntime(unpack_returned_tuples=True);r.globals().ROOT=d
   def execute(command,timeout):
    argv=shlex.split(command)
@@ -85,6 +85,7 @@ return {models=workflow_adapter.models,lists=MODELS,provider=function(p)provider
   mode[0]='hang';api.models.refresh(False);assert api.models.job is not None
   clock[0]=31;api.models.poll();assert api.models.job is None and 'Zeitlimit' in api.models.message
   assert not list(folder.rglob('*.curl-config'))
+  saved.pop('key-openai')
   before=len(messages);api.models.refresh(True)
   assert api.models.job is None and 'API-Key' in api.models.message and len(messages)==before
   saved['key-openai']='FIXTURE-KEY';mode[0]='normal';refresh('openai',True)

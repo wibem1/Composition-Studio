@@ -1493,7 +1493,7 @@ local function decode_engine_json(src)
       if lo and lo>=0xDC00 and lo<=0xDFFF then cp=0x10000+(cp-0xD800)*1024+lo-0xDC00;i=i+6 end
      end
      if cp>=0xD800 and cp<=0xDFFF then bad("Unicode-Surrogat") end
-     out[#out+1]=utf8.char(cp)
+     out[#out+1]=_G.utf8.char(cp)
     else bad("Escape") end
    else
     if ch:byte()<32 then bad("Steuerzeichen") end

@@ -11,11 +11,11 @@ legacy = old[old.index('local function version_parts(v)'):old.index('local updat
 reference = LuaRuntime(unpack_returned_tuples=True).execute(
     legacy + '\nreturn {parts=version_parts,is_newer=version_is_newer}')
 
-# Nothing outside the extracted version block may change in this first step.
+# Preserve the version-only invariant while allowing the independently tested Unicode fix.
 runtime = (ROOT / 'Composition Studio.lua').read_text()
 first = runtime.index('-- BEGIN VERSION MODULE')
 last = runtime.index('local update_job=nil', first)
-assert runtime[:first] + legacy + runtime[last:] == old, 'Unexpected runtime change outside version module'
+assert (runtime[:first] + legacy + runtime[last:]).replace('_G.utf8.char(cp)', 'utf8.char(cp)') == old, 'Unexpected runtime change outside version module and Unicode fix'
 
 subprocess.run([sys.executable, str(ROOT / 'tools/build_version_module.py'), '--check'], check=True)
 variants = {'module': (ROOT / 'src/core/version.lua').read_text()}
