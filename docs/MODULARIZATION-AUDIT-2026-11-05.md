@@ -291,6 +291,41 @@ CI deckt diese Gesamtheit nicht ab: Die bestehenden Workflows haben Quell-/
 Testpfadfilter und führen nur Teilmengen aus; ein reiner Dokumentations-PR kann
 daher ohne diese Jobs bleiben. Keine künstliche Quelländerung zum CI-Auslösen.
 
+Reproduktion der Lua-Dateien ohne separaten Lua-CLI-Installer, aus dem Repo-Root:
+
+```python
+from pathlib import Path
+from lupa.lua54 import LuaRuntime
+for path in sorted(Path("tests").glob("*.lua")):
+    LuaRuntime().execute(path.read_text())
+```
+
+Reproduktion des Unicodebefunds mit den tatsächlichen lexikalischen Nachbarn:
+
+```python
+from pathlib import Path
+from lupa.lua54 import LuaRuntime
+s = Path("Composition Studio.lua").read_text()
+helper = s[s.index("local function utf8(cp)"):s.index("local function read_json_string")]
+decoder = s[s.index("local function decode_engine_json(src)"):s.index("local function engine_translate_json(answer)")]
+check = LuaRuntime(unpack_returned_tuples=True).execute(
+    helper + "\n" + decoder + "\nreturn function(s) return pcall(decode_engine_json,s) end")
+print(check(r'{"title":"\u00e4"}'))  # false, utf8 ist eine Funktion
+print(check('{"title":"ä"}')[0])     # true
+```
+
+### Übergabestatus
+
+Dokumentation und Projektstand sind auf `docs/modularization-audit-20261105`
+nach GitHub gepusht. Die PR-Anlage ist noch blockiert: Der Proxy verweigert
+`api.github.com` bereits beim CONNECT mit HTTP 403; HTTPS-Git zum Repository
+funktioniert. Die benötigte Domain wurde additiv im Cloud-Konfigurationsentwurf
+gespeichert, zusammen mit getesteten Python-/Lua-Setup- und Startanweisungen.
+Das Speichern aktiviert oder veröffentlicht die Netzfreigabe nicht. Nach deren
+Aktivierung GitHub-API erneut prüfen und den Dokumentations-PR gegen `main`
+erstellen, ohne ihn zu mergen. Bis dahin existiert nur der Review-Branch,
+kein bestätigter PR. Die tatsächliche Modularisierung bleibt ein Folgeauftrag.
+
 ## 8. Reihenfolge und objektive Zwischenziele
 
 | Schritt | Begrenzter Umfang | Objektives Abnahmekriterium |

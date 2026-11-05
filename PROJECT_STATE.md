@@ -10,6 +10,8 @@
 
 **Nächster einzelner Entwicklungsschritt (erst nach Folgeauftrag):** Nur `version_parts`/`version_is_newer` als internes Modul mit unveränderter Semantik und weiterhin einer ausgelieferten Datei isolieren; Differentialtests sowie bestehende Update-/Offline-/Rollbackprüfungen. Transport-Fixture und Unicodefehler als getrennte Folgeaufgaben, nicht nebenbei beheben. Die eigentliche Modularisierung ist noch nicht begonnen.
 
+**Übergabe:** Auditbranch nach GitHub gepusht. PR-Anlage noch blockiert durch Proxy-HTTP-403 für `api.github.com` (Git-Zugriff funktioniert). Domain sowie wiederverwendbare Setup-/Startanweisungen im Cloud-Entwurf gespeichert; erst nach Aktivierung der Netzfreigabe PR gegen `main` anlegen. Kein bestehender Notations-PR verändert.
+
 
 ## 05.11.2026 – Verbindliche Zielsetzung: modularer, hostübergreifend nutzbarer Kompositionskern (nur Dokumentation)
 
