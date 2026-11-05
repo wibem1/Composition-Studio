@@ -1,5 +1,11 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Lesbare Notation per Button (PR #12)
+
+Die Textanalyse ist keine Voraussetzung für die Bedienung. **Lesbare Notation erstellen** sendet einen vorbereiteten Auftrag und setzt geprüfte Einsätze und Dauern als native Anzeige-Offsets. Der Ablauf bewahrt ursprüngliche MIDI-Ereignisse und manuelle Anzeige-Offsets, überspringt unsichere Vorschläge und schützt gegen veraltete Quellen sowie Schreibfehler. Ergebnis im REAPER-Noteneditor mit proportionalen Abständen und nativer Triolenerkennung. Die isolierte Testfassung ist über den bestehenden Testinstaller installierbar.
+
+**Nachgewiesen:** REAPER 7.84 Linux, echte Anzeige mit vorbereiteter Antwort. Acht verstreute Noten und Zwischenpausen wurden zu zwei gebalkten Achtelgruppen. Alle übrigen MIDI-Ereignisse hatten identische absolute Zeitpunkte, Flags und Bytes. Vollständige Lua-Syntax und 18 lokale Testsuiten erfolgreich. Live-KI-Interpretation und Plattformabnahme stehen aus. Bedienung und Grenzen: [Native Notation per Button](docs/NATIVE-NOTATION-BUTTON.md).
+
 ## 04.11.2026 – Testfähiger Abschluss der semantischen Notationsanalyse (PR #12)
 
 Verbindliche globale Standards, Projektanweisungen und aktueller GitHub-Branch gelesen; Ausgangscommit `334a21a2a3bc09ccd6d88b87cbb265840ac2a966`. Vollständige lokale Regression nach Integration erfolgreich: **12 Lua-Dateien mit Lua 5.4 kompiliert, alle vier Lua-Testsuiten und 13 Python-Testsuiten bestanden**, darunter 22 SEMNOTE-Fälle, Produktions-Auftrags-/Antwortpfad mit Provider-Fixture, echte JSON-Speicherung/Neuladen, Quellschutz, externe Änderung während der Analyse, Speicherfehler, isolierte Installation/erster UI-Frame und bestehende 64 Dear-ImGui-Layouts. Echter LilyPond-Compiler mangels Installation ausgelassen. Kein laufendes REAPER, kein echter KI-Aufruf, keine kostenpflichtige API-Nutzung und keine native Windows-/macOS-Abnahme.

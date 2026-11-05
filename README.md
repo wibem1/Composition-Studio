@@ -1,6 +1,6 @@
 # Composition Studio
 
-**Separater Entwicklungstest (PR #12):** [Musikalische MIDI-Notationsanalyse – Installation und ein abschließender Vier-Takte-Test](docs/SEMANTIC-ANALYSIS-TEST.md). Der isolierte Installer ersetzt die stabile Version nicht. Analyse, Zuordnung und Speicherung sind automatisiert geprüft; reale REAPER-/KI-Abnahme steht aus.
+**Separater Entwicklungstest (PR #12):** Der Button **Lesbare Notation erstellen** überträgt notierte Einsätze und Dauern in REAPERs Noteneditor. [Installation, Bedienung und Prüfnachweis](docs/NATIVE-NOTATION-BUTTON.md).
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
 

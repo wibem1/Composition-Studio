@@ -787,7 +787,7 @@ local function parse_semnotes(reply,items)
  end
  return accepted,rejected
 end
-local function analysis_prompt(request,items,tracks)
+local function analysis_prompt(request,items,tracks,display_plan)
  local prompt=[[Du analysierst das konkret übergebene MIDI-Material. Antworte musikalisch präzise als normaler Text. Erfinde nichts. Erzeuge kein MIDI und keine CS-Zeilen.]].."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false)
  local query=tostring(request or ""):lower()
  if query:find("notation",1,true) or query:find("notier",1,true) or query:find("partitur",1,true) or query:find("transkrib",1,true) or query:find("notenansicht",1,true) or query:find("notensicht",1,true) then
@@ -806,6 +806,20 @@ local function analysis_prompt(request,items,tracks)
    q=b;count=count+1
   end
   if q<hi then prompt=prompt.."METRIK UNVOLLSTAENDIG: Taktzuordnung ausserhalb der BAR-Zeilen NICHT BELEGBAR.\n" end
+  if display_plan then
+   return prompt..[[
+
+Erstelle einen Notationsplan für den nativen Noteneditor. N-Zeilen sind in Reihenfolge ab 1 nummeriert.
+Rekonstruiere taktweise Melodie, Bass, Begleitung und Mittelstimmen anhand musikalischer Zusammenhänge.
+Unterscheide rhythmische Absicht von Vortragstiming, echte Pausen von kurzen Artikulationslücken,
+Triolen von freiem Timing und Vorschlagsnoten von regulären Noten. Erhalte die Identität jeder Note.
+Plane konventionelle, spielbare Notenwerte, metrische Gruppierung und zusammengehörige Akkorde.
+Start in absoluten Projektvierteln (QN), Dauer in Vierteln, z. B. 0.5 für Achtel, 0.333333333 für Triolenachtel.
+Bei Unsicherheit, Vorschlagsnoten oder nicht eindeutig darstellbaren Fällen lasse die Note aus.
+Antworte ausschließlich mit einer Zeile je eindeutig gelöster Note, auch bei bereits richtigen Werten.
+DISPLAY|Nummer_der_N_Zeile|Notierter_Start_QN|Notierte_Dauer_QN|SICHER
+Keine Programm- oder MIDI-Befehle.]]
+  end
   prompt=prompt..[[
 
 ZUSATZAUFTRAG: MUSIKALISCHE NOTATIONSINTERPRETATION (NUR ANALYSE)
@@ -1691,6 +1705,162 @@ function workflow_adapter.guard()
  for i=0,reaper.CountTempoTimeSigMarkers(0)-1 do local _,tm,mp,bp,bpm,num,den,linear=reaper.GetTempoTimeSigMarker(0,i); rows[#rows+1]=workflow_adapter.encode({tm,mp,bp,bpm,num,den,linear}) end
  return table.concat(rows,"\n")
 end
+-- BEGIN NATIVE NOTATION
+function workflow_adapter.notation_plan(reply, targets)
+ local plan, seen = {}, {}
+ local function on_grid(qn, divisions)
+  return math.abs(qn*divisions-math.floor(qn*divisions+0.5)) < 0.0001
+ end
+ for line in reply:gmatch("[^\r\n]+") do
+  local id, start, length, certainty = line:match("^DISPLAY|(%d+)|([^|]+)|([^|]+)|([^|]+)$")
+  id, start, length = tonumber(id), tonumber(start), tonumber(length)
+  local target = targets[id]
+  if target then
+   local note = target.note
+   local _, bar = reaper.TimeMap_QNToMeasures(0, start and start>=0 and start<1e8 and start or note.start_qn)
+   if seen[id] then
+    plan[id] = nil
+   elseif certainty=="SICHER" and start and length and bar and start>=target.item.start_qn-1e-7
+     and start+length<=target.item.end_qn+1e-7
+     and math.abs(start-note.start_qn)<=0.126
+     and length>=0.125 and length<=32
+     and math.abs(length-note.duration_qn)<=math.min(0.5, note.duration_qn/2)
+     and (on_grid(start-bar,8) or on_grid(start-bar,6))
+     and (on_grid(length,8) or on_grid(length,6)) then
+    plan[id] = {start=start-note.start_qn, length=length-note.duration_qn}
+   end
+   seen[id] = true
+  end
+ end
+ return plan
+end
+
+-- Change only type-15 note-display data. Preserve every existing event's
+-- position, flags, order and payload except the display fields being added.
+function workflow_adapter.notation_stream(raw, changes)
+ local out, ons, metadata, events = {}, {}, {}, {}
+ local pos, tick = 1, 0
+ local prefix = string.char(255,15)
+ local function identity(at, channel, pitch)
+  return string.format("%d:%d:%d",at,channel,pitch)
+ end
+ while pos<=#raw do
+  local first=pos
+  local delta, flags, msg
+  delta,flags,msg,pos=string.unpack("i4Bs4",raw,pos)
+  tick=tick+delta
+  local index=#events+1
+  events[index]={raw=raw:sub(first,pos-1),delta=delta,flags=flags,msg=msg}
+  local status,pitch,velocity=msg:byte(1,3)
+  local key
+  if #msg==3 and status>>4==9 and velocity>0 then
+   key=identity(tick,status&15,pitch)
+   ons[key]=ons[key]==nil and index or false
+  elseif msg:sub(1,2)==prefix then
+   local channel, pitch=msg:sub(3):match("^NOTE (%d+) (%d+)%f[%D]")
+   if channel then
+    key=identity(tick,tonumber(channel),tonumber(pitch))
+    metadata[key]=metadata[key]==nil and index or false
+   end
+  end
+ end
+ local after,changed,represented={},0,0
+ for _, edit in ipairs(changes) do
+  local key=identity(edit.tick,edit.channel,edit.pitch)
+  local on,meta=ons[key],metadata[key]
+  if on and meta~=false then
+   local previous=meta and events[meta].msg
+   -- Existing hand-edited offsets take precedence.
+   if not previous or not (previous:find("%sdisp_pos%s") or previous:find("%sdisp_len%s")) then
+    local fields=""
+    if math.abs(edit.start)>0.00001 then fields=fields..string.format(" disp_pos %.9f",edit.start) end
+    if math.abs(edit.length)>0.00001 then fields=fields..string.format(" disp_len %.9f",edit.length) end
+    represented=represented+1
+    if fields~="" then
+     if previous then
+      local e=events[meta]
+      e.raw=string.pack("i4Bs4",e.delta,e.flags,e.msg..fields)
+     else
+      local msg=prefix..string.format("NOTE %d %d",edit.channel,edit.pitch)..fields
+      after[on]=string.pack("i4Bs4",0,0,msg)
+     end
+     changed=changed+1
+    end
+   end
+  end
+ end
+ for i,event in ipairs(events) do
+  out[#out+1]=event.raw
+  if after[i] then out[#out+1]=after[i] end
+ end
+ return table.concat(out),changed,represented
+end
+
+function workflow_adapter.write_native_notation(reply,data)
+ assert(data.workflow_guard==workflow_adapter.guard(),"Das Projekt wurde während der Analyse verändert. Bitte erneut starten.")
+ local plan=workflow_adapter.notation_plan(reply,data.targets)
+ local edits,counts={},{}
+ for id,target in ipairs(data.targets) do
+  local row=target.item
+  if plan[id] then
+   local note=target.note
+   local tick=reaper.MIDI_GetPPQPosFromProjQN(row.take,note.start_qn)
+   local integer=math.floor(tick+0.5)
+   if math.abs(tick-integer)<0.0001 then
+    edits[row]=edits[row] or {}
+    local key=string.format("%d:%d:%d",integer,note.channel,note.pitch)
+    counts[row]=counts[row] or {}
+    counts[row][key]=(counts[row][key] or 0)+1
+    edits[row][#edits[row]+1]={key=key,tick=integer,channel=note.channel,pitch=note.pitch,
+     start=plan[id].start,length=plan[id].length}
+   end
+  end
+ end
+ local writes,changed,represented={},0,0
+ for row, changes in pairs(edits) do
+  assert(reaper.ValidatePtr2(0,row.take,"MediaItem_Take*"),"Der MIDI-Take ist nicht mehr verfügbar.")
+  local readable,raw=reaper.MIDI_GetAllEvts(row.take)
+  assert(readable and raw==row.original_stream,"Die MIDI-Ereignisse wurden während der Analyse verändert.")
+  local unique={}
+  for _,edit in ipairs(changes) do
+   if counts[row][edit.key]==1 then unique[#unique+1]=edit end
+  end
+  local output,n,accepted=workflow_adapter.notation_stream(raw,unique)
+  represented=represented+accepted
+  if n>0 then
+   changed=changed+n
+   writes[#writes+1]={row=row,before=raw,after=output}
+  end
+ end
+ if #writes>0 then
+  reaper.Undo_BeginBlock2(0)
+  local attempted=0
+  local ok,why=pcall(function()
+   for i,w in ipairs(writes) do
+    attempted=i
+    assert(reaper.MIDI_SetAllEvts(w.row.take,w.after),"REAPER konnte die Anzeigeereignisse nicht schreiben.")
+    local read,actual=reaper.MIDI_GetAllEvts(w.row.take)
+    assert(read and actual==w.after,"REAPER hat den erwarteten Ereignisstrom nicht übernommen.")
+   end
+  end)
+  local restored=true
+  if not ok then
+   for i=attempted,1,-1 do
+    local w=writes[i]
+    local reset=pcall(reaper.MIDI_SetAllEvts,w.row.take,w.before)
+    local read,actual=reaper.MIDI_GetAllEvts(w.row.take)
+    restored=restored and reset and read and actual==w.before
+   end
+  end
+  reaper.Undo_EndBlock2(0,ok and "Lesbare Notation erstellen" or "Notation: Schreibfehler",4)
+  for i=1,attempted do reaper.UpdateItemInProject(writes[i].row.item) end
+  if not restored then error("Rücknahme konnte nicht geprüft werden. Bitte REAPER-Rückgängig verwenden.") end
+  if not ok then error(why) end
+ end
+ return changed,represented
+end
+-- END NATIVE NOTATION
+
 function workflow_adapter.history_path()
  local dir=reaper.GetResourcePath().."/CompositionStudioResults"
  reaper.RecursiveCreateDirectory(dir,0)
@@ -2270,6 +2440,98 @@ local function open_score_workspace(mode)
   or "Notations-Shortcut ausgeführt. Falls noch Piano-Roll sichtbar ist, in REAPER einmal auf Ansicht → Notation wechseln (Alt+4)."
 end
 
+function workflow_adapter.show_native_notation(data)
+ local ed=focused_or_last_notation_editor()
+ local function shows_target(editor)
+  if not editor then return false end
+  local take=reaper.MIDIEditor_GetTake(editor)
+  for _,row in ipairs(data.items) do if take==row.take then return true end end
+  return false
+ end
+ if not shows_target(ed) and data.arrangement then
+  reaper.Main_OnCommand(40153,0)
+  ed=focused_or_last_notation_editor()
+ end
+ if not shows_target(ed) then return false end
+ local section=reaper.SectionFromUniqueID(32060)
+ if not section then return false end
+ local mode,spacing,triplets
+ for i=0,19999 do
+  local id,label=reaper.kbd_enumerateActions(section,i)
+  if not id or id==0 then break end
+  label=(label or ""):lower()
+  if label=="view: mode: musical notation" or label=="view: mode: notation" or label=="mode: notation" then mode=id end
+  if label=="notation: proportional (musical) note spacing" then spacing=id end
+  if label=="notation: automatically detect triplets" then triplets=id end
+ end
+ if not mode or not reaper.MIDIEditor_OnCommand(ed,mode) then return false end
+ local function enable(id)
+  if id and reaper.GetToggleCommandStateEx(32060,id)==0 then reaper.MIDIEditor_OnCommand(ed,id) end
+ end
+ enable(spacing)
+ enable(triplets)
+ return true
+end
+
+function workflow_adapter.begin_native_notation()
+ local ok,why=pcall(function()
+  local rows,count=notation_selection_items(true)
+  local arrangement=count==0
+  if arrangement then rows=selected_items(true,"items") end
+  if #rows==0 then
+   local editor=focused_or_last_notation_editor()
+   local take=editor and reaper.MIDIEditor_GetTake(editor)
+   local visible=take and notation_visible_items(true)
+   for _,row in ipairs(visible or {}) do
+    if row.take==take then rows={row};arrangement=false;break end
+   end
+  end
+  assert(#rows>0,"Bitte MIDI-Items oder Noten im MIDI-Editor auswählen.")
+  local guard=workflow_adapter.guard()
+  local pools={}
+  for guid in guard:gmatch("[\r\n]%s*POOLEDEVTS%s+(%b{})") do pools[guid]=(pools[guid] or 0)+1 end
+  local targets={}
+  for _,row in ipairs(rows) do
+   local read,chunk=reaper.GetItemStateChunk(row.item,"",false)
+   assert(read,"Das MIDI-Item konnte nicht geprüft werden.")
+   for guid in chunk:gmatch("[\r\n]%s*POOLEDEVTS%s+(%b{})") do
+    assert(pools[guid]==1,"Bitte gepoolte MIDI-Items vor dem Notieren entpoolen.")
+   end
+   local source=reaper.GetMediaItemTake_Source(row.take)
+   assert(source and reaper.GetMediaSourceFileName(source,"")=="","Bitte dateibasierte MIDI-Quellen zuerst ins Projekt importieren.")
+   if reaper.GetMediaItemInfo_Value(row.item,"B_LOOPSRC")==1 then
+    local length,is_qn=reaper.GetMediaSourceLength(source)
+    local zero=reaper.MIDI_GetProjQNFromPPQPos(row.take,0)
+    local rate=reaper.GetMediaItemTakeInfo_Value(row.take,"D_PLAYRATE")
+    assert(is_qn and rate>0 and row.end_qn<=zero+length/rate+0.00001,
+     "Bitte wiederholte MIDI-Schleifen vor dem Notieren in einzelne Items umwandeln.")
+   end
+   local read_events,raw=reaper.MIDI_GetAllEvts(row.take)
+   assert(read_events,"MIDI-Ereignisse konnten nicht gelesen werden.")
+   row.original_stream=raw
+   for _,note in ipairs(row.notes) do targets[#targets+1]={item=row,note=note} end
+  end
+  assert(#targets>0,"Die Auswahl enthält keine klingenden MIDI-Noten.")
+  assert(#targets<=500,"Bitte einen Abschnitt mit höchstens 500 Noten wählen.")
+  local key=get_key()
+  assert(key and key~="","Kein API-Key für "..provider_name().." verfügbar.")
+  local request="Lesbare Notation erstellen"
+  local prompt=analysis_prompt(request,rows,score_context_tracks(rows),true)
+  if count>0 then
+   local reference=editor_reference_excerpt(rows)
+   if reference~="" then prompt=prompt.."\n\n"..reference end
+  end
+  costs.begin()
+  info_visible=false
+  history_mode=false
+  update_status="Notation wird musikalisch rekonstruiert …"
+  busy=true
+  launch("native_notation",prompt,key,{request=request,targets=targets,items=rows,
+   arrangement=arrangement,workflow_guard=guard})
+ end)
+ if not ok then busy=false;update_status=tostring(why) end
+end
+
 local function begin_process(request)
  -- For an unambiguous new-composition request, do not pay for a controller call.
  local lower=request:lower()
@@ -2425,6 +2687,17 @@ local function poll_job()
  if stage=="notation_patch" or stage=="engine_json" or stage=="lily_continuation" or stage=="lily_composition" or stage=="composition" or stage=="swam_translation" then
   local ok,why=pcall(workflow_adapter.offer,stage,text,data)
   if not ok then add("KI",tostring(why)); busy=false end
+  return
+ end
+ if stage=="native_notation" then
+  local ok,changed,represented=pcall(workflow_adapter.write_native_notation,text,data)
+  busy=false
+  if not ok then update_status=tostring(changed);return end
+  local opened,shown=pcall(workflow_adapter.show_native_notation,data)
+  update_status=string.format("%d Anzeigeänderungen · %d von %d Noten eindeutig dargestellt.",
+    changed,represented,#data.targets)
+  if not (opened and shown) then update_status=update_status.." Notenansicht bitte im MIDI-Editor öffnen." end
+  add("Notation",update_status)
   return
  end
  if stage=="analysis" then
@@ -2679,8 +2952,8 @@ local scale=font_size/14
 local _,spacing=reaper.ImGui_GetStyleVar(ctx,reaper.ImGui_StyleVar_ItemSpacing())
 spacing=spacing or 4
 local bh=math.max(reaper.ImGui_GetFrameHeight(ctx),math.floor(34*scale+0.5))
-local ih=math.min(math.floor(112*scale+0.5),math.max(bh*2,math.floor(h*0.32)))
-local ch=math.max(1,h-ih-bh*2-spacing*5-2)
+local ih=math.max(1,math.min(math.floor(112*scale+0.5),math.max(bh*2,math.floor(h*0.32)),h-bh*3-spacing*6-18))
+local ch=math.max(1,h-ih-bh*3-spacing*6-2)
 local child_visible=reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders())
 if child_visible then
  reaper.ImGui_TextWrapped(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks))
@@ -2689,6 +2962,9 @@ if child_visible then
  draw_workflow_status()
  draw_history()
  reaper.ImGui_EndChild(ctx)
+end
+if reaper.ImGui_Button(ctx,"Lesbare Notation erstellen",w,bh) and not busy then
+ workflow_adapter.begin_native_notation()
 end
 local input_flags=0
 if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then input_flags=input_flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end
