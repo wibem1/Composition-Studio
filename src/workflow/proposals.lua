@@ -77,6 +77,9 @@ function workflow_adapter.load()
  return ok
 end
 function workflow_adapter.offer(stage,text,data)
+-- BEGIN WHOLE TRACK VALIDATION
+ if stage=="whole_track" then whole_track.to_cs(text,data.track_snapshot) end
+-- END WHOLE TRACK VALIDATION
 -- BEGIN MUSIC WORKSPACE VALIDATION
  local song_summary
  if stage=="song_construction" then
@@ -98,6 +101,9 @@ function workflow_adapter.offer(stage,text,data)
  if stage=="song_construction" then r.music_snapshot=data.music_snapshot;r.song_summary=song_summary end
  if data.music_memory_context and data.music_memory_context~="" then r.music_memory_context=data.music_memory_context end
 -- END MUSIC WORKSPACE RECORD
+-- BEGIN WHOLE TRACK RECORD
+ if stage=="whole_track" then r.track_snapshot=data.track_snapshot;r.track_run_id=data.track_run_id end
+-- END WHOLE TRACK RECORD
  for _,it in ipairs(data.full or {}) do r.bindings[#r.bindings+1]=it.guid end
  r.notation_selection={}
  for _,it in ipairs(data.full or {}) do if it.selection_source and #it.selection_source>0 then r.notation_selection[#r.notation_selection+1]={guid=it.guid,notes=it.selection_source} end end

@@ -46,7 +46,7 @@ local workflow_adapter={guard=function()return "guard" end,
  offer=function(stage,text,data)sent[#sent+1]={stage="proposal",payload=text,data=data};busy=false end}
 local CONTROLLER="TEST"
 '''+section('local function request_words(request)','local function compact_music_excerpt')+
-section('local function begin_continuation(request,bars,tail)','local function title_prompt()')+
+section('local function begin_continuation(request,bars,tail)','-- BEGIN WHOLE TRACK LOCAL_SCOPE\n')+
 section('local function poll_job()','local function submit()')+'''
 return {bars=continuation_bars,tail=request_transition,
  begin=function(req)busy=true;begin_process(req)end,

@@ -32,7 +32,7 @@ local reaper={GetOS=function()return WINDOWS and "Win64" or "OSX64" end,
  time_precise=function()return 10 end,ExecProcess=function()return "" end}
 local function diag_set(key,value)last_diag[key]=value end
 local function trim(value)return (value or ""):match("^%s*(.-)%s*$")end
-local function reasoning_parameters()return "","high" end
+local REASONING_LABELS={low="Kurz",medium="Mittel",high="Hoch",auto="Automatisch"}
 local function add()end
 local workflow_core={prompt=function()return "" end}
 local workflow_adapter_guard=function()return "guard"end
@@ -40,7 +40,7 @@ local function first_text_field(raw)return raw:match('"text"%s*:%s*"([^\"]+)"')e
 local function response_text(raw)return first_text_field(raw)end
 local launch
 '''
-    code += source('platform/process') + source('platform/files') + source('ai/response') + source('ai/costs')
+    code += source('platform/process') + source('platform/files') + source('ai/response') + source('ai/reasoning') + source('ai/costs')
     requests = source('ai/requests')
     if fast:
         assert requests.count('local timeout=600') == 1
@@ -54,6 +54,7 @@ os.execute=function(command)launches[#launches+1]=command;return execute(command
     code += '''
 return {command=ai_command,poll=ai_poll,diagnostics=last_diag,costs=costs,launches=launches,
  set_provider=function(value)provider=value end,
+ set_reasoning=function(value)reasoning_mode=value end,
  scripts=function()return launches end}
 '''
     return lua, lua.execute(code)
@@ -63,9 +64,42 @@ with TemporaryDirectory() as temporary:
     folder = Path(temporary)
     (folder / 'CompositionStudioTemp').mkdir()
     lua, api = environment(folder, True)
+    # Bounded output requests use each provider's actual wire parameter.
+    for provider in ('google', 'openai', 'anthropic'):
+        api.set_provider(provider)
+        for effort in ('high', 'auto'):
+            api.set_reasoning(effort)
+            request, error = api.command('bounded fixture', 'FIXTURE-KEY', 2048)
+            assert request.timeout_seconds == 120 and request.deadline == 150
+            body = json.loads(Path(request.rq).read_text())
+            if provider == 'google':
+                assert body['generationConfig']['maxOutputTokens'] == 2048
+                if effort == 'high': assert body['generationConfig']['thinkingConfig']['thinkingLevel'] == 'high'
+            elif provider == 'openai': assert body['max_output_tokens'] == 2048
+            else: assert body['max_tokens'] == 2048
+    api.set_provider('google'); api.set_reasoning('high')
+    fixture_launches = len(api.launches)
+    api.costs.total.calls = 0
+    api.costs.total.unknown = 0
+    for provider, ending in (
+        ('google', {'finishReason': 'MAX_TOKENS'}),
+        ('anthropic', {'stop_reason': 'max_tokens'}),
+        ('openai', {'status': 'incomplete', 'incomplete_details': {'reason': 'max_output_tokens'}}),
+        ('openai', {'finish_reason': 'length'}),
+    ):
+        api.set_provider(provider)
+        request, error = api.command('incomplete fixture', 'FIXTURE-KEY', 8192)
+        Path(request.cd).write_text('200')
+        Path(request.rs).write_text(json.dumps(dict(ending, text='partial notes')))
+        result, error, done = api.poll(request)
+        assert result is None and done and 'Tokenlimit' in error
+    api.set_provider('google')
+    fixture_launches = len(api.launches)
+    api.costs.total.calls = 0
+    api.costs.total.unknown = 0
     first, error = api.command('fixture', 'FIXTURE-KEY')
     assert error is None and first.timeout_seconds == 600 and first.deadline == 630
-    script = Path(api.launches[1]).read_text(encoding='utf-8-sig')
+    script = Path(api.launches[fixture_launches + 1]).read_text(encoding='utf-8-sig')
     assert '[TimeSpan]::FromSeconds(600)' in script
     assert '$cause.InnerException' in script and '[System.OperationCanceledException]' in script
     assert "$code = 'TIMEOUT'" in script and 'finally' in script
@@ -89,7 +123,7 @@ with TemporaryDirectory() as temporary:
     assert api.costs.total.calls == 2 and api.costs.total.unknown == 1
     # Prior known usage remains in aggregate totals, not in the failed call's fields.
     assert api.costs.total.input == 1140 and api.costs.total.output == 530
-    assert len(api.launches) == 2
+    assert len(api.launches) == fixture_launches + 2
     assert not Path(second.cd).exists() and not Path(second.rq).exists()
     missing, error = api.command('missing status', 'FIXTURE-KEY')
     missing.deadline = 0

@@ -17,6 +17,9 @@ function workflow_adapter.apply()
    result,why=lily_compile_import(r.payload,r.extension_start,r.extension_bars,r.transition_bars>0 and items or nil)
   else
    local text=r.payload
+-- BEGIN WHOLE TRACK APPLY
+   if r.stage=="whole_track" then text=whole_track.to_cs(text,r.track_snapshot) end
+-- END WHOLE TRACK APPLY
 -- BEGIN MUSIC WORKSPACE APPLY
    if r.stage=="song_construction" then text,why=music_workspace.song_to_cs(text,r.music_snapshot);assert(text,why) end
 -- END MUSIC WORKSPACE APPLY

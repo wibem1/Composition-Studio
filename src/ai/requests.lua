@@ -1,11 +1,23 @@
-local function ai_command(prompt,key)
+local function ai_command(prompt,key,output_limit)
  local timeout=600
+-- BEGIN WHOLE TRACK TIMEOUT
+ if output_limit then timeout=120 end
+-- END WHOLE TRACK TIMEOUT
  local thinking,requested=reasoning_parameters(provider,model,reasoning_mode)
  diag_set("reasoning_mode",reasoning_mode); diag_set("reasoning_requested",requested)
  local base=temp_path(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers,win_headers
  if provider=="openai" then body='{"model":"'..json_escape(model)..'","input":"'..json_escape(prompt)..'"'..thinking..'}'; url="https://api.openai.com/v1/responses"; win_headers={"Authorization: Bearer "..key,"Content-Type: application/json"}
  elseif provider=="anthropic" then body='{"model":"'..json_escape(model)..'","max_tokens":16000,"messages":[{"role":"user","content":"'..json_escape(prompt)..'"}]'..thinking..'}'; url="https://api.anthropic.com/v1/messages"; win_headers={"x-api-key: "..key,"anthropic-version: 2023-06-01","Content-Type: application/json"}
  else body='{"contents":[{"parts":[{"text":"'..json_escape(prompt)..'"}]}]'..thinking..'}'; url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key; win_headers={"Content-Type: application/json"} end
+-- BEGIN WHOLE TRACK LIMIT
+ if output_limit then
+  assert(type(output_limit)=="number" and output_limit%1==0 and output_limit>=256 and output_limit<=8192,"Ungültiges Ausgabelimit.")
+  if provider=="openai" then body=body:sub(1,-2)..',"max_output_tokens":'..output_limit..'}'
+  elseif provider=="anthropic" then body=body:gsub('"max_tokens":16000','"max_tokens":'..output_limit,1)
+  elseif body:find('"generationConfig":{',1,true) then body=body:gsub('("generationConfig":{)','%1"maxOutputTokens":'..output_limit..',',1)
+  else body=body:sub(1,-2)..',"generationConfig":{"maxOutputTokens":'..output_limit..'}}' end
+ end
+-- END WHOLE TRACK LIMIT
  if not write_file(rq,body) then return nil,"Anfrage konnte nicht geschrieben werden: "..rq end
  if IS_WINDOWS then
   local script=windows_curl_script(nil,rq,rs,cd,win_headers,url,timeout)
@@ -50,6 +62,10 @@ local function ai_poll(a)
   return nil,"KI-Aufruf fehlgeschlagen ("..status.."): "..excerpt:sub(1,350),true
  end
  local stop_reason=raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"')
+-- BEGIN WHOLE TRACK STOP
+ stop_reason=stop_reason or raw:match('"finish_reason"%s*:%s*"([^"]+)"')
+ if raw:match('"reason"%s*:%s*"max_output_tokens"') then stop_reason="max_tokens" end
+-- END WHOLE TRACK STOP
  if stop_reason=="max_tokens" or stop_reason=="MAX_TOKENS" or stop_reason=="length" then
   diag_set("api_error","Tokenlimit erreicht; unvollständige Komposition")
   os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
@@ -82,5 +98,8 @@ launch=function(stage,prompt,key,data)
 -- END MUSIC WORKSPACE MEMORY
  prompt=workflow_core.prompt(stage=="analysis" and "analysis" or "common").."\n"..prompt
  if stage=="controller" or stage=="swam_interpretation" or stage=="work_title" then costs.begin() end; local _,requested=reasoning_parameters(provider,model,reasoning_mode); log_communication(stage,"APP → KI (Denkaufwand "..reasoning_mode.."; gesendet "..requested.."; Prompt; Modell "..tostring(model)..", Provider "..tostring(provider)..")",prompt)
- local a,e=ai_command(prompt,key); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
+-- BEGIN WHOLE TRACK LAUNCH
+ local output_limit=data.whole_track_output_limit
+-- END WHOLE TRACK LAUNCH
+ local a,e=ai_command(prompt,key,output_limit); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 

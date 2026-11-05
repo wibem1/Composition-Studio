@@ -1,0 +1,37 @@
+# Vollständiger Track mit gesicherten Zwischenständen
+
+Für die ausdrücklich beauftragte Testfreigabe 1.3.0 vorbereitet. Installation nach Veröffentlichung über Studio-Menü → Update, danach Studio neu starten.
+
+## Anlass und belegte Ursache
+
+Die zweite Nutzerdiagnose aus 1.2.1 meldet HTTP 200 und `MAX_TOKENS` bei Google/Gemini 4 Argon, Denkaufwand high. Controller erfolgreich, Komposition nach 4:27 Minuten unvollständig; 33961 Eingabetokens, 32768 Ausgabetokens einschließlich gegebenenfalls gemeldeter Denktokens, geschätzte 0,395602 USD. Keine MIDI-Übernahme. Google bekommt im bisherigen Einzelaufruf kein appseitiges `maxOutputTokens`. Ein höheres unterstütztes Modelllimit ist hier nicht belegt; es wird kein erfundener Maximalwert eingestellt. Rohdiagnose, Quellnoten und lokale Nutzerpfade werden nicht eingecheckt.
+
+## Bedienung
+
+1. Vollständige MIDI-Items im Arrangement auswählen. Alternativ ohne Itemauswahl die Quellspuren auswählen; dann werden deren gesamte MIDI-Items erfasst. Eine Zeitmarkierung beschneidet diese Quelle nicht. Der explizite Ganztrack-Befehl verwendet keine Einzelnotenauswahl aus dem Editor.
+2. Im Menü **Ganzer Track: Auftrag vorbereiten** wählen und den Auftrag ergänzen, beispielsweise: `Ganzer Track: Erstelle eine Techno-Version dieser beiden Tracks mit Synthie, Bass und Drums.` Anschließend Senden. Alternativ den gesamten Befehl direkt eingeben. Diese Vorbereitung erfolgt lokal ohne Controller oder Anbieteraufruf.
+3. Studio zeigt den gesamten Umfang, Zahl der noch möglichen Aufrufe, gesicherte Abschnitte, bekannte Kosten und ein Tarifbeispiel. Start beispielsweise mit `Track-Aufbau starten: 2 USD`. Das gibt ein **zusätzliches geschätztes Ausgabenbudget** frei, keinen Festpreis. Ohne hinterlegten Tarif kein Start; eigene Tarife lassen sich über die vorhandene Kostenübersicht setzen.
+4. Ein gemeinsamer Werkplan und danach die technischen Arbeitsfenster werden nacheinander erzeugt. Gültige Ergebnisse werden vor jeder nächsten Anfrage lokal gesichert. Fortschritt und **Track-Aufbau anhalten** erscheinen in der Oberfläche.
+5. Erst wenn alle Fenster validiert und zusammengefügt sind, erscheint ein vollständiger Vorschlag im Ergebnisverlauf. **Änderungen anwenden** legt die neue Fassung auf neuen Spuren an, ausgerichtet am ursprünglichen Trackanfang. Originale und Tempo-/Taktkarte bleiben erhalten; native Commit-/Undo-Logik wird wiederverwendet. Neue Spuren für den Hörvergleich solo schalten.
+
+Nach einem Fehler oder Neustart: `Track-Aufbau fortsetzen` zeigt den gespeicherten Stand ohne Anbieteraufruf. Erst eine erneute Eingabe `Track-Aufbau starten: … USD` erlaubt weitere Anfragen. Bereits erfolgreich gesicherte Fenster werden nicht neu erzeugt; ein fehlgeschlagenes Fenster wird ausschließlich nach dieser ausdrücklichen Freigabe erneut versucht. Fertige Vorschläge werden anhand der Auftragskennung nicht doppelt angeboten. `Track-Aufbau abbrechen` startet keine weiteren Anfragen; während laufender Verarbeitung die Schaltfläche verwenden, weil das Texteingabefeld wie bisher keine parallelen Aufträge startet.
+
+## Grenzen, Kosten und Schutz
+
+- Der ganze erfasste Track bleibt das Ziel. Technische Fenster von maximal 16 QN begrenzen die Antwortgröße; sie schreiben weder musikalische Form noch Phrasenlänge vor. Musikalische Abschnitte im Werkplan sind frei und dürfen Fenstergrenzen überspannen. Noten können über eine Grenze ausklingen. Gemeinsamer Plan, vorherige Übergabe und ausklingende Noten gehen an das nächste Fenster.
+- Ein Planaufruf mit maximal 2048 Ausgabetokens, danach ein Aufruf je Fenster mit maximal 8192 Ausgabetokens. Jeder neue Track-Aufruf hat 120 Sekunden HTTP-Limit und 140 Sekunden Watchdog. Keine automatischen Wiederholungen, keine zusätzlichen kostenpflichtigen Prüf- oder Übersetzungsaufrufe. Bisherige Einzelaufrufe behalten ihre Limits.
+- Vor jeder Anfrage wird der voraussichtliche Aufwand aus Promptbytes, Reserve, Antwortlimit und vorhandenem Tarif mit dem verbleibenden Budget verglichen. Nach jeder Antwort zählt der tatsächliche gemeldete Verbrauch. Fehlende Verbrauchsdaten stoppen weitere Anfragen, nachdem ein gültiges Ergebnis gesichert wurde.
+- **Keine garantierte Rechnungsobergrenze und keine zugesicherte Kosten-/Zeitersparnis.** Die Eingabetokens sind vorab geschätzt, Tarife können abweichen. Mehrere Aufrufe können insgesamt mehr kosten. Ein abgebrochener Hintergrundaufruf kann beim Anbieter weiterlaufen und Kosten verursachen; sein Verbrauch bleibt ohne gemeldete Daten unbekannt. Gesicherte Arbeit bleibt erhalten, unvollständige Antworten werden nicht als gültiges Fenster übernommen.
+- Projekt-/Quellschutz, Anbieter, Modell, Denkaufwand und Musikgedächtnis werden vor Folgeaufrufen geprüft. Änderungen stoppen den Ablauf. Kein stilles Herabsetzen des Denkaufwands. Gemini 2.5 wird in diesem begrenzten Ablauf nur mit Automatisch unterstützt, da seine expliziten Denkbudgets das Antwortlimit übersteigen können.
+- Obergrenzen: 20000 Quellnoten, 1024 QN/64 Fenster, 16 Ergebnisstimmen, 32 musikalische Abschnitte, 4000 Noten pro Fenster, 20000 Ergebnisnoten und 8 MB Zwischenstand. Überschreitungen melden einen Fehler, keine stille Kürzung. Stille Fenster müssen ausdrücklich bestätigt sein; Sustain muss pro Fenster geschlossen sein. Keine Tempo-/Taktänderungen oder Pitch-Bend-Erweiterung.
+- Die Gesamtprüfung ist **technisch**, kein automatischer musikalischer Qualitätsnachweis. Sie prüft vollständige Fensterabdeckung, Zeitgrenzen, Stimmenidentität, MIDI-Werte, Controller, Gesamtumfang und vorhandene JSON-/CS-Schnittstellen. Eine KI kann trotz formal vollständiger Daten musikalisch unbefriedigend arbeiten; eine Hörabnahme bleibt notwendig.
+
+## Schnittstellen und Persistenz
+
+`music/whole_track` ist portabel und enthält `track_plan.windows`, `validate`, `validate_window`, `assemble` und `excerpt`. Der Hostkoordinator `workflow/whole_track` kümmert sich um Budget, Requests, Sourceguard, lokale Sicherung und Vorschlagsübergabe. Datenverträge: `Composition-TrackPlan-1`, `Composition-TrackWindow-1`, `Composition-TrackJob-1`; das Gesamtergebnis verwendet vorhandenes `Composition-Song-1`, `music_model.validate_song` und `engine_translate_json`. Keine zweite Engine und keine Veränderung von Composition-Engine oder Notations-PR #12.
+
+Zwischenstand liegt neben dem vorhandenen projektspezifischen Ergebnisverlauf als `.whole-track.json`, mit `.pending` und `.bak` für atomare Sicherung. Er enthält Quelle, Plan, gültige Ergebnisse, Bindungen, Kostenstand und Auftragskennung; keine API-Schlüssel oder nativen Handles. Projekt speichern, damit dessen bestehende Verlaufsidentität nach Wiederöffnung erhalten bleibt. Korrupte Daten werden nicht ungeprüft als Auftrag ausgeführt.
+
+## Nachweis
+
+`tools/test_whole_track.py` führt Produktionsfunktionen mit simuliertem Anbieter/REAPER aus: rund 36 Takte mit gebrochenem Ende und drei Stimmen, spätes Scheitern, Wiederaufnahme ohne erneute erfolgreiche Aufrufe, frische Lua-Sitzung, Kosten-/Budgetstopp, unbekannter Verbrauch, Abbruch/Projektwechsel/stale Quelle, Save/Reload, vollständiger Vorschlag und einmaliges Apply. Dazu ungültige/verkürzte Pläne, unerlaubte MIDI-Werte, Fenster, Controller, offene Pedale, absichtliche Stille und ausklingende Noten. `test_ai_timeouts.py` prüft tatsächliche Requestparameter aller drei Anbieter und deren Tokenabbrüche; Transporttest über realen lokalen HTTP-Server. Keine bezahlten Anbieteraufrufe und keine native Windows-/REAPER-/Hörabnahme.

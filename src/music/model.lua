@@ -12,9 +12,11 @@ local function music_list(value,name,limit)
  assert(count==#value and count<=limit,name..": technische Größenbegrenzung überschritten.")
  return value
 end
-function music_model.capture(items,tempo,num,den)
+function music_model.capture(items,tempo,num,den,source_limit)
  assert(music_number(tempo) and tempo>=20 and tempo<=400,"Tempo außerhalb des unterstützten JSON-Bereichs (20–400 BPM).")
  assert(music_number(num) and num%1==0 and num>=1 and num<=32 and music_number(den) and den%1==0 and den>=1 and den<=64,"Taktart nicht unterstützt.")
+ source_limit=source_limit or music_model.max_source_notes
+ assert(music_number(source_limit) and source_limit>=1 and source_limit<=20000,"Ungültiges Quellnotenlimit.")
  local snapshot={schema=music_model.schema,representation="performance",tempo=tempo,time_signature={num,den},parts={},note_count=0}
  local parts,seen_items={},{ }; local first,last=math.huge,-math.huge
  for _,item in ipairs(items) do
@@ -28,7 +30,7 @@ function music_model.capture(items,tempo,num,den)
   end
   for ordinal,note in ipairs(item.notes or {}) do
    snapshot.note_count=snapshot.note_count+1
-   assert(snapshot.note_count<=music_model.max_source_notes,"Mehr als 2500 Quellnoten; bitte einen kleineren Bereich auswählen.")
+   assert(snapshot.note_count<=source_limit,"Quellnotenlimit überschritten ("..source_limit..").")
    assert(music_number(note.start_qn) and music_number(note.duration_qn) and note.duration_qn>0,"Ungültige Quellzeiten.")
    assert(music_number(note.pitch) and note.pitch%1==0 and note.pitch>=0 and note.pitch<=127,"Ungültige Quelltonhöhe.")
    assert(music_number(note.velocity) and note.velocity%1==0 and note.velocity>=1 and note.velocity<=127,"Ungültige Quellvelocity.")

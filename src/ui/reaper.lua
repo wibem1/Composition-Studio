@@ -118,6 +118,12 @@ reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(composition_mode=="concept" and " ✓" or "")) then composition_mode="concept"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Konzeption + Komposition (2 KI-Aufrufe)." end
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
+-- BEGIN WHOLE TRACK MENU
+if reaper.ImGui_MenuItem(ctx,"Ganzer Track: Auftrag vorbereiten") and not busy then
+ if not input:match("^[Gg]anzer%s+[Tt]rack:") then input="Ganzer Track: "..input end
+ update_status="Ganze MIDI-Items oder Quellspuren auswählen, Auftrag ergänzen und Senden. Vorbereitung ohne KI-Aufruf."
+end
+-- END WHOLE TRACK MENU
 if reaper.ImGui_MenuItem(ctx,"Schrift kleiner (A-)") then set_font_size(font_size-1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift größer (A+)") then set_font_size(font_size+1) end
 if reaper.ImGui_MenuItem(ctx,"Schrift Standard (14)") then set_font_size(14) end; if reaper.ImGui_MenuItem(ctx,"MIDI exportieren …") then export_last_midi() end; if reaper.ImGui_MenuItem(ctx,"SWAM-MIDI exportieren …") then export_swam_midi() end; if reaper.ImGui_MenuItem(ctx,"Diagnose speichern …") then save_diagnosis() end; if reaper.ImGui_MenuItem(ctx,"LilyPond-Pfad einstellen ...") then set_lily_exe() end; if reaper.ImGui_MenuItem(ctx,"Notenansicht vorbereiten") then local ok,msg=open_score_workspace(); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Piano-Roll öffnen") then local ok,msg=open_score_workspace("pianoroll"); add("KI",msg) end; if reaper.ImGui_MenuItem(ctx,"Update") then install_update() end; reaper.ImGui_Separator(ctx); if reaper.ImGui_MenuItem(ctx,"OpenAI API-Key ...") then edit_key("openai") end; if reaper.ImGui_MenuItem(ctx,"Anthropic API-Key ...") then edit_key("anthropic") end; if reaper.ImGui_MenuItem(ctx,"Google API-Key ...") then edit_key("google") end; reaper.ImGui_EndPopup(ctx) end; local model_width=reaper.ImGui_GetContentRegionAvail(ctx); draw_model_picker(model_width)
@@ -147,6 +153,12 @@ if child_visible then
  reaper.ImGui_TextWrapped(ctx,string.format("%d MIDI | %d Spur(en)",#items,#tracks))
  reaper.ImGui_TextWrapped(ctx,"Auftrag: "..costs.amount(costs.order).." · Gesamt: "..costs.amount(costs.total))
  if busy then reaper.ImGui_TextWrapped(ctx,job and (job.stage=="work_title" and "KI findet einen Werktitel …" or job.stage=="composition_music" and "KI komponiert …" or job.stage=="composition" and "MIDI wird erzeugt …" or job.stage=="summary" and "KI beschreibt das Stück …") or "KI arbeitet …") end
+-- BEGIN WHOLE TRACK STATUS
+ if whole_track and job and (job.stage=="whole_track_plan" or job.stage=="whole_track_window") then
+  reaper.ImGui_TextWrapped(ctx,update_status)
+  if reaper.ImGui_Button(ctx,"Track-Aufbau anhalten") then whole_track.cancel() end
+ end
+-- END WHOLE TRACK STATUS
  draw_workflow_status()
  draw_history()
  reaper.ImGui_EndChild(ctx)
