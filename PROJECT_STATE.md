@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – 1.2.0 mit musikalischen Erweiterungen veröffentlicht
+
+**Veröffentlicht auf ausdrücklichen Nutzerauftrag:** [PR #14](https://github.com/wibem1/Composition-Studio/pull/14) gemergt, Merge-Commit `738288d5c00d32630cd541bf5dedfe094b5092a1`. Header und Laufzeit **1.2.0** auf `main`; Studio-Blob `a6fdab607e1dcbebb5ee475f37d512263c8cf497`, Offline-Installer-Blob `660437d39b95cd7b71ba804c6bd61569b43af3bb`, identisch mit dem geprüften Kandidaten `f306a56570cfc6ffe6ae2f3b25c68349cc97738b`. Regulären raw.githubusercontent.com-Update-Download nach Merge gelesen und bytegenau verglichen.
+
+**Prüfgrundlage:** Alle 15 Python-Suiten und drei Lua-Dateien lokal bestanden; alle fünf Release-CI-Jobs erfolgreich, darunter [Gesamtbuild und vollständiger Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42037984537). Exakte Offline-Installation aus 1.1.11 mit Backup bestanden. Keine Liveprovider-/Hör-/native REAPER-/Windows-/macOS-/Update-Neustartabnahme; echter LilyPond-Compiler SKIP. Weiterhin **Testfreigabe**, keine bestätigte vollständige Produktreife. Engine und Notations-PR #12 unverändert.
+
+**Jetzt benutzbar nach Update:** `Merke musikalisch: …`, `Zeige Musikgedächtnis`, `Lösche Musikgedächtnis`, `Analysiere den Werkzusammenhang`, `Prüfe den musikalischen Gesamtzusammenhang`, `Entwickle die Auswahl zu einem vollständigen Song`. Song erst nach `Änderungen anwenden` auf neuen Spuren; Original und Tempo-/Taktkarte bleiben erhalten. Gedächtnis zunächst Nutzerentscheidungen, Songpfad ein begrenzter Aufruf statt mehrstufigem Agenten. [Befehle und Grenzen](docs/MUSIC-WORKSPACE.md).
+
+**Nächster Schritt:** Studio-Menü → Update, Studio neu starten und native Gegenprobe an Projektkopie durchführen. Neue Songspuren für den Hörvergleich solo schalten; Projekt speichern, um Gedächtnis/Verlauf dauerhaft zu behalten. Veröffentlichung ersetzt die lokale Nutzerinstallation nicht automatisch.
+
 ## 05.11.2026 – 1.2.0 zur ausdrücklich beauftragten Testveröffentlichung vorbereitet
 
 **Nutzerfreigabe:** „veröffentlichen!“ autorisiert die Veröffentlichung der neuen musikalischen Funktionen aus PR #14 über den bestehenden main-Updater. Wegen neuer Fähigkeiten Minor-Version **1.2.0**; Header und Laufzeitkennung in den modularen Quellen synchronisiert, Installer aus Gesamtbuild erzeugt. Letzter veröffentlichter Stand 1.1.11 bleibt unter `2742b497de4e2e15c95d86972bb8c6617fd4a3fd` reproduzierbar. Der Offline-Installertest prüft jetzt auch exakt diesen Ausgangsstand mit bytegenauem Backup.

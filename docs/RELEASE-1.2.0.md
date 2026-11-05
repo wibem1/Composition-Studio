@@ -1,7 +1,9 @@
 # Composition Studio 1.2.0 – Testfreigabe
 
-05.11.2026. Neue musikalische Funktionen aus PR #14, Veröffentlichung auf
-expliziten Nutzerauftrag über den bestehenden Studio-main-Updater.
+05.11.2026. Auf expliziten Nutzerauftrag über [PR #14](https://github.com/wibem1/Composition-Studio/pull/14)
+veröffentlicht; Merge `738288d5c00d32630cd541bf5dedfe094b5092a1`.
+Der reguläre Studio-Update-Download stimmt bytegenau mit dem geprüften
+Release-Kandidaten überein.
 
 ## Neue Funktionen
 
@@ -34,10 +36,10 @@ Keine Übernahme von Notations-PR #12 und keine Änderung der Composition Engine
 ## Prüfungen und Installation
 
 15 Python-Suiten und drei Lua-Dateien sowie die fünf CI-Jobs haben den
-Featurestand bestanden. Der Release-Kandidat wird zusätzlich mit 1.2.0-Kennung
-und synchronisierten Artefakten vollständig geprüft, einschließlich exakter
-Offline-Installation aus 1.1.11 mit Backup. Konkrete Commit-/Prüfnachweise stehen
-in PROJECT_STATE.md und PR #14.
+Featurestand bestanden. Auch der endgültige Release-Kandidat mit 1.2.0-Kennung
+und synchronisierten Artefakten hat den vollständigen Runner und alle fünf
+CI-Jobs bestanden, einschließlich exakter Offline-Installation aus 1.1.11 mit
+Backup. Konkrete Commit-/Prüfnachweise stehen in PROJECT_STATE.md und PR #14.
 
 Kein Liveprovider-/Hör-/nativer REAPER-/Windows-/macOS-Test. Echter
 LilyPond-Compiler ohne Konfiguration ausdrücklich ausgelassen.
