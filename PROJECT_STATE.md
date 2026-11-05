@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – 1.2.1-Testfreigabe veröffentlicht
+
+**Veröffentlichung:** [PR #15](https://github.com/wibem1/Composition-Studio/pull/15) gemergt, Merge-Commit `2754871b5e32909cdc0baf263103ece9faf75b0c`. Header und Laufzeit 1.2.1 auf main. Studio-Blob `33764f8200c01d12a77292346bdafc7d30417797`, Offline-Installer-Blob `5a8e4343b6964f24f337914734103e59de2ce871`; beide identisch mit geprüftem Kandidaten `97bc5e88ef6596c59bfd8458c9fa1da3533c9980`. Tatsächlichen raw.githubusercontent.com-Update-Download nach Merge bytegenau abgeglichen.
+
+**Prüfgrundlage:** Alle 16 Python-Suiten und drei Lua-Dateien lokal bestanden, fünf CI-Jobs am exakten Kandidaten erfolgreich; [Gesamtbuild und vollständiger Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42057974341). Exakte Offline-Installation aus 1.2.0 mit Backup bestanden. Unix-HTTP-Erfolg/Timeout real lokal getestet, Windows-Transport nur generiert/statisch geprüft. Keine native Windows-/REAPER-/Liveprovider-Abnahme, keine bezahlten Aufrufe. Daher Testfreigabe, keine bestätigte vollständige Produktreife.
+
+**Nächster Schritt:** Studio-Menü → Update und Studio neu starten. Native Gegenprobe an Projektkopie: längerer Auftrag mit unverändertem Denkaufwand; bei Timeout klare Meldung, kein Retry/Teilimport und keine übernommenen Verbrauchswerte des vorherigen Aufrufs. Zehn Minuten Clientlimit garantieren keine Anbieterantwort. Engine und Notations-PR #12 unverändert.
+
 ## 05.11.2026 – Patchfreigabe 1.2.1 vorbereitet
 
 **Fortsetzung auf Nutzerauftrag:** „weiter“ nach dem geprüften Fehlerfix; Veröffentlichung als Testfreigabe über PR #15. Header und Laufzeitkennung 1.2.1, alle Installer aus dem Gesamtbuild. Letzter veröffentlichter Stand 1.2.0 unter `31b5849af27b67dab488bda72c07c9a2d83e3166` bleibt reproduzierbar; Offline-Installertest ergänzt diesen exakten Ausgangsstand mit Backup.
