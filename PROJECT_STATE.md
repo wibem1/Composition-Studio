@@ -1,5 +1,11 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Patchfreigabe 1.2.1 vorbereitet
+
+**Fortsetzung auf Nutzerauftrag:** „weiter“ nach dem geprüften Fehlerfix; Veröffentlichung als Testfreigabe über PR #15. Header und Laufzeitkennung 1.2.1, alle Installer aus dem Gesamtbuild. Letzter veröffentlichter Stand 1.2.0 unter `31b5849af27b67dab488bda72c07c9a2d83e3166` bleibt reproduzierbar; Offline-Installertest ergänzt diesen exakten Ausgangsstand mit Backup.
+
+**Umfang:** 600 Sekunden KI-HTTP-Zeitlimit, 620 Sekunden Watchdog, eindeutige Timeoutdiagnose und getrennte Verbrauchswerte pro Aufruf. Keine musikalische Verhaltensänderung oder automatischen Wiederholungen. Fix-CI auf `39e3edc` vollständig grün. Release-Kandidat lokal geprüft: alle 16 Python-Suiten und drei Lua-Dateien bestanden, einschließlich exakter Offline-Installation aus 1.2.0. Vor Merge CI am Release-Kandidaten prüfen, danach veröffentlichte Updatebytes vergleichen. Native Windows-/REAPER-Abnahme bleibt offen; keine bezahlten Anbieteraufrufe. [Releaseumfang](docs/RELEASE-1.2.1.md).
+
 ## 05.11.2026 – Diagnose: 180-Sekunden-Abbruch bei Techno-Überarbeitung
 
 **Beleg aus vom Nutzer bereitgestellter Diagnose, Version 1.2.0:** Google/Gemini 3.8 Flash, Denkaufwand high. Controller antwortet nach ca. 9 Sekunden erfolgreich mit NEED_MUSIC. Kompositionsaufruf beginnt 15:04:14 und scheitert 15:07:16 (ca. 182 Sekunden) im Windows-HttpClient `SendAsync(...).GetAwaiter().GetResult()` mit TaskCanceledException. Das korreliert mit dem hart gesetzten 180-Sekunden-Clientlimit; keine Kompositionsantwort, kein Import/Apply dieses Auftrags. Warum die Gegenstelle nicht rechtzeitig antwortet, ist damit nicht weiter belegt. Keine Rohdiagnose oder Nutzernoten ins Repository übernommen.

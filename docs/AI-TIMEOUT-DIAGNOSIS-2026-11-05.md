@@ -51,6 +51,6 @@ Vollständiger Runner: 16 Python-Suiten und drei Lua-Dateien bestanden.
 Kein nativer Windows-/PowerShell-/REAPER- und kein Liveprovider-Test. Die
 hochgeladene Diagnose ist ein realer Fehlernachweis, keine Praxisabnahme des Fixes.
 
-Status: separater Fixbranch, keine neue Version und keine Veröffentlichung
-in diesem Auftrag. Nach Patchfreigabe genügt eine gezielte native Gegenprobe
-mit repräsentativer Antwort; keine Serie kostenpflichtiger Wiederholungen.
+Status: Patchfreigabe 1.2.1 vorbereitet in PR #15. Nach Veröffentlichung
+gezielte native Windows-/REAPER-Gegenprobe mit repräsentativer Antwort;
+keine Serie kostenpflichtiger Wiederholungen.

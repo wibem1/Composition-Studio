@@ -14,7 +14,7 @@ Installation über **Studio-Menü → Update**, anschließend Studio neu starten
 **Langfristige Architektur-Zielsetzung (05.11.2026):** [Modularer, später für REAPER, MuseScore und Maestro nutzbarer Kompositionskern](docs/MODULAR-ARCHITECTURE-VISION.md). Quellmodularisierung, Projektgedächtnis und erster begrenzter Song-Aufbau umgesetzt; weitere musikalische Fähigkeiten folgen schrittweise. Die laufende Notationsentwicklung bleibt getrennt.
 
 
-Aktueller Stand: **v1.2.0 · 05.11.2026 · TESTFREIGABE**. Projektbezogenes Musikgedächtnis, Werkzusammenhang-Analyse und erster Song-Aufbau mit expliziter Übernahme auf neuen Spuren. Weiterhin eine eigenständige Studio-Datei; native REAPER-/Hörabnahme ausstehend. [Änderungen und Prüfgrenzen](docs/RELEASE-1.2.0.md).
+Aktueller Stand: **v1.2.1 · 05.11.2026 · TESTFREIGABE**. KI-Zeitlimit auf zehn Minuten erhöht und veraltete Verbrauchswerte nach fehlgeschlagenen Aufrufen korrigiert. Musikalische Funktionen aus 1.2.0 bleiben erhalten. Native Windows-/REAPER-Gegenprobe ausstehend. [Änderungen und Prüfgrenzen](docs/RELEASE-1.2.1.md).
 
 Update: **Studio-Menü → Update**, anschließend Studio neu starten. Der bestehende Updater sichert die vorherige Skriptdatei. Einstellungen und Projektdaten werden nicht migriert; der REAPER-Sitzungszustand bleibt teilweise gemeinsam.
 
