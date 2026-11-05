@@ -1,5 +1,6 @@
 """Exercise standalone portable modules, dependency contracts and artifact parity."""
 import json
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -26,7 +27,13 @@ first = restored.index(signature)
 last = restored.index(commit, first)
 assert restored[first:last] == signature + ' local jobs,musical_map,controls,src,targets=plan_composition(text,items,tracks,force_single_piano); if not jobs then return nil,musical_map end;'
 restored = restored[:first] + old_prefix + restored[last:]
-assert restored == baseline, 'Unexpected runtime change outside the mechanically extracted planner'
+# Release metadata may change, but header and actual runtime must agree.
+release = re.search(r'^-- @version (\S+)', runtime, re.M).group(1)
+assert re.search(r'^local VERSION="([^"]+)"', runtime, re.M).group(1) == release
+old_release = re.search(r'^-- @version (\S+)', baseline, re.M).group(1)
+restored = restored.replace('-- @version ' + release + '\n', '-- @version ' + old_release + '\n', 1)
+restored = restored.replace('local VERSION="' + release + '"', 'local VERSION="' + old_release + '"', 1)
+assert restored == baseline, 'Unexpected runtime change outside planner extraction and release metadata'
 
 lua = LuaRuntime(unpack_returned_tuples=True)
 load_portable = lua.eval('''function(source)

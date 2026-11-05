@@ -78,8 +78,9 @@ Die Quellenaufteilung allein macht ihn nicht zu einem universellen Host-Framewor
 Studio bleibt genau eine installierbare Lua-Datei. Keine zusätzliche
 Laufzeitinstallation, kein `require`, keine Suchpfadänderung und kein neuer
 Netzwerkdienst. Update-/Repair-/Backup-/Offlinepfade und persistente Schlüssel
-bleiben erhalten. Produktversion bleibt 1.1.10, `main` und Notations-PR #12 werden
-nicht verändert. Der Default-Kompositionsablauf, Prompts und musikalische
+bleiben erhalten. Die ausdrücklich beauftragte Testfreigabe 1.1.11 wird über
+PR #13 und den bestehenden main-Updater veröffentlicht; Notations-PR #12 bleibt
+unverändert. Der Default-Kompositionsablauf, Prompts und musikalische
 Algorithmen werden beim Refactoring nicht an einen anderen Enginevertrag
 angepasst.
 

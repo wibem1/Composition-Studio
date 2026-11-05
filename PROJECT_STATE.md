@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – 1.1.11 zur ausdrücklich beauftragten Veröffentlichung vorbereitet
+
+**Nutzerauftrag:** „veröffentlichen!“ autorisiert jetzt die Veröffentlichung des Refactoringstands über den bestehenden main-Updater. Dies ersetzt die frühere Merge-/Versionssperre für diesen Stand, nicht die Sperre der getrennten Notationsarbeit. Header und Laufzeitversion in den modularen Quellen auf **1.1.11**, alle Artefakte durch Gesamtbuild synchronisiert. [Releaseumfang und Grenzen](docs/RELEASE-1.1.11.md).
+
+**Freigabeart:** Testfreigabe, keine behauptete native Produktreife. Vor Merge Release-Kandidat mit vollständigem Offline-Runner und aktueller CI prüfen; erst danach PR #13 mergen und veröffentlichte main-/Updatebytes abgleichen. Letzter Produktionsstand 1.1.10 bleibt unter `4743491d7081cf009f144a88b70c373047febeab` reproduzierbar. Offline-Installertest ergänzt diesen exakten 1.1.10→1.1.11-Pfad mit bytegenauem Backup. Keine Engineänderung, keine Integration von PR #12, keine neuen musikalischen Module oder bezahlten Provideraufrufe. Native REAPER-/Windows-/macOS-/Hör-/Neustartabnahme bleibt ausstehend.
+
+**Release-Kandidat lokal geprüft:** Gesamtbuild aktuell; alle 14 Python-Suiten und drei Lua-Dateien bestanden. Exakte Offline-Installation aus 1.1.10 samt Backup bestanden; der erste Lauf deckte lediglich eine hart auf 1.1.10 gebundene Argon-Testassertion auf, die nun konsistente Versionsangaben ab 1.1.10 prüft. Keine App-Verhaltenskorrektur für diesen Release-Schritt. CI und Merge werden am anschließend gesicherten Kandidaten durchgeführt.
+
 ## 05.11.2026 – Quellmodularisierung und CS-Plan-/Commit-Grenze umgesetzt
 
 **Aktueller Umfang:** 50 registrierte Quellen unter `src/`, davon 17 eigenständig ladbare portable Module/Factories. KI-Requestparameter, musikalische Prompts, JSON-/CS-Datenverarbeitung und Operationsplanung haben explizite portable Schnittstellen. Hostzugriff, Persistenz, Freigabe, Undo, UI und Jobsteuerung sind nach Verantwortung gegliedert. REAPER-Sitzungszustand bleibt bewusst über deklarierte lexikalische Bindungen verknüpft; keine Behauptung einer vollständigen Laufzeitentkopplung oder neuer musikalischer Zukunftsmodule.
