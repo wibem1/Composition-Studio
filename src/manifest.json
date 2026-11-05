@@ -185,6 +185,7 @@
       "writes": [],
       "globals": [
         "io",
+        "string",
         "tostring"
       ],
       "host_apis": []
@@ -335,7 +336,7 @@
       "parameters": [],
       "provides": [
         "DIAG_CACHE_PATH",
-        "DIAG_STATE_KEY",
+        "DIAG_CONFIG",
         "diag_json",
         "diag_set",
         "persist_diag",
@@ -346,6 +347,7 @@
         "json_escape",
         "last_diag",
         "read_file",
+        "read_json_string",
         "write_file"
       ],
       "writes": [
@@ -1579,6 +1581,31 @@
         "ShowMessageBox",
         "time_precise"
       ]
+    },
+    {
+      "id": "diagnostics/partial_response",
+      "path": "src/diagnostics/partial_response.lua",
+      "kind": "host",
+      "exports": [],
+      "parameters": [],
+      "provides": [],
+      "requires": [
+        "costs",
+        "decode_engine_json",
+        "diag_set"
+      ],
+      "writes": [
+        "costs"
+      ],
+      "globals": [
+        "ipairs",
+        "math",
+        "pcall",
+        "table",
+        "tostring",
+        "type"
+      ],
+      "host_apis": []
     },
     {
       "id": "music/model",

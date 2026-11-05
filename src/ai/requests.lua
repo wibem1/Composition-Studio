@@ -31,6 +31,8 @@ local function ai_command(prompt,key,output_limit)
  end
  local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,reasoning_mode=reasoning_mode,reasoning_requested=requested,timeout_seconds=timeout,deadline=reaper.time_precise()+timeout+20}
  costs.start(a)
+ diag_set("api_requested_output_tokens",output_limit and tostring(output_limit) or (provider=="anthropic" and "16000" or "Anbietervorgabe"))
+ diag_set("api_request_prompt_bytes",tostring(#prompt))
  return a,nil
 end
 
@@ -39,6 +41,7 @@ local function ai_poll(a)
  if not status or trim(status)=="" then
   if reaper.time_precise()<a.deadline then return nil,nil,false end
   costs.record(a,read_file(a.rs))
+  if costs.capture_partial then costs.capture_partial(a.provider,read_file(a.rs)) end
   diag_set("api_status","TIMEOUT")
   diag_set("api_error","Zeitlimit / Hintergrundprozess ohne Statusdatei")
   return nil,"KI-Zeitlimit erreicht; siehe Diagnose und CompositionStudioTemp.",true
@@ -49,6 +52,7 @@ local function ai_poll(a)
  -- Don't retain access credentials: API responses do not include submitted keys.
  diag_set("api_status",status); diag_set("api_stop_reason",raw and (raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"') or raw:match('"finish_reason"%s*:%s*"([^"]+)"')) or "")
  if status=="TIMEOUT" then
+  if costs.capture_partial then costs.capture_partial(a.provider,raw) end
   diag_set("api_error","Zeitlimit / KI-Antwort nicht vollständig eingetroffen")
   os.remove(a.rq);os.remove(a.rs);os.remove(a.cd)
   local usage=last_diag.usage_input_tokens and last_diag.usage_input_tokens~="" and "Vorliegende Verbrauchsdaten stehen in der Kostenübersicht." or "Verbrauch dieses Aufrufs ist unbekannt."
@@ -67,6 +71,8 @@ local function ai_poll(a)
  if raw:match('"reason"%s*:%s*"max_output_tokens"') then stop_reason="max_tokens" end
 -- END WHOLE TRACK STOP
  if stop_reason=="max_tokens" or stop_reason=="MAX_TOKENS" or stop_reason=="length" then
+  if costs.capture_partial then costs.capture_partial(a.provider,raw) end
+  diag_set("api_stop_reason",a.provider=="openai" and raw:match('"reason"%s*:%s*"max_output_tokens"') and "max_output_tokens" or stop_reason)
   diag_set("api_error","Tokenlimit erreicht; unvollständige Komposition")
   os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
   return nil,"Die KI hat das Tokenlimit erreicht. Keine unvollständige Komposition importiert.",true
@@ -101,5 +107,6 @@ launch=function(stage,prompt,key,data)
 -- BEGIN WHOLE TRACK LAUNCH
  local output_limit=data.whole_track_output_limit
 -- END WHOLE TRACK LAUNCH
+ diag_set("api_stage",stage)
  local a,e=ai_command(prompt,key,output_limit); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 

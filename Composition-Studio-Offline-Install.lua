@@ -220,7 +220,7 @@ local function unix_launch_script(command)
  if not ok or result==nil then os.remove(script);return nil,"Hintergrundprozess konnte nicht gestartet werden." end
  return script
 end
-local function json_escape(s) return tostring(s or ""):gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t") end
+local function json_escape(s) return tostring(s or ""):gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t"):gsub('[%z\1-\8\11\12\14-\31]',function(c)return string.format('\\u%04x',c:byte())end) end
 local function read_file(p) local f=io.open(p,"rb"); if not f then return nil end; local s=f:read("*a"); f:close(); return s end
 local function write_file(p,s) local f=io.open(p,"wb"); if not f then return false end; f:write(s); f:close(); return true end
 -- BEGIN VERSION MODULE
@@ -371,25 +371,25 @@ local function select_model(pv,id) provider=pv; model=id; reaper.SetExtState(EXT
 local function get_key() local kn=KEY_NAMES[provider]; local k=trim(reaper.GetExtState(EXT_SECTION,kn)); if k~="" then return k end; local ok,v=reaper.GetUserInputs("Studio – KI-Zugang",1,provider_name().." API-Key:,extrawidth=320",""); if not ok then return nil end; k=trim(v); if k~="" then reaper.SetExtState(EXT_SECTION,kn,k,true); return k end end
 local function edit_key(pv) local kn=KEY_NAMES[pv]; local old=reaper.GetExtState(EXT_SECTION,kn); local name=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; local ok,v=reaper.GetUserInputs("Studio – KI-Zugang",1,name.." API-Key:,extrawidth=320",old or ""); if ok then reaper.SetExtState(EXT_SECTION,kn,trim(v),true) end end
 local diag_json
-local DIAG_STATE_KEY="LastDiagnosisV2"
+local DIAG_CONFIG={key="LastDiagnosisV2",fields={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log","api_stage","api_requested_output_tokens","api_request_timeout_seconds","api_request_prompt_bytes","api_response_bytes","api_partial_answer","api_partial_answer_bytes","api_partial_retained_bytes","api_partial_truncated","api_partial_status","usage_answer_tokens","usage_breakdown_status","usage_provider_json","usage_provider_json_truncated","usage_output_definition","usage_input_estimated_usd","usage_output_estimated_usd","usage_answer_estimated_usd","usage_reasoning_estimated_usd"}}
 local function persist_diag()
  local ok,raw=pcall(function() return diag_json() end)
- if ok and raw then reaper.SetExtState(EXT_SECTION,DIAG_STATE_KEY,raw,true) end
+ if ok and raw then reaper.SetExtState(EXT_SECTION,DIAG_CONFIG.key,raw,true) end
 end
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys=DIAG_CONFIG.fields; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
- local raw=read_file(DIAG_CACHE_PATH) or reaper.GetExtState(EXT_SECTION,DIAG_STATE_KEY)
+ local raw=read_file(DIAG_CACHE_PATH) or reaper.GetExtState(EXT_SECTION,DIAG_CONFIG.key)
  if not raw or raw=="" then return end
- local keys={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error","lilypond_log"}
+ local keys=DIAG_CONFIG.fields
  for _,k in ipairs(keys) do
   local pat='"'..k..'"%s*:%s*"'
   local _,e=raw:find(pat)
-  if e then local q=e; local out={}; local esc=false; while q<#raw do q=q+1; local c=raw:sub(q,q); if esc then if c=="n" then out[#out+1]="\n" elseif c=="r" then out[#out+1]="\r" elseif c=="t" then out[#out+1]="\t" else out[#out+1]=c end; esc=false elseif c=="\\" then esc=true elseif c=='"' then break else out[#out+1]=c end end; last_diag[k]=table.concat(out) end
+  if e then last_diag[k]=read_json_string(raw,e) end
  end
 end
 restore_diag()
@@ -954,13 +954,21 @@ do
   local n={input=0,output=0,cached=0,write5=0,write1=0}
   if pv=="google" then
    n.input=count(u,"promptTokenCount",true)
-   n.output=count(u,"candidatesTokenCount",true)+count(u,"thoughtsTokenCount")
+   n.answer=count(u,"candidatesTokenCount",true)
+   local thinking=count(u,"thoughtsTokenCount")
+   if u.thoughtsTokenCount and u.thoughtsTokenCount~="null" then n.reasoning=thinking end
+   n.output=n.answer+thinking
    n.cached=count(u,"cachedContentTokenCount")
   else
    n.input=count(u,"input_tokens",true); n.output=count(u,"output_tokens",true)
    if pv=="openai" then
     local details=fields(u.input_tokens_details)
     n.cached=count(details,"cached_tokens"); n.write5=count(details,"cache_write_tokens")
+    local output_details=fields(u.output_tokens_details)
+    if output_details.reasoning_tokens and output_details.reasoning_tokens~="null" then
+     n.reasoning=count(output_details,"reasoning_tokens")
+     if n.reasoning>n.output then bad=true else n.answer=n.output-n.reasoning end
+    end
    elseif pv=="anthropic" then
     n.cached=count(u,"cache_read_input_tokens")
     local writes=count(u,"cache_creation_input_tokens")
@@ -1028,10 +1036,14 @@ do
  end
  function costs.begin() costs.order=summary(""); persist() end
  local function clear_call_diagnostics()
-  for _,field in ipairs({"usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_reasoning_tokens","usage_estimated_usd"}) do diag_set(field,"") end
+  for _,field in ipairs({"usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_reasoning_tokens","usage_estimated_usd","usage_answer_tokens","usage_breakdown_status","usage_provider_json","usage_provider_json_truncated","usage_output_definition","usage_input_estimated_usd","usage_output_estimated_usd","usage_answer_estimated_usd","usage_reasoning_estimated_usd"}) do diag_set(field,"") end
  end
  function costs.start(a)
   clear_call_diagnostics()
+  for _,field in ipairs({"api_stop_reason","api_error","api_response_excerpt","api_partial_answer","api_partial_answer_bytes","api_partial_retained_bytes","api_partial_truncated","api_partial_status","api_response_bytes"}) do diag_set(field,"") end
+  diag_set("api_status","PENDING")
+  diag_set("api_requested_output_tokens","Anbietervorgabe")
+  diag_set("api_request_timeout_seconds",tostring(a.timeout_seconds or ""))
   diag_set("usage_cost_status","Aufruf läuft; Verbrauch noch nicht bekannt")
   a.cost_order=costs.order; a.cost_rate=costs.rate(a.provider,a.model)
   for _,s in ipairs({costs.total,a.cost_order}) do s.calls=s.calls+1; s.unknown=s.unknown+1 end
@@ -1041,6 +1053,12 @@ do
   if a.cost_recorded then return end; a.cost_recorded=true
   local n=costs.usage(a.provider,raw); local usd=costs.price(n,a.cost_rate)
   clear_call_diagnostics()
+  local raw_usage=fields(raw)[a.provider=="google" and "usageMetadata" or "usage"]
+  if raw_usage then
+   local at=math.min(#raw_usage,8192)
+   while at>0 do local b=raw_usage:byte(at+1);if not b or b<128 or b>191 then break end;at=at-1 end
+   diag_set("usage_provider_json",raw_usage:sub(1,at));diag_set("usage_provider_json_truncated",at<#raw_usage and "true" or "false")
+  end
   -- Diagnose shows real provider usage, not an estimate from response length.
   -- Anthropic reports thinking within output_tokens, not as a separate usage field.
   if n then
@@ -1049,12 +1067,24 @@ do
    diag_set("usage_cached_tokens",tostring(n.cached))
    diag_set("usage_cache_write_5m_tokens",tostring(n.write5))
    diag_set("usage_cache_write_1h_tokens",tostring(n.write1))
-   diag_set("usage_reasoning_tokens",a.provider=="anthropic" and "nicht separat ausgewiesen (in Ausgabe enthalten)" or "nicht separat ausgewiesen")
+   diag_set("usage_reasoning_tokens",n.reasoning~=nil and tostring(n.reasoning) or (a.provider=="anthropic" and "nicht separat ausgewiesen (in Ausgabe enthalten)" or "nicht separat ausgewiesen"))
+   diag_set("usage_answer_tokens",n.answer~=nil and tostring(n.answer) or "nicht separat bestimmbar")
+   diag_set("usage_output_definition",a.provider=="google" and "candidatesTokenCount + gemeldete thoughtsTokenCount" or "output_tokens enthält Denktokens; nicht erneut addiert")
+   diag_set("usage_breakdown_status",n.reasoning~=nil and n.answer~=nil and (a.provider=="openai" and "Antwort = output_tokens minus reasoning_tokens" or "Antwort und Denken separat von Google gemeldet") or "Aufteilung unvollständig; fehlende Denktokens bleiben unbekannt")
   else
    diag_set("usage_cost_status","Verbrauchsdaten fehlen oder sind ungültig")
   end
   if usd then
    diag_set("usage_estimated_usd",string.format("%.6f",usd))
+   local input_cost=costs.price({input=n.input,output=0,cached=n.cached,write5=n.write5,write1=n.write1},a.cost_rate)
+   local output_cost=math.max(0,usd-input_cost)
+   diag_set("usage_input_estimated_usd",string.format("%.6f",input_cost))
+   diag_set("usage_output_estimated_usd",string.format("%.6f",output_cost))
+   if n.reasoning~=nil and n.answer~=nil then
+    local reasoning_cost=n.output>0 and output_cost*n.reasoning/n.output or 0
+    diag_set("usage_reasoning_estimated_usd",string.format("%.6f",reasoning_cost))
+    diag_set("usage_answer_estimated_usd",string.format("%.6f",output_cost-reasoning_cost))
+   end
    diag_set("usage_cost_status","USD-Schätzung aus API-Verbrauch und hinterlegtem Tarif")
   elseif n then
    diag_set("usage_cost_status","Verbrauch bekannt, aber kein gültiger Preis hinterlegt")
@@ -1162,6 +1192,8 @@ local function ai_command(prompt,key,output_limit)
  end
  local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,reasoning_mode=reasoning_mode,reasoning_requested=requested,timeout_seconds=timeout,deadline=reaper.time_precise()+timeout+20}
  costs.start(a)
+ diag_set("api_requested_output_tokens",output_limit and tostring(output_limit) or (provider=="anthropic" and "16000" or "Anbietervorgabe"))
+ diag_set("api_request_prompt_bytes",tostring(#prompt))
  return a,nil
 end
 
@@ -1170,6 +1202,7 @@ local function ai_poll(a)
  if not status or trim(status)=="" then
   if reaper.time_precise()<a.deadline then return nil,nil,false end
   costs.record(a,read_file(a.rs))
+  if costs.capture_partial then costs.capture_partial(a.provider,read_file(a.rs)) end
   diag_set("api_status","TIMEOUT")
   diag_set("api_error","Zeitlimit / Hintergrundprozess ohne Statusdatei")
   return nil,"KI-Zeitlimit erreicht; siehe Diagnose und CompositionStudioTemp.",true
@@ -1180,6 +1213,7 @@ local function ai_poll(a)
  -- Don't retain access credentials: API responses do not include submitted keys.
  diag_set("api_status",status); diag_set("api_stop_reason",raw and (raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"') or raw:match('"finish_reason"%s*:%s*"([^"]+)"')) or "")
  if status=="TIMEOUT" then
+  if costs.capture_partial then costs.capture_partial(a.provider,raw) end
   diag_set("api_error","Zeitlimit / KI-Antwort nicht vollständig eingetroffen")
   os.remove(a.rq);os.remove(a.rs);os.remove(a.cd)
   local usage=last_diag.usage_input_tokens and last_diag.usage_input_tokens~="" and "Vorliegende Verbrauchsdaten stehen in der Kostenübersicht." or "Verbrauch dieses Aufrufs ist unbekannt."
@@ -1198,6 +1232,8 @@ local function ai_poll(a)
  if raw:match('"reason"%s*:%s*"max_output_tokens"') then stop_reason="max_tokens" end
 -- END WHOLE TRACK STOP
  if stop_reason=="max_tokens" or stop_reason=="MAX_TOKENS" or stop_reason=="length" then
+  if costs.capture_partial then costs.capture_partial(a.provider,raw) end
+  diag_set("api_stop_reason",a.provider=="openai" and raw:match('"reason"%s*:%s*"max_output_tokens"') and "max_output_tokens" or stop_reason)
   diag_set("api_error","Tokenlimit erreicht; unvollständige Komposition")
   os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
   return nil,"Die KI hat das Tokenlimit erreicht. Keine unvollständige Komposition importiert.",true
@@ -1232,6 +1268,7 @@ launch=function(stage,prompt,key,data)
 -- BEGIN WHOLE TRACK LAUNCH
  local output_limit=data.whole_track_output_limit
 -- END WHOLE TRACK LAUNCH
+ diag_set("api_stage",stage)
  local a,e=ai_command(prompt,key,output_limit); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 
 -- The official LilyPond compiler handles the musical semantics.
@@ -2195,6 +2232,42 @@ end
 
 -- End shared workflow host adapter.
 
+-- Preserve only provider-visible text, never thinking blocks or a second usable proposal.
+function costs.capture_partial(pv,raw)
+ diag_set("api_response_bytes",type(raw)=="string" and tostring(#raw) or "0")
+ if type(raw)~="string" or raw=="" then diag_set("api_partial_status","Keine Antwortdaten verfügbar.");return end
+ if #raw>2000000 then diag_set("api_partial_status","Antwort größer als 2 MB; sichere Textauswertung ausgelassen.");return end
+ local ok,object=pcall(decode_engine_json,raw)
+ if not ok or type(object)~="table" then diag_set("api_partial_status","Antwort-JSON unvollständig oder ungültig; kein sicher extrahierter Text.");return end
+ local pieces={}
+ if pv=="google" then
+  local candidate=type(object.candidates)=="table" and object.candidates[1]
+  local content=type(candidate)=="table" and candidate.content
+  for _,part in ipairs(type(content)=="table" and type(content.parts)=="table" and content.parts or {}) do
+   if type(part)=="table" and (part.thought==nil or part.thought==false) and type(part.text)=="string" then pieces[#pieces+1]=part.text end
+  end
+ elseif pv=="openai" then
+  for _,item in ipairs(type(object.output)=="table" and object.output or {}) do
+   if type(item)=="table" and item.type=="message" then
+    for _,part in ipairs(type(item.content)=="table" and item.content or {}) do
+     if type(part)=="table" and part.type=="output_text" and type(part.text)=="string" then pieces[#pieces+1]=part.text end
+    end
+   end
+  end
+ elseif pv=="anthropic" then
+  for _,part in ipairs(type(object.content)=="table" and object.content or {}) do
+   if type(part)=="table" and part.type=="text" and type(part.text)=="string" then pieces[#pieces+1]=part.text end
+  end
+ end
+ local text=table.concat(pieces,"\n");local at=math.min(#text,262144)
+ -- Do not cut a UTF-8 codepoint in the diagnostic JSON.
+ while at>0 do local b=text:byte(at+1);if not b or b<128 or b>191 then break end;at=at-1 end
+ diag_set("api_partial_answer_bytes",tostring(#text))
+ diag_set("api_partial_retained_bytes",tostring(at))
+ diag_set("api_partial_truncated",at<#text and "true" or "false")
+ diag_set("api_partial_answer",text:sub(1,at))
+ diag_set("api_partial_status",#text>0 and "Unvollständige sichtbare Antwort, nur Diagnose; nicht zur MIDI-Übernahme freigegeben." or "Kein sichtbarer Antworttext in der Anbieterantwort.")
+end
 local music_model={schema="Composition-Music-1",song_schema="Composition-Song-1",max_source_notes=2500,max_result_notes=20000}
 local function music_number(value)
  return type(value)=="number" and value==value and value~=math.huge and value~=-math.huge
@@ -3037,7 +3110,7 @@ end
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
- log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
+ log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s; Antworttokens: %s; Denktokens: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?"),tostring(last_diag.usage_answer_tokens or "?"),tostring(last_diag.usage_reasoning_tokens or "?")))
 -- BEGIN WHOLE TRACK RESULT
  if stage=="whole_track_plan" or stage=="whole_track_window" then whole_track.result(stage,text,data,e,key);return end
  if not text and stage=="composition" and last_diag.api_error=="Tokenlimit erreicht; unvollständige Komposition" then

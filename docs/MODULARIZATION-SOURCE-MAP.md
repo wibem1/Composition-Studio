@@ -29,7 +29,7 @@ Callbackbindung und Persistenzverhalten erhalten.
 | [`distribution/update`](../src/distribution/update.lua) | host | `core/session`, `core/text`, `core/version`, `platform/files`, `platform/process` |
 | [`ai/response`](../src/ai/response.lua) | portable | — |
 | [`ai/credentials`](../src/ai/credentials.lua) | host | `core/session`, `core/text` |
-| [`diagnostics/state`](../src/diagnostics/state.lua) | host | `core/session`, `platform/files` |
+| [`diagnostics/state`](../src/diagnostics/state.lua) | host | `core/session`, `platform/files`, `ai/response` |
 | [`host/reaper/save_export`](../src/host/reaper/save_export.lua) | host | `core/session`, `core/text`, `diagnostics/state`, `platform/files`, `platform/process` |
 | [`music/swam`](../src/music/swam.lua) | workflow | `ai/credentials`, `core/session`, `host/reaper/save_export` |
 | [`workflow/chat`](../src/workflow/chat.lua) | host | `ai/response`, `core/session` |
@@ -63,6 +63,7 @@ Callbackbindung und Persistenzverhalten erhalten.
 | [`host/reaper/note_commit`](../src/host/reaper/note_commit.lua) | host | `workflow/proposals` |
 | [`workflow/apply_review`](../src/workflow/apply_review.lua) | workflow | `ai/credentials`, `ai/request_state`, `core/session`, `core/text`, `diagnostics/state`, `host/reaper/commit`, `host/reaper/context`, `host/reaper/instruments`, `host/reaper/lilypond_commit`, `host/reaper/note_commit`, `music/json_score`, `music/prompts`, `music/swam`, `shared/workflow`, `workflow/chat`, `workflow/proposals` |
 | [`ai/catalog`](../src/ai/catalog.lua) | host | `core/session`, `core/text`, `music/json_codec`, `platform/files`, `platform/process`, `workflow/chat`, `workflow/proposals` |
+| [`diagnostics/partial_response`](../src/diagnostics/partial_response.lua) | host | `ai/costs`, `diagnostics/state`, `music/json_codec` |
 | [`music/model`](../src/music/model.lua) | portable | — |
 | [`music/memory`](../src/music/memory.lua) | portable | — |
 | [`workflow/music_workspace`](../src/workflow/music_workspace.lua) | workflow | `ai/credentials`, `ai/request_state`, `core/session`, `diagnostics/state`, `host/reaper/context`, `music/continuation_request`, `music/json_codec`, `music/json_direct_prompt`, `music/json_score`, `music/memory`, `music/model`, `music/prompts`, `music/swam`, `workflow/chat`, `workflow/proposals` |
