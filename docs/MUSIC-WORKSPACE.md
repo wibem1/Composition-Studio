@@ -1,8 +1,8 @@
 # Musikgedächtnis, Werkzusammenhang und erster Song-Aufbau
 
-**Status:** Implementierter Entwicklungsstand auf `feat/music-workspace-20261105`,
-noch nicht veröffentlicht. Die installierte Testfreigabe 1.1.11 enthält diese
-Erweiterung noch nicht. Keine Übernahme der getrennten Notationsarbeit.
+**Status:** Testfreigabe **1.2.0** auf ausdrücklichen Nutzerauftrag. Update über
+Studio-Menü → Update und Studio neu starten. Native REAPER-/Hörabnahme steht
+weiterhin aus. Keine Übernahme der getrennten Notationsarbeit.
 
 ## Benutzung im vorhandenen Auftragsfeld
 
@@ -116,6 +116,6 @@ Entfernen der markierten neuen Integrationspunkte aktiv.
 
 Kein Liveprovider-/Hörtest, kein nativer REAPER-/Windows-/macOS-Nachweis. Eine
 syntaktisch und technisch gültige Songantwort beweist keine musikalische
-Kohärenz. Vor einer Veröffentlichung ist der Entwicklungsstand gesondert zu
-prüfen; der bisherige main-Updater bleibt unverändert auf der veröffentlichten
-Fassung.
+Kohärenz. Der Nutzer hat die Veröffentlichung als Testfreigabe ausdrücklich beauftragt.
+Die Abnahmegrenzen bleiben bestehen; der vorhandene main-Updater ist der
+Veröffentlichungsweg.

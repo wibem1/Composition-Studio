@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – 1.2.0 zur ausdrücklich beauftragten Testveröffentlichung vorbereitet
+
+**Nutzerfreigabe:** „veröffentlichen!“ autorisiert die Veröffentlichung der neuen musikalischen Funktionen aus PR #14 über den bestehenden main-Updater. Wegen neuer Fähigkeiten Minor-Version **1.2.0**; Header und Laufzeitkennung in den modularen Quellen synchronisiert, Installer aus Gesamtbuild erzeugt. Letzter veröffentlichter Stand 1.1.11 bleibt unter `2742b497de4e2e15c95d86972bb8c6617fd4a3fd` reproduzierbar. Der Offline-Installertest prüft jetzt auch exakt diesen Ausgangsstand mit bytegenauem Backup.
+
+**Freigabeart:** Testfreigabe. Die Funktionstests nutzen simulierte Anbieter/native Schnittstellen; keine musikalische Hör-/Liveprovider-/native REAPER-Abnahme. Vor Merge vollständigen Release-Runner und CI am endgültigen Kandidaten prüfen; danach veröffentlichte Skript-/Installerbytes und tatsächlichen Update-Download abgleichen. [Releaseumfang und Grenzen](docs/RELEASE-1.2.0.md). Keine Änderung an Composition-Engine oder Notations-PR #12, keine automatische Verbesserungsschleife und kein kostenpflichtiger Live-Test.
+
+**Release-Kandidat lokal geprüft:** Alle 15 Python-Suiten und drei Lua-Dateien bestanden, Gesamtbuild aktuell und Offline-Installation aus exakt 1.1.11 mit Backup erfolgreich. Die endgültige CI wird am anschließend gesicherten Release-Commit geprüft.
+
 ## 05.11.2026 – Musikalische Erweiterung: Projektgedächtnis, Werkzusammenhang und erster Song-Aufbau
 
 **Auftrag:** Nach Veröffentlichung der Quellmodularisierung fordert der Nutzer neue musikalische Funktionen und bestätigt die Fortsetzung. Umsetzung auf `feat/music-workspace-20261105`, Basis `main` `2742b497de4e2e15c95d86972bb8c6617fd4a3fd`. Keine Veröffentlichung, keine neue Versionsnummer und keine Integration von Notations-PR #12.

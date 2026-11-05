@@ -6,15 +6,15 @@ Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAP
 `src/`; `python tools/build_studio.py` erzeugt weiterhin dieselben eigenständigen
 Lua-Dateien für Studio und Installation. [Modulgrenzen, Build und Prüfungen](docs/MODULARIZATION-DEVELOPMENT.md).
 
-**Neue Funktionen auf diesem Entwicklungsbranch:** projektbezogene musikalische
+**Neu ab 1.2.0:** projektbezogene musikalische
 Entscheidungen merken, Werkzusammenhang analysieren und einen ersten Song-Aufbau
 als gesicherten Vorschlag erzeugen. [Befehle, Umfang und Grenzen](docs/MUSIC-WORKSPACE.md).
-Diese Erweiterung ist noch nicht veröffentlicht; die installierte 1.1.11 bleibt unverändert.
+Installation über **Studio-Menü → Update**, anschließend Studio neu starten.
 
-**Langfristige Architektur-Zielsetzung (05.11.2026):** [Modularer, später für REAPER, MuseScore und Maestro nutzbarer Kompositionskern](docs/MODULAR-ARCHITECTURE-VISION.md). Quellmodularisierung umgesetzt; neue musikalische Fähigkeiten und Song Construction folgen später. Die laufende Notationsentwicklung bleibt getrennt.
+**Langfristige Architektur-Zielsetzung (05.11.2026):** [Modularer, später für REAPER, MuseScore und Maestro nutzbarer Kompositionskern](docs/MODULAR-ARCHITECTURE-VISION.md). Quellmodularisierung, Projektgedächtnis und erster begrenzter Song-Aufbau umgesetzt; weitere musikalische Fähigkeiten folgen schrittweise. Die laufende Notationsentwicklung bleibt getrennt.
 
 
-Aktueller Stand: **v1.1.11 · 05.11.2026 · TESTFREIGABE**. Modulare Entwicklungsquellen und reine CS-Operationsplanung; weiterhin eine eigenständige Studio-Datei. Vollständige Offline-Regression bestanden, native REAPER-Abnahme ausstehend. [Änderungen und Prüfgrenzen](docs/RELEASE-1.1.11.md).
+Aktueller Stand: **v1.2.0 · 05.11.2026 · TESTFREIGABE**. Projektbezogenes Musikgedächtnis, Werkzusammenhang-Analyse und erster Song-Aufbau mit expliziter Übernahme auf neuen Spuren. Weiterhin eine eigenständige Studio-Datei; native REAPER-/Hörabnahme ausstehend. [Änderungen und Prüfgrenzen](docs/RELEASE-1.2.0.md).
 
 Update: **Studio-Menü → Update**, anschließend Studio neu starten. Der bestehende Updater sichert die vorherige Skriptdatei. Einstellungen und Projektdaten werden nicht migriert; der REAPER-Sitzungszustand bleibt teilweise gemeinsam.
 
