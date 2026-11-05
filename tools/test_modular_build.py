@@ -27,6 +27,8 @@ for unit in manifest['units']:
 for unit in manifest['units']:
     if unit['id'] in ('music/model', 'music/memory', 'workflow/music_workspace', 'music/whole_track', 'workflow/whole_track'):
         legacy_runtime = legacy_runtime.replace(inline(unit), '', 1)
+# Compact transport is checked separately for exact event/operation preservation.
+legacy_runtime = re.sub(r'-- BEGIN COMPACT MUSIC ([A-Z]+)\n.*?-- END COMPACT MUSIC \1\n', '', legacy_runtime, flags=re.S)
 legacy_runtime = re.sub(r'-- BEGIN WHOLE TRACK ([A-Z_]+)\n.*?-- END WHOLE TRACK \1\n', '', legacy_runtime, flags=re.S)
 legacy_runtime = re.sub(r'-- BEGIN MUSIC WORKSPACE ([A-Z]+)\n.*?-- END MUSIC WORKSPACE \1\n', '', legacy_runtime, flags=re.S)
 legacy_runtime = legacy_runtime.replace('if stage=="engine_json" or stage=="song_construction" then', 'if stage=="engine_json" then', 1)

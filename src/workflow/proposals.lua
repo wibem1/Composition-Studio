@@ -77,6 +77,13 @@ function workflow_adapter.load()
  return ok
 end
 function workflow_adapter.offer(stage,text,data)
+-- BEGIN COMPACT MUSIC VALIDATE
+ local compact_raw
+ if stage=="composition" and text:match("^%s*CS2|1") then
+  compact_raw=text
+  local decoded,why=music_model.compact.decode(text);assert(decoded,why);text=decoded
+ end
+-- END COMPACT MUSIC VALIDATE
 -- BEGIN WHOLE TRACK VALIDATION
  if stage=="whole_track" then whole_track.to_cs(text,data.track_snapshot) end
 -- END WHOLE TRACK VALIDATION
@@ -101,6 +108,9 @@ function workflow_adapter.offer(stage,text,data)
  if stage=="song_construction" then r.music_snapshot=data.music_snapshot;r.song_summary=song_summary end
  if data.music_memory_context and data.music_memory_context~="" then r.music_memory_context=data.music_memory_context end
 -- END MUSIC WORKSPACE RECORD
+-- BEGIN COMPACT MUSIC RECORD
+ if compact_raw then r.raw_response=compact_raw;r.transport="CS2-1" end
+-- END COMPACT MUSIC RECORD
 -- BEGIN WHOLE TRACK RECORD
  if stage=="whole_track" then r.track_snapshot=data.track_snapshot;r.track_run_id=data.track_run_id end
 -- END WHOLE TRACK RECORD

@@ -1,4 +1,4 @@
-return function(music_context,parse_notes,trim)
+return function(music_context,parse_notes,trim,music_model)
 local function analysis_prompt(request,items,tracks) return [[Du analysierst das konkret übergebene MIDI-Material. Antworte musikalisch präzise als normaler Text. Erfinde nichts. Erzeuge kein MIDI und keine CS-Zeilen.]].."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false) end
 local function composition_prompt(request,items,tracks,is_new)
  if is_new then
@@ -13,6 +13,14 @@ local function composition_prompt(request,items,tracks,is_new)
    break
   end
  end
+-- BEGIN COMPACT MUSIC OUTPUT
+ if music_model and #items>0 and not has_note_selection then
+  local scoped=false;for _,it in ipairs(items) do if it.score_context then scoped=true end end
+  if not scoped then return [=[Du komponierst Musik in Composition Studio. Nutze das konkret übergebene vorhandene Material als musikalischen Kontext und erfülle den freien Auftrag eigenständig; füge keine unnötigen Regeln hinzu. Bei einer reinen Ergänzung einer weiteren Stimme bleiben alle vorhandenen Stimmen unverändert: erzeuge die zusätzliche Stimme mit T/ART=new und kennzeichne vorhandene Items mit U. TIME_SELECTION ist nur bei ausdrücklichem Bezug auf den markierten Bereich ein Zielbereich. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item direkt Ziel sein. Jedes neu erzeugte MIDI-Item MUSS einen passenden General-MIDI-Program-Change (0-127) erhalten.
+Dynamik, Artikulation und Phrasierung in Velocity, Notendauern und Einsätzen konkret umsetzen.
+]=]..music_model.compact.spec().."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false) end
+ end
+-- END COMPACT MUSIC OUTPUT
  return [[Du komponierst Musik in Composition Studio. Nutze das konkret übergebene vorhandene Material als musikalischen Kontext und erfülle den freien Auftrag eigenständig; füge keine unnötigen Regeln hinzu. Bei einer reinen Ergänzung einer weiteren Stimme bleiben alle vorhandenen Stimmen unverändert: erzeuge die zusätzliche Stimme mit CS|new und kennzeichne vorhandene Items mit CS|unchanged. TIME_SELECTION ist nur bei ausdrücklichem Bezug auf den markierten Bereich ein Zielbereich. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item direkt Ziel sein. Jedes neu erzeugte MIDI-Item MUSS einen passenden General-MIDI-Program-Change (0-127) erhalten.
 Antworte ausschließlich:
 CS|unchanged|SOURCE_GUID

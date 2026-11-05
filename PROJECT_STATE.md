@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Kompakte Ein-/Ausgabe prototypisch implementiert
+
+**Auftrag:** „versuche ein kompakteres Format für Eingabe und Ausgabe.“ Umsetzung separat auf `feat/compact-music-format-20261105`, ausgehend vom dokumentierten Tokenaudit. Die zuvor pausierten Routing-/Abschnittsänderungen wurden nicht übernommen. Keine neue Version oder Veröffentlichung.
+
+**Implementiert:** Gruppierte MIDI1-Eingabe mit Itemreferenz einmal je Quelle und unveränderten fünf Dezimalstellen ohne redundante Nullen. CS2-1-Ausgabe mit Stimmendeklarationen, expliziten Noten und optionalen exakten Figurenreferenzen. Komplette Quelle bleibt als Kontext erhalten; keine Taktgruppensteuerung. Decoder expandiert lokal in den vorhandenen CS-Verarbeiter. Normaler Freitext-Bearbeitungsweg für vollständige MIDI-Items angeschlossen; zusätzliche KI-Übersetzung entfällt. Andere JSON-/Ganztrack-/LilyPond- und gezielte Editorwege behalten ihre Verfahren. Rohantwort und expandierter Payload getrennt gespeichert; bestehende Quell-/Apply-/Undo-Schutzregeln wiederverwendet. [Format und Grenzen](docs/COMPACT-MUSIC-TRANSPORT.md).
+
+**Nachweis:** Vollständiger Offline-Runner mit 18 Python-Suiten und drei Lua-Dateien bestanden. Testweise tatsächliche normale Controller→Komposition→Vorschlag→Save/Reload→Apply-Route mit Anbietermocks; ungültige/abgeschnittene Antworten ohne Teilübernahme. Synthetischer kompletter 72-Takte-Dreistimmer: 10719→268 Zeichen bei identischen expandierten Planeroperationen; 500 nicht wiederholte expressive Noten: 16473→15690 Zeichen. Bei den realen 549 Quellnoten sinkt der gesamte Prompt rechnerisch von 39144 auf rund 16000 Zeichen (etwa 59 %). Keine behauptete exakte Token-/Kosteneinsparung, keine realen Anbieteraufrufe, keine native REAPER-/Windows-/Hörabnahme. Engine und Notations-PR #12 unverändert.
+
+**Nächster Schritt:** PR und CI prüfen; dann Prototyp bewerten, bevor eine Releasefreigabe erfolgt. Reale Generierungsqualität sowie getrennte Antwort-/Denktokens bleiben für spätere Abnahme offen; geringere Zeichenzahl garantiert keine kürzere Denkzeit oder erfolgreiche Antwort.
+
 ## 05.11.2026 – Tokenverbrauch geprüft; Konzeptarbeit vor weiterer Umsetzung
 
 **Nutzerentscheidung:** Automatische Steuerung zunächst diskutieren. Die zuvor lokal begonnenen Routing-/UI-Änderungen sind auf `fix/automatic-workload-routing-20261105` pausiert und nicht veröffentlicht. Jetzt ausschließlich Verbrauchsanalyse auf getrenntem Dokumentationsbranch; main-Version 1.3.0 bleibt unverändert. Nachträglich bestätigt: auch der verzögerte fünfte Release-CI-Job aus PR #16 ist erfolgreich beendet.
