@@ -1,4 +1,5 @@
 local function ai_command(prompt,key)
+ local timeout=600
  local thinking,requested=reasoning_parameters(provider,model,reasoning_mode)
  diag_set("reasoning_mode",reasoning_mode); diag_set("reasoning_requested",requested)
  local base=temp_path(); local rq,rs,cd=base..".json",base..".out",base..".code"; local body,url,headers,win_headers
@@ -7,15 +8,16 @@ local function ai_command(prompt,key)
  else body='{"contents":[{"parts":[{"text":"'..json_escape(prompt)..'"}]}]'..thinking..'}'; url="https://generativelanguage.googleapis.com/v1beta/models/"..model..":generateContent?key="..key; win_headers={"Content-Type: application/json"} end
  if not write_file(rq,body) then return nil,"Anfrage konnte nicht geschrieben werden: "..rq end
  if IS_WINDOWS then
-  local script=windows_curl_script(nil,rq,rs,cd,win_headers,url,180)
+  local script=windows_curl_script(nil,rq,rs,cd,win_headers,url,timeout)
   if not script then return nil,"PowerShell-Aufruf konnte nicht vorbereitet werden." end
   if not ps_launch(script,true) then os.remove(script); os.remove(rq); return nil,"Windows-Hintergrundprozess konnte nicht gestartet werden." end
  else
   headers=""; for _,h in ipairs(win_headers) do headers=headers.." -H "..shell_quote(h) end
-  local cmd="/usr/bin/curl -sS --max-time 180 -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(cd).." 2>/dev/null &"
+  local pending=cd..".pending"
+  local cmd="(/usr/bin/curl -sS --max-time "..timeout.." -o "..shell_quote(rs).." -w '%{http_code}' "..headers.." --data-binary @"..shell_quote(rq).." "..shell_quote(url).." > "..shell_quote(pending).." 2>/dev/null; cs_exit=$?; if [ \"$cs_exit\" -eq 28 ]; then printf '%s' TIMEOUT > "..shell_quote(pending).."; fi; mv "..shell_quote(pending).." "..shell_quote(cd)..") &"
   os.execute(cmd)
  end
- local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,reasoning_mode=reasoning_mode,reasoning_requested=requested,deadline=reaper.time_precise()+200}
+ local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,reasoning_mode=reasoning_mode,reasoning_requested=requested,timeout_seconds=timeout,deadline=reaper.time_precise()+timeout+20}
  costs.start(a)
  return a,nil
 end
@@ -25,6 +27,7 @@ local function ai_poll(a)
  if not status or trim(status)=="" then
   if reaper.time_precise()<a.deadline then return nil,nil,false end
   costs.record(a,read_file(a.rs))
+  diag_set("api_status","TIMEOUT")
   diag_set("api_error","Zeitlimit / Hintergrundprozess ohne Statusdatei")
   return nil,"KI-Zeitlimit erreicht; siehe Diagnose und CompositionStudioTemp.",true
  end
@@ -33,6 +36,12 @@ local function ai_poll(a)
  costs.record(a,raw)
  -- Don't retain access credentials: API responses do not include submitted keys.
  diag_set("api_status",status); diag_set("api_stop_reason",raw and (raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"') or raw:match('"finish_reason"%s*:%s*"([^"]+)"')) or "")
+ if status=="TIMEOUT" then
+  diag_set("api_error","Zeitlimit / KI-Antwort nicht vollständig eingetroffen")
+  os.remove(a.rq);os.remove(a.rs);os.remove(a.cd)
+  local usage=last_diag.usage_input_tokens and last_diag.usage_input_tokens~="" and "Vorliegende Verbrauchsdaten stehen in der Kostenübersicht." or "Verbrauch dieses Aufrufs ist unbekannt."
+  return nil,"KI-Zeitlimit erreicht ("..tostring(a.timeout_seconds or 600).." Sekunden). Kein Ergebnis übernommen. Nicht automatisch erneut angefragt. "..usage,true
+ end
  if status~="200" or not raw then
   local excerpt=(raw or ""):sub(1,1500)
   diag_set("api_response_excerpt",excerpt)

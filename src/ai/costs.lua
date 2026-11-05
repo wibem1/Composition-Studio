@@ -115,7 +115,12 @@ do
   end
  end
  function costs.begin() costs.order=summary(""); persist() end
+ local function clear_call_diagnostics()
+  for _,field in ipairs({"usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_reasoning_tokens","usage_estimated_usd"}) do diag_set(field,"") end
+ end
  function costs.start(a)
+  clear_call_diagnostics()
+  diag_set("usage_cost_status","Aufruf läuft; Verbrauch noch nicht bekannt")
   a.cost_order=costs.order; a.cost_rate=costs.rate(a.provider,a.model)
   for _,s in ipairs({costs.total,a.cost_order}) do s.calls=s.calls+1; s.unknown=s.unknown+1 end
   persist()
@@ -123,6 +128,7 @@ do
  function costs.record(a,raw)
   if a.cost_recorded then return end; a.cost_recorded=true
   local n=costs.usage(a.provider,raw); local usd=costs.price(n,a.cost_rate)
+  clear_call_diagnostics()
   -- Diagnose shows real provider usage, not an estimate from response length.
   -- Anthropic reports thinking within output_tokens, not as a separate usage field.
   if n then

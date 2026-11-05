@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Diagnose: 180-Sekunden-Abbruch bei Techno-Überarbeitung
+
+**Beleg aus vom Nutzer bereitgestellter Diagnose, Version 1.2.0:** Google/Gemini 3.8 Flash, Denkaufwand high. Controller antwortet nach ca. 9 Sekunden erfolgreich mit NEED_MUSIC. Kompositionsaufruf beginnt 15:04:14 und scheitert 15:07:16 (ca. 182 Sekunden) im Windows-HttpClient `SendAsync(...).GetAwaiter().GetResult()` mit TaskCanceledException. Das korreliert mit dem hart gesetzten 180-Sekunden-Clientlimit; keine Kompositionsantwort, kein Import/Apply dieses Auftrags. Warum die Gegenstelle nicht rechtzeitig antwortet, ist damit nicht weiter belegt. Keine Rohdiagnose oder Nutzernoten ins Repository übernommen.
+
+**Korrektur auf `fix/ai-timeout-diagnostics-20261105`:** KI-HTTP-Zeitlimit auf 600 Sekunden, Lua-Watchdog passend auf 620 Sekunden. Update-/Kataloglimits unverändert kurz. Windows erkennt verschachtelte Cancellation-/Timeout-Ausnahmen als TIMEOUT, Unix klassifiziert curl-Exit 28 und veröffentlicht Status erst nach Abschluss. Fehlermeldung ohne automatische Wiederholung und ohne unvollständige MIDI-Übernahme. Pro-Call-Diagnose löscht alte Token-/Preiswerte; Gesamt-/Auftragssummen bleiben erhalten. So werden beim Fehlschlag nicht mehr die Controllerwerte als Verbrauch der Komposition angezeigt. Tatsächlich vorhandene Verbrauchsdaten werden auch bei Timeout weiter erfasst, sonst bleibt der Verbrauch unbekannt.
+
+**Prüfung:** Vollständiger Offline-Runner mit 16 Python-Suiten und drei Lua-Dateien bestanden; ergänzender gezielter Test auch für gemeldeten Verbrauch trotz Timeout bestanden. Tatsächlicher Unix-curl gegen lokalen Server mit kurzer Zeitlimit-Fehlerinjektion: Erfolg/Timeout, genau ein Request je Versuch, keine Retry-Schleife. Generierter PowerShell-Code und 600/620-Kopplung geprüft; kein natives Windows/PowerShell/REAPER und kein bezahlter Anbieteraufruf. Der Fix behebt das vorzeitige lokale Limit, garantiert aber keine Antwort der Gegenstelle innerhalb von zehn Minuten.
+
+**Status:** Implementierter Fix zur PR-Prüfung, noch nicht veröffentlicht; installierte 1.2.0 unverändert. Musikalische Prompts, Denkaufwand, Routing, Notenauswahl und MIDI-Verhalten bleiben unverändert. Nächster Schritt: CI am Fix prüfen; danach gesonderte Patchfreigabe/native Gegenprobe.
+
+
 ## 05.11.2026 – 1.2.0 mit musikalischen Erweiterungen veröffentlicht
 
 **Veröffentlicht auf ausdrücklichen Nutzerauftrag:** [PR #14](https://github.com/wibem1/Composition-Studio/pull/14) gemergt, Merge-Commit `738288d5c00d32630cd541bf5dedfe094b5092a1`. Header und Laufzeit **1.2.0** auf `main`; Studio-Blob `a6fdab607e1dcbebb5ee475f37d512263c8cf497`, Offline-Installer-Blob `660437d39b95cd7b71ba804c6bd61569b43af3bb`, identisch mit dem geprüften Kandidaten `f306a56570cfc6ffe6ae2f3b25c68349cc97738b`. Regulären raw.githubusercontent.com-Update-Download nach Merge gelesen und bytegenau verglichen.
