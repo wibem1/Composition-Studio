@@ -1,6 +1,6 @@
 # Vollständiger Track mit gesicherten Zwischenständen
 
-Für die ausdrücklich beauftragte Testfreigabe 1.3.0 vorbereitet. Installation nach Veröffentlichung über Studio-Menü → Update, danach Studio neu starten.
+Als Testfreigabe 1.3.0 veröffentlicht. Installation über Studio-Menü → Update, danach Studio neu starten. Native REAPER-/Hörabnahme ausstehend.
 
 ## Anlass und belegte Ursache
 

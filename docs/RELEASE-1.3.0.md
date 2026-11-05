@@ -1,6 +1,6 @@
 # Composition Studio 1.3.0 – Testfreigabe
 
-Auf ausdrücklichen Nutzerauftrag zur Veröffentlichung über [PR #16](https://github.com/wibem1/Composition-Studio/pull/16) vorbereitet.
+Auf ausdrücklichen Nutzerauftrag über [PR #16](https://github.com/wibem1/Composition-Studio/pull/16) veröffentlicht, Merge `f603dcd9eecae34ddeb05d39229d99d9da1d474e`. Tatsächlichen Update-Download bytegenau mit dem geprüften Kandidaten verglichen.
 
 ## Neu: ganzer Track mit Zwischenständen
 
@@ -12,6 +12,8 @@ Neue Track-Aufrufe: 120 Sekunden HTTP-Limit, 140 Sekunden Watchdog, maximal 2048
 
 ## Prüfgrundlage und Installation
 
+Am Release-Kandidaten `ca2d85d` sind Gesamtbuild und vollständiger CI-Runner sowie Linux-/macOS-Syntax und Notenauswahl bestanden. Der zusätzliche Score-Bridge-Job war beim Downloadabgleich noch bei Lua-Installation; dessen Lua-Regression ist im bestandenen vollständigen Runner enthalten. [CI-Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42093664773), [Zusatzjob](https://github.com/wibem1/Composition-Studio/actions/runs/42093664796).
+
 Implementierungsstand: 17 Python-Suiten und drei Lua-Dateien sowie fünf CI-Jobs bestanden. Release-Kandidat lokal ebenfalls mit allen 17 Python-Suiten und drei Lua-Dateien bestanden, einschließlich exakter Offline-Installation aus 1.2.1 mit bytegenauem Backup. Getestet mit simulierten Anbieter-/REAPER-Schnittstellen und realem lokalem HTTP-Server. Keine kostenpflichtigen Anbieteraufrufe, keine native Windows-/REAPER-/Hörabnahme. Daher Testfreigabe.
 
-Nach Veröffentlichung **Studio-Menü → Update**, danach Studio neu starten. Erste Gegenprobe an Projektkopie. Bisherige Einzelaufträge bleiben verfügbar; der neue Ablauf wird ausdrücklich gewählt. Composition-Engine und Notations-PR #12 unverändert.
+**Studio-Menü → Update**, danach Studio neu starten. Erste Gegenprobe an Projektkopie. Bisherige Einzelaufträge bleiben verfügbar; der neue Ablauf wird ausdrücklich gewählt. Composition-Engine und Notations-PR #12 unverändert.

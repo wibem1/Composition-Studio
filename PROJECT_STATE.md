@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – 1.3.0-Testfreigabe veröffentlicht
+
+**Veröffentlichung auf ausdrücklichen Auftrag:** [PR #16](https://github.com/wibem1/Composition-Studio/pull/16) regulär ohne Admin-Option gemergt, Merge `f603dcd9eecae34ddeb05d39229d99d9da1d474e`. Header/Laufzeit 1.3.0 auf main. Studio-Blob `fbd6a04afb5fded6a2f847294e40175125e7a40d`, Offline-Installer-Blob `b88cd212032a3f414b1805400b09e0b2e746b59f`, identisch mit geprüftem Kandidaten `ca2d85d009d537b35dd6f8adf1a7e4dd0c77c43f`. Tatsächlichen raw.githubusercontent.com-Update-Download nach Merge bytegenau abgeglichen.
+
+**Nachweis und offene Grenzen:** 17 Python-Suiten und drei Lua-Dateien lokal sowie [Gesamtbuild und vollständiger CI-Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42093664773) am exakten Release-Kandidaten bestanden, einschließlich Installation aus 1.2.1 mit Backup. Vier von fünf CI-Jobs zum Downloadabgleich grün (Runner, Linux-/macOS-Syntax, Notenauswahl); [zusätzlicher Score-Bridge-Job](https://github.com/wibem1/Composition-Studio/actions/runs/42093664796) zu diesem Zeitpunkt noch bei Lua-Installation. Dessen Lua-Regression ist bereits im bestandenen vollständigen Runner enthalten. Am Implementierungsstand waren alle fünf Jobs grün. Kein bekannter Testfehler und keine Schutzregel umgangen. Keine native Windows-/REAPER-/Hörabnahme und keine kostenpflichtigen Anbieteraufrufe: weiterhin Testfreigabe, keine behauptete vollständige Produktreife.
+
+**Jetzt verfügbar:** Nach Studio-Menü → Update und Neustart ganze MIDI-Items auswählen; Menü **Ganzer Track: Auftrag vorbereiten** oder `Ganzer Track: Erstelle eine Techno-Version mit Synthie, Bass und Drums.` eingeben. Lokale Aufwandsvorschau, danach ausdrückliche geschätzte Kostenfreigabe, etwa `Track-Aufbau starten: 2 USD`. Gültige Abschnitte bleiben bei späterem Fehler erhalten; `Track-Aufbau fortsetzen` zeigt den Zwischenstand. Keine automatischen Wiederholungen, keine garantierte Preis-/Zeitersparnis oder Rechnungsobergrenze. Nur vollständiges Ergebnis nach **Änderungen anwenden** auf neuen Spuren. [Bedienung und Grenzen](docs/WHOLE-TRACK-WORKFLOW.md).
+
+**Nächster Schritt:** Zusatz-CI-Job nachverfolgen und gezielte native Abnahme an Projektkopie: vollständiger Track, Kostenanzeige, Abbruch/Fortsetzung, Apply/Undo und Neuladen. Engine und Notations-PR #12 unverändert.
+
 ## 05.11.2026 – 1.3.0 zur ausdrücklich beauftragten Veröffentlichung vorbereitet
 
 **Auftrag:** „veröffentlichen!“ autorisiert den Ganztrack-Ablauf aus PR #16 als Testfreigabe. Neue Funktion, daher Minor-Version 1.3.0; Header und Laufzeit synchronisiert, Installer neu aus Quellen erzeugt. Letzter veröffentlichter Stand 1.2.1 bleibt unter `d9610ae22dfa26e4ec55dab0b65805fdee8f87f9` reproduzierbar; Offline-Installertest ergänzt diesen exakten Stand mit Backup.
