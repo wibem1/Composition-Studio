@@ -1,7 +1,9 @@
 # Composition Studio 1.1.11 – Testfreigabe
 
-05.11.2026. Veröffentlichung auf ausdrücklichen Nutzerauftrag über den
-bestehenden `main`-Updateweg; kein neuer Installationskanal.
+05.11.2026. Auf ausdrücklichen Nutzerauftrag über [PR #13](https://github.com/wibem1/Composition-Studio/pull/13)
+veröffentlicht, Merge `4bae6c519dee0eb45501eee8b30db4740f5b6b0f`.
+Bestehender `main`-Updateweg; kein neuer Installationskanal. Der tatsächliche
+Update-Download stimmt bytegenau mit dem geprüften Kandidaten überein.
 
 ## Änderungen
 
@@ -38,9 +40,9 @@ Der Refactoringstand hat 14 Python-Suiten, drei Lua-Dateien und fünf CI-Jobs
 bestanden. Darunter portable Modulgrenzen, 60 Plan-/Commit-Differentialfälle,
 Versionsvergleich, Startmocks, UI/Modelle/Kosten/Reasoning, Originalschutz,
 Apply/Undo/Rollback sowie Installer-/Backup-/Payloadprüfungen.
-Der Release-Kandidat durchläuft vor Merge denselben vollständigen Runner und CI
-mit neuer Versionskennung und synchronisierten Installern; konkrete Ergebnisse
-stehen im Projektstand und in PR #13.
+Auch der Release-Kandidat 1.1.11 hat denselben vollständigen Runner und alle fünf
+CI-Jobs mit neuer Versionskennung und synchronisierten Installern bestanden.
+Konkrete Commit-/Blobnachweise stehen im Projektstand und in PR #13.
 
 Der echte LilyPond-Compilerlauf wird ohne konfigurierten Compiler ausdrücklich
 übersprungen. REAPER ist in dieser Cloud nicht installiert. Keine native

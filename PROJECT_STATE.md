@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – 1.1.11 als Testfreigabe veröffentlicht
+
+**Veröffentlicht auf ausdrücklichen Nutzerauftrag:** [PR #13](https://github.com/wibem1/Composition-Studio/pull/13) gemergt, Merge-Commit `4bae6c519dee0eb45501eee8b30db4740f5b6b0f`. Header und Laufzeit **1.1.11** auf `main`. Studio-Blob `9da856d5fe70140e9298d95483ce91b71aa2d363`, Offline-Installer-Blob `6f3783aa3863b3a536e4485c0dfc384362f5843a`; beide unverändert gegenüber dem geprüften Release-Commit `913ce95139fc5a691319238c5f1bbf2bcbd71a73`. Die tatsächliche raw.githubusercontent.com-Updateadresse nach Merge heruntergeladen und bytegenau mit dem Kandidaten verglichen.
+
+**Nachweis:** Alle 14 Python-Suiten und drei Lua-Dateien lokal bestanden; alle fünf CI-Jobs am Release-Commit erfolgreich, darunter [vollständiger Runner und Artefaktprüfung](https://github.com/wibem1/Composition-Studio/actions/runs/42029643115). Exakte 1.1.10→1.1.11-Offline-Installation mit Backup geprüft. Keine native REAPER-/Windows-/macOS-/Hör-/Liveprovider-/Update-Neustartabnahme; echter LilyPond-Compiler SKIP. Daher weiterhin **Testfreigabe**, keine behauptete vollständige Produktreife. Engine und getrennte Notationsarbeit bleiben unangetastet.
+
+**Nächster Schritt für die installierte App:** Studio-Menü → Update, danach Studio neu starten. Veröffentlichung aktualisiert die lokale Nutzerinstallation nicht automatisch. Erste native Gegenprüfung an gesicherter Projektkopie: Auswahl-/Referenzschutz, Apply/Undo, Reload und Update/Rückfall.
+
 ## 05.11.2026 – 1.1.11 zur ausdrücklich beauftragten Veröffentlichung vorbereitet
 
 **Nutzerauftrag:** „veröffentlichen!“ autorisiert jetzt die Veröffentlichung des Refactoringstands über den bestehenden main-Updater. Dies ersetzt die frühere Merge-/Versionssperre für diesen Stand, nicht die Sperre der getrennten Notationsarbeit. Header und Laufzeitversion in den modularen Quellen auf **1.1.11**, alle Artefakte durch Gesamtbuild synchronisiert. [Releaseumfang und Grenzen](docs/RELEASE-1.1.11.md).
