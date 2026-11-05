@@ -83,22 +83,34 @@ local function unix_launch_script(command)
 end
 local function read_file(p) local f=io.open(p,"rb"); if not f then return nil end; local s=f:read("*a"); f:close(); return s end
 local function write_file(p,s) local f=io.open(p,"wb"); if not f then return false end; f:write(s); f:close(); return true end
-local function version_parts(v)
- local a,b,c=tostring(v or ""):match("^(%d+)%.(%d+)%.(%d+)$")
- if a then return tonumber(a),tonumber(b),tonumber(c) end
- local x,y,t=tostring(v or ""):match("^(%d+)%.(%d+)%-test(%d+)$")
- if x then return tonumber(x),tonumber(y),tonumber(t) end
- return nil,nil,nil
-end
+-- BEGIN VERSION MODULE
+local version_parts,version_is_newer
+do
+ local function create_version_module()
+  -- Pure version comparison; keep legacy update ordering unchanged.
+  local function version_parts(v)
+   local a,b,c=tostring(v or ""):match("^(%d+)%.(%d+)%.(%d+)$")
+   if a then return tonumber(a),tonumber(b),tonumber(c) end
+   local x,y,t=tostring(v or ""):match("^(%d+)%.(%d+)%-test(%d+)$")
+   if x then return tonumber(x),tonumber(y),tonumber(t) end
+   return nil,nil,nil
+  end
 
-local function version_is_newer(remote,localv)
- local a,b,c=version_parts(remote)
- local x,y,z=version_parts(localv)
- if not (a and x) then return false end
- if a~=x then return a>x end
- if b~=y then return b>y end
- return c>z
+  local function version_is_newer(remote,localv)
+   local a,b,c=version_parts(remote)
+   local x,y,z=version_parts(localv)
+   if not (a and x) then return false end
+   if a~=x then return a>x end
+   if b~=y then return b>y end
+   return c>z
+  end
+
+  return {parts=version_parts, is_newer=version_is_newer}
+ end
+ local version=create_version_module()
+ version_parts,version_is_newer=version.parts,version.is_newer
 end
+-- END VERSION MODULE
 
 local update_job=nil
 local function fetch_update(url,raw)

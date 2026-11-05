@@ -1,5 +1,16 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Modularisierung begonnen: Versionsvergleich isoliert (M1)
+
+**Auftrag:** Nutzer beauftragt jetzt die Umsetzung der Modularisierung. Erster begrenzter Schritt gemäß Audit auf `refactor/version-module-20261105`, ausgehend vom Auditbranch und produktivem `main` `4743491d7081cf009f144a88b70c373047febeab`. Produktversion bleibt **1.1.10**, kein Merge/Release, keine Engineänderung oder Übernahme aus PR #12.
+
+**Implementiert:** `src/core/version.lua` mit `parts`/`is_newer`; `tools/build_version_module.py` bettet es in den bisherigen lokalen Versionsvergleich ein. Studio bleibt eine eigenständige Laufzeitdatei ohne `require`. Rescue-Updater und Offline-Installer regeneriert; vorhandene Generatorgrenzen übernehmen das Modul ohne Generatorumbau. Drei Testharness-Dateien nur an die neue Abschnittsmarkierung angepasst. [Entwicklungs-/Buildanleitung](docs/MODULARIZATION-DEVELOPMENT.md). CI um Modul-Parität und vorhandene Import-/Updaterprüfungen ergänzt.
+
+**Nachweis:** Neuer Differentialtest vergleicht Modul, Studio, Updater und Offline-Installer jeweils mit dem ursprünglichen Produktionsvergleich: 27 Parserfälle + 729 Versionspaare pro Kopie bestanden. Vollständige Studioquelle außerhalb des Modulblocks nachweislich byteinhaltlich unverändert; alle drei Lua-Artefakte syntaktisch gültig. Alle drei Generatoren erneut ausgeführt, Ausgaben byteidentisch. Neun bisher grüne Python-Suiten und drei Lua-Dateien erneut bestanden, einschließlich Start-/Import-/Undo-/Rollbackmocks, 64 Layouts, 6 Picker-Interaktionen, Kosten-/Reasoning-/Persistenz-/Installerprüfungen. Zusammen mit neuer Suite zehn Python-Suiten bestanden. Transporttest erneut mit Socketberechtigung ausgeführt: derselbe bekannte Fixturefehler bei Zeile 77, nicht behoben. Echter LilyPond-Compiler SKIP; keine native REAPER-/Liveprovider-/Hörprüfung und keine vollständige Produktfreigabe.
+
+**Nächster einzelner Schritt:** Die bereits diagnostizierte Transport-Fixture mit fehlenden Testschlüsseln separat korrigieren und den tatsächlichen lokalen HTTP-/Pagination-/Fehlerpfad absichern (M2); danach Unicode-Scopefehler separat behandeln und erst anschließend weitere Formatmodule extrahieren. M1 ist implementiert und offline regressionsgeprüft; die Gesamtmodularisierung ist noch nicht abgeschlossen.
+
+
 ## 05.11.2026 – Architektur-Audit und konkreter Modularisierungsplan (nur Dokumentation)
 
 **Basis:** GitHub `main` `4743491d7081cf009f144a88b70c373047febeab`, Studio **1.1.10**. Zentrale Standards vollständig gelesen; Engine `main` `8b062ea6deea9e7421c62b0dd415cf652b47828a` lesend geprüft. Separater Branch `docs/modularization-audit-20261105`; kein Merge, keine Version, keine Quell-/Installeränderung, keine Integration oder Änderung von PR #12.

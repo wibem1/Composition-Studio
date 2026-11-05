@@ -8,6 +8,13 @@ on:
       - 'tools/test_layout.py'
       - 'tools/test_offline_installer.py'
       - 'tools/build_offline_installer.py'
+      - 'src/core/version.lua'
+      - 'tools/build_version_module.py'
+      - 'tools/test_version_module.py'
+      - 'tools/test_lilypond_import.py'
+      - 'tools/test_update_helper.py'
+      - 'tools/build_update_helper.py'
+      - 'Composition-Studio-Update.lua'
       - '.github/workflows/model-picker-regression.yml'
 jobs:
   model-picker:
@@ -20,6 +27,9 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install lupa==2.8 imgui-bundle==1.93.0
+      - run: python tools/test_version_module.py
+      - run: python tools/test_lilypond_import.py
+      - run: python tools/test_update_helper.py
       - run: python tools/test_model_picker.py
       - run: python tools/test_layout.py
       - run: python tools/test_offline_installer.py

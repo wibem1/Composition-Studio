@@ -73,7 +73,7 @@ local function item_guid(it) return it.id end
 local seq=0
 local function temp_path(ext) seq=seq+1; return TEST_ROOT.."/fixture_"..seq..ext end
 """
-files = section("local function read_file(p)", "local function version_parts(v)")
+files = section("local function read_file(p)", "-- BEGIN VERSION MODULE")
 lily = section("local LILYPOND_PATH_KEY=", "local function lily_composition_prompt(")
 exports = section(" local function process_result(raw)", " if not IS_WINDOWS then return nil,") + """
 return {parse=process_result, score=midi_score, compile=lily_compile_import,
@@ -194,7 +194,7 @@ def score_tests():
     assert api.score("no score")[0] is None
 check("MIDI block insertion, idempotence and invalid input",score_tests)
 
-updater=section("local function version_parts(v)", "local function utf8(cp)")
+updater=section("-- BEGIN VERSION MODULE", "local function utf8(cp)")
 def update_env(tmp):
     r=LuaRuntime(unpack_returned_tuples=True)
     r.globals().TEST_ROOT=tmp.as_posix()

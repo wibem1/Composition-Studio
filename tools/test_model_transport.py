@@ -60,7 +60,7 @@ local function trim(s)return (s or ""):gsub("^%s+",""):gsub("%s+$","")end
 local function enc(s)return s end
 local workflow_adapter={}
 '''+section('local IS_WINDOWS=','local function json_escape(s)')+
-section('local function read_file(p)','local function version_parts(v)')+
+section('local function read_file(p)','-- BEGIN VERSION MODULE')+
 section('local function decode_engine_json(src)','local function engine_translate_json(answer)')+
 section('function workflow_adapter.encode(v)','function workflow_adapter.guard()')+
 section('workflow_adapter.models={job=nil','-- End shared workflow host adapter.')+'''

@@ -10,7 +10,7 @@ source=path.read_text(encoding="utf-8")
 def section(a,b): return source[source.index(a):source.index(b)]
 module=section("-- Local token-cost estimates,","-- End cost accounting.")+"-- End cost accounting.\n"
 json_helpers=section("local function utf8(cp)","local function provider_name()")
-files=section("local function read_file(p)","local function version_parts(v)")
+files=section("local function read_file(p)","-- BEGIN VERSION MODULE")
 ai=section("local job=nil","-- The official LilyPond compiler")
 passed=[]
 def test(name,fn):
