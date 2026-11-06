@@ -185,6 +185,7 @@
       "writes": [],
       "globals": [
         "io",
+        "string",
         "tostring"
       ],
       "host_apis": []
@@ -335,7 +336,7 @@
       "parameters": [],
       "provides": [
         "DIAG_CACHE_PATH",
-        "DIAG_STATE_KEY",
+        "DIAG_CONFIG",
         "diag_json",
         "diag_set",
         "persist_diag",
@@ -346,6 +347,7 @@
         "json_escape",
         "last_diag",
         "read_file",
+        "read_json_string",
         "write_file"
       ],
       "writes": [
@@ -527,6 +529,36 @@
       ]
     },
     {
+      "id": "music/model",
+      "path": "src/music/model.lua",
+      "kind": "portable",
+      "exports": [
+        "music_model"
+      ],
+      "parameters": [],
+      "requires": [],
+      "provides": [
+        "music_list",
+        "music_model",
+        "music_number"
+      ],
+      "writes": [],
+      "globals": [
+        "assert",
+        "error",
+        "ipairs",
+        "math",
+        "pairs",
+        "pcall",
+        "string",
+        "table",
+        "tonumber",
+        "tostring",
+        "type"
+      ],
+      "host_apis": []
+    },
+    {
       "id": "host/reaper/context",
       "path": "src/host/reaper/context.lua",
       "kind": "host",
@@ -551,7 +583,8 @@
         "track_guid"
       ],
       "requires": [
-        "history"
+        "history",
+        "music_model"
       ],
       "writes": [],
       "globals": [
@@ -850,7 +883,8 @@
       "parameters": [
         "music_context",
         "parse_notes",
-        "trim"
+        "trim",
+        "music_model"
       ],
       "provides": [
         "analysis_prompt",
@@ -862,6 +896,7 @@
       ],
       "requires": [
         "music_context",
+        "music_model",
         "parse_notes",
         "trim"
       ],
@@ -1376,6 +1411,7 @@
         "diag_set",
         "item_guid",
         "model",
+        "music_model",
         "music_workspace",
         "provider",
         "read_file",
@@ -1581,25 +1617,26 @@
       ]
     },
     {
-      "id": "music/model",
-      "path": "src/music/model.lua",
-      "kind": "portable",
-      "exports": [
-        "music_model"
-      ],
+      "id": "diagnostics/partial_response",
+      "path": "src/diagnostics/partial_response.lua",
+      "kind": "host",
+      "exports": [],
       "parameters": [],
-      "requires": [],
-      "provides": [
-        "music_list",
-        "music_model",
-        "music_number"
+      "provides": [],
+      "requires": [
+        "costs",
+        "decode_engine_json",
+        "diag_set"
       ],
-      "writes": [],
+      "writes": [
+        "costs"
+      ],
       "globals": [
-        "assert",
         "ipairs",
         "math",
-        "pairs",
+        "pcall",
+        "table",
+        "tostring",
         "type"
       ],
       "host_apis": []

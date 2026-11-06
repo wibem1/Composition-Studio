@@ -1,5 +1,43 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – Gemeinsame Testfreigabe 1.4.0 vorbereitet
+
+**Veröffentlichungsauftrag:** Nutzer fordert „veröffentlichen“; nach Infrastrukturfehler jetzt in wieder verfügbarer Umgebung fortgesetzt. PR #17 (`16079791e8c745bb789eacad44991aa424958bc5`) und #18 (`3e09d148b26a7a3b530880dbf16acc1ebc72e438`) jeweils mit allen fünf CI-Jobs grün. Beide Implementierungsstände auf isoliertem `release/1.4.0` zusammengeführt; Quellen/Manifeste gemeinsam abgeglichen, Artefakte regeneriert. Keine Übernahme der lokal pausierten automatischen Routing-/Abschnittssteuerung und keine Änderung von Engine/Notations-PR #12.
+
+**Prüfung:** Gemeinsame Integration mit 19 Python-Suiten und drei Lua-Dateien lokal vollständig bestanden. Header und Laufzeit für Release 1.4.0 synchronisiert, exakter letzter veröffentlichter Stand 1.3.0 (`9a339b90f7a4dfb8b58f27268efc66e7c18ff93b`) als Offline-Update-/Backup-Ausgangspunkt ergänzt. Endgültiger Release-Kandidat lokal ebenfalls vollständig bestanden: 19 Python-Suiten und drei Lua-Dateien, einschließlich exakter Offline-Installation aus 1.3.0 mit Backup. Vor Merge CI am endgültigen Commit prüfen und danach veröffentlichte Dateien samt tatsächlichem Update-Download bytegenau vergleichen. [Releaseumfang und Bedienung](docs/RELEASE-1.4.0.md).
+
+**Grenzen:** Testfreigabe ohne bezahlte Anbieteraufrufe und ohne native Windows-/REAPER-/Hörabnahme. Kompaktes Format spart gemessene Zeichen; reale Tokenersparnis und Modellqualität nicht zugesichert. Diagnose macht künftige Antwort-/Denkanteile überprüfbar, rekonstruiert keine verlorenen Altdaten. Für den kompakten Bearbeitungsweg den normalen Auftrag verwenden; gesamtes Material bleibt Kontext, keine feste Taktgruppensteuerung.
+
+## 05.11.2026 – Token-Diagnose korrigiert, separate Antwort-/Denkzahlen
+
+**Anlass:** Nutzer beanstandet, dass die Diagnose trotz vorhandener Anbieterfelder nicht erkennen lässt, ob Denken oder Antwort den Verbrauch verursacht. Fix unabhängig vom kompakten Format aus PR #17 auf `fix/token-diagnostics-20261105`; keine Übernahme der pausierten Routing-/Abschnittssteuerung, keine neue Version/Veröffentlichung.
+
+**Implementiert:** Getrennte Antwort-/Denktokens mit anbieterabhängiger Definition, ursprüngliche Usage-Metadaten, Kostenanteile und Aufrufstufe/tatsächlich angeforderte Limits. Google getrennt übernehmen; OpenAI-Denken ist Teil der Gesamtausgabe und wird nicht doppelt addiert; fehlende Werte/Anthropic-Aufteilung bleiben unbekannt. Kommunikationslog enthält die Aufteilung pro Aufruf. Bei Tokenabbruch/Timeout sichtbaren Teiltext vor Transportbereinigung für Diagnose sichern, bis 262144 Bytes mit ausdrücklichen Längen-/Trunkierungsangaben; keine Thinking-Blöcke, keine MIDI-Übernahme/Retry. Gemeinsame Feldliste für Export/Neustart; Steuerzeichen sicher als JSON exportieren. [Felder und Grenzen](docs/TOKEN-DIAGNOSTICS.md).
+
+**Prüfung:** 18 Python-Suiten und drei Lua-Dateien im vollständigen Offline-Runner bestanden. Tatsächliche Produktionsfunktionen mit Google/OpenAI/Anthropic-Fixtures, identischer Gesamtausgabe bei unterschiedlichen Denkanteilen, unveränderter Kostensumme, Teilantworten, Unicode/Steuerzeichen, Neustart und Altdateien geprüft. Keine kostenpflichtigen Anbieteraufrufe, keine native REAPER-/Windows-Abnahme. Bereits verlorene historische Aufteilungen bleiben nicht rekonstruierbar.
+
+**Nächster Schritt:** PR/CI prüfen, danach mit dem Format-Prototyp abgestimmt zur Releaseprüfung vorlegen. Engine und Notations-PR #12 unverändert. Die Diagnose verbessert Messbarkeit; sie ist keine Zusage niedrigerer Kosten oder erfolgreicher Komposition.
+
+## 05.11.2026 – Kompakte Ein-/Ausgabe prototypisch implementiert
+
+**Auftrag:** „versuche ein kompakteres Format für Eingabe und Ausgabe.“ Umsetzung separat auf `feat/compact-music-format-20261105`, ausgehend vom dokumentierten Tokenaudit. Die zuvor pausierten Routing-/Abschnittsänderungen wurden nicht übernommen. Keine neue Version oder Veröffentlichung.
+
+**Implementiert:** Gruppierte MIDI1-Eingabe mit Itemreferenz einmal je Quelle und unveränderten fünf Dezimalstellen ohne redundante Nullen. CS2-1-Ausgabe mit Stimmendeklarationen, expliziten Noten und optionalen exakten Figurenreferenzen. Komplette Quelle bleibt als Kontext erhalten; keine Taktgruppensteuerung. Decoder expandiert lokal in den vorhandenen CS-Verarbeiter. Normaler Freitext-Bearbeitungsweg für vollständige MIDI-Items angeschlossen; zusätzliche KI-Übersetzung entfällt. Andere JSON-/Ganztrack-/LilyPond- und gezielte Editorwege behalten ihre Verfahren. Rohantwort und expandierter Payload getrennt gespeichert; bestehende Quell-/Apply-/Undo-Schutzregeln wiederverwendet. [Format und Grenzen](docs/COMPACT-MUSIC-TRANSPORT.md).
+
+**Nachweis:** Vollständiger Offline-Runner mit 18 Python-Suiten und drei Lua-Dateien bestanden. Testweise tatsächliche normale Controller→Komposition→Vorschlag→Save/Reload→Apply-Route mit Anbietermocks; ungültige/abgeschnittene Antworten ohne Teilübernahme. Synthetischer kompletter 72-Takte-Dreistimmer: 10719→268 Zeichen bei identischen expandierten Planeroperationen; 500 nicht wiederholte expressive Noten: 16473→15690 Zeichen. Bei den realen 549 Quellnoten sinkt der gesamte Prompt rechnerisch von 39144 auf rund 16000 Zeichen (etwa 59 %). Keine behauptete exakte Token-/Kosteneinsparung, keine realen Anbieteraufrufe, keine native REAPER-/Windows-/Hörabnahme. Engine und Notations-PR #12 unverändert.
+
+**Nächster Schritt:** PR und CI prüfen; dann Prototyp bewerten, bevor eine Releasefreigabe erfolgt. Reale Generierungsqualität sowie getrennte Antwort-/Denktokens bleiben für spätere Abnahme offen; geringere Zeichenzahl garantiert keine kürzere Denkzeit oder erfolgreiche Antwort.
+
+## 05.11.2026 – Tokenverbrauch geprüft; Konzeptarbeit vor weiterer Umsetzung
+
+**Nutzerentscheidung:** Automatische Steuerung zunächst diskutieren. Die zuvor lokal begonnenen Routing-/UI-Änderungen sind auf `fix/automatic-workload-routing-20261105` pausiert und nicht veröffentlicht. Jetzt ausschließlich Verbrauchsanalyse auf getrenntem Dokumentationsbranch; main-Version 1.3.0 bleibt unverändert. Nachträglich bestätigt: auch der verzögerte fünfte Release-CI-Job aus PR #16 ist erfolgreich beendet.
+
+**Beleg:** Letzte Diagnose 1.3.0: 33932 Eingabetokens, 32768 Ausgabe einschließlich Denken. Geschätzte Kompositionskosten 0,067864 USD Eingabe + 0,327680 USD Ausgabe/Denken (82,84 %); Controller zusätzlich 0,003298 USD. Eingabe enthält 549 Noten, deren lange Quellkennung pro Note wiederholt wird: 20862 von 39144 tatsächlich gesendeten Promptzeichen. Verlustfreie lokale Formatprobe reduziert Promptzeichen rechnerisch um 51,65 % (kurze Quellenreferenzen), mit entfallenden Dezimalnullen um 56,53 %; keine behauptete exakte Tokenersparnis. Zahlen-/Herkunftsgleichheit aller Ereignisse geprüft. Quellformat und Kompositionsprompt unverändert gegenüber 1.1.10.
+
+**Messlücke:** Google-Kandidaten- und Denktokens werden im Code addiert; Export verliert die Aufteilung. Bei MAX_TOKENS wird die unvollständige Antwort gelöscht, bevor Text-/Notenstatistik gesichert wird. Zwei synthetische, mit Produktionsfunktionen geprüfte Verteilungen ergeben denselben Diagnoseexport. Deshalb ist die konkrete Ausgabeverteilung rückwirkend nicht rekonstruierbar. Keine bezahlten API-Aufrufe, keine funktionale Änderung. [Analyse und belegte Grenzen](docs/TOKEN-CONSUMPTION-AUDIT-2026-11-05.md).
+
+**Nächster Schritt zur Diskussion:** Diagnostik getrennt messbar machen und sichtbare Teilantworten erhalten; verlustfreie Eingabedarstellung bewerten. Keine weitere Abschnitts-/Routingimplementierung vor geklärtem Konzept. Erfolgreiche 72-Takte-Läufe ohne damalige Diagnose nicht exakt vergleichbar.
+
 ## 05.11.2026 – 1.3.0-Testfreigabe veröffentlicht
 
 **Veröffentlichung auf ausdrücklichen Auftrag:** [PR #16](https://github.com/wibem1/Composition-Studio/pull/16) regulär ohne Admin-Option gemergt, Merge `f603dcd9eecae34ddeb05d39229d99d9da1d474e`. Header/Laufzeit 1.3.0 auf main. Studio-Blob `fbd6a04afb5fded6a2f847294e40175125e7a40d`, Offline-Installer-Blob `b88cd212032a3f414b1805400b09e0b2e746b59f`, identisch mit geprüftem Kandidaten `ca2d85d009d537b35dd6f8adf1a7e4dd0c77c43f`. Tatsächlichen raw.githubusercontent.com-Update-Download nach Merge bytegenau abgeglichen.

@@ -1,5 +1,5 @@
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.3.0"
+local VERSION="1.4.0"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"

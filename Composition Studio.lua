@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.3.0
+-- @version 1.4.0
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.3.0"
+local VERSION="1.4.0"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -177,7 +177,7 @@ local function unix_launch_script(command)
  if not ok or result==nil then os.remove(script);return nil,"Hintergrundprozess konnte nicht gestartet werden." end
  return script
 end
-local function json_escape(s) return tostring(s or ""):gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t") end
+local function json_escape(s) return tostring(s or ""):gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t"):gsub('[%z\1-\8\11\12\14-\31]',function(c)return string.format('\\u%04x',c:byte())end) end
 local function read_file(p) local f=io.open(p,"rb"); if not f then return nil end; local s=f:read("*a"); f:close(); return s end
 local function write_file(p,s) local f=io.open(p,"wb"); if not f then return false end; f:write(s); f:close(); return true end
 -- BEGIN VERSION MODULE
@@ -328,25 +328,25 @@ local function select_model(pv,id) provider=pv; model=id; reaper.SetExtState(EXT
 local function get_key() local kn=KEY_NAMES[provider]; local k=trim(reaper.GetExtState(EXT_SECTION,kn)); if k~="" then return k end; local ok,v=reaper.GetUserInputs("Studio – KI-Zugang",1,provider_name().." API-Key:,extrawidth=320",""); if not ok then return nil end; k=trim(v); if k~="" then reaper.SetExtState(EXT_SECTION,kn,k,true); return k end end
 local function edit_key(pv) local kn=KEY_NAMES[pv]; local old=reaper.GetExtState(EXT_SECTION,kn); local name=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; local ok,v=reaper.GetUserInputs("Studio – KI-Zugang",1,name.." API-Key:,extrawidth=320",old or ""); if ok then reaper.SetExtState(EXT_SECTION,kn,trim(v),true) end end
 local diag_json
-local DIAG_STATE_KEY="LastDiagnosisV2"
+local DIAG_CONFIG={key="LastDiagnosisV2",fields={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log","api_stage","api_requested_output_tokens","api_request_timeout_seconds","api_request_prompt_bytes","api_response_bytes","api_partial_answer","api_partial_answer_bytes","api_partial_retained_bytes","api_partial_truncated","api_partial_status","usage_answer_tokens","usage_breakdown_status","usage_provider_json","usage_provider_json_truncated","usage_output_definition","usage_input_estimated_usd","usage_output_estimated_usd","usage_answer_estimated_usd","usage_reasoning_estimated_usd"}}
 local function persist_diag()
  local ok,raw=pcall(function() return diag_json() end)
- if ok and raw then reaper.SetExtState(EXT_SECTION,DIAG_STATE_KEY,raw,true) end
+ if ok and raw then reaper.SetExtState(EXT_SECTION,DIAG_CONFIG.key,raw,true) end
 end
 local DIAG_CACHE_PATH=reaper.GetResourcePath().."/Composition-Studio-Last-Diagnosis.json"
 local function diag_set(k,v) last_diag[k]=v; persist_diag(); local raw=diag_json(); if raw then write_file(DIAG_CACHE_PATH,raw) end end
 diag_json=function()
- local keys={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log"}; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
+ local keys=DIAG_CONFIG.fields; local a={"{\n  \"timestamp\": \""..json_escape(os.date("%Y-%m-%dT%H:%M:%S")).."\""}
  for _,k in ipairs(keys) do a[#a+1]=",\n  \""..k.."\": \""..json_escape(last_diag[k] or "").."\"" end; a[#a+1]="\n}\n"; return table.concat(a)
 end
 local function restore_diag()
- local raw=read_file(DIAG_CACHE_PATH) or reaper.GetExtState(EXT_SECTION,DIAG_STATE_KEY)
+ local raw=read_file(DIAG_CACHE_PATH) or reaper.GetExtState(EXT_SECTION,DIAG_CONFIG.key)
  if not raw or raw=="" then return end
- local keys={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_error","api_response_excerpt","update_error","lilypond_log"}
+ local keys=DIAG_CONFIG.fields
  for _,k in ipairs(keys) do
   local pat='"'..k..'"%s*:%s*"'
   local _,e=raw:find(pat)
-  if e then local q=e; local out={}; local esc=false; while q<#raw do q=q+1; local c=raw:sub(q,q); if esc then if c=="n" then out[#out+1]="\n" elseif c=="r" then out[#out+1]="\r" elseif c=="t" then out[#out+1]="\t" else out[#out+1]=c end; esc=false elseif c=="\\" then esc=true elseif c=='"' then break else out[#out+1]=c end end; last_diag[k]=table.concat(out) end
+  if e then last_diag[k]=read_json_string(raw,e) end
  end
 end
 restore_diag()
@@ -489,6 +489,245 @@ local function load_history(proj) history={}; if proj then local _,raw=reaper.Ge
 local function add(role,text) history[#history+1]={role=role,text=text}; save_history() end
 local function clear_saved_history() history={{role="KI",text="Composition Studio ist bereit."}}; chat_start=1; info_visible=false; history_mode=false; save_history() end
 load_history(current_project)
+local music_model={schema="Composition-Music-1",song_schema="Composition-Song-1",max_source_notes=2500,max_result_notes=20000}
+local function music_number(value)
+ return type(value)=="number" and value==value and value~=math.huge and value~=-math.huge
+end
+local function music_list(value,name,limit)
+ assert(type(value)=="table",name..": Liste fehlt.")
+ local count=0
+ for key in pairs(value) do
+  assert(type(key)=="number" and key%1==0 and key>=1 and key<=#value,name..": ungültige Liste.")
+  count=count+1
+ end
+ assert(count==#value and count<=limit,name..": technische Größenbegrenzung überschritten.")
+ return value
+end
+function music_model.capture(items,tempo,num,den,source_limit)
+ assert(music_number(tempo) and tempo>=20 and tempo<=400,"Tempo außerhalb des unterstützten JSON-Bereichs (20–400 BPM).")
+ assert(music_number(num) and num%1==0 and num>=1 and num<=32 and music_number(den) and den%1==0 and den>=1 and den<=64,"Taktart nicht unterstützt.")
+ source_limit=source_limit or music_model.max_source_notes
+ assert(music_number(source_limit) and source_limit>=1 and source_limit<=20000,"Ungültiges Quellnotenlimit.")
+ local snapshot={schema=music_model.schema,representation="performance",tempo=tempo,time_signature={num,den},parts={},note_count=0}
+ local parts,seen_items={},{ }; local first,last=math.huge,-math.huge
+ for _,item in ipairs(items) do
+  assert(type(item.guid)=="string" and item.guid~="","Quell-Item ohne Identität.")
+  assert(not seen_items[item.guid],"Doppeltes Quell-Item im Musikkontext.");seen_items[item.guid]=true
+  local id=(type(item.track_guid)=="string" and item.track_guid~="" and item.track_guid) or item.guid
+  if not parts[id] then
+   assert(#snapshot.parts<32,"Mehr als 32 Quellspuren; bitte einen kleineren Bereich auswählen.")
+   parts[id]={id=id,name=item.track_name or "Instrument",events={}}
+   snapshot.parts[#snapshot.parts+1]=parts[id]
+  end
+  for ordinal,note in ipairs(item.notes or {}) do
+   snapshot.note_count=snapshot.note_count+1
+   assert(snapshot.note_count<=source_limit,"Quellnotenlimit überschritten ("..source_limit..").")
+   assert(music_number(note.start_qn) and music_number(note.duration_qn) and note.duration_qn>0,"Ungültige Quellzeiten.")
+   assert(music_number(note.pitch) and note.pitch%1==0 and note.pitch>=0 and note.pitch<=127,"Ungültige Quelltonhöhe.")
+   assert(music_number(note.velocity) and note.velocity%1==0 and note.velocity>=1 and note.velocity<=127,"Ungültige Quellvelocity.")
+   assert(music_number(note.channel) and note.channel%1==0 and note.channel>=0 and note.channel<=15,"Ungültiger Quellkanal.")
+   local event={id=item.guid..":"..ordinal,source_item=item.guid,source_ordinal=ordinal,
+    at=note.start_qn,duration=note.duration_qn,pitch=note.pitch,velocity=note.velocity,channel=note.channel}
+   parts[id].events[#parts[id].events+1]=event
+   first=math.min(first,event.at); last=math.max(last,event.at+event.duration)
+  end
+ end
+ assert(snapshot.note_count>0,"Keine MIDI-Noten als Ausgangsmaterial vorhanden.")
+ snapshot.bounds={start_qn=first,end_qn=last}
+ return snapshot
+end
+function music_model.validate_song(song,snapshot)
+ assert(type(snapshot)=="table" and snapshot.schema==music_model.schema,"Gesicherter Musikkontext fehlt.")
+ assert(type(song)=="table" and song.schema==music_model.song_schema,"Song-Antwort benötigt Composition-Song-1.")
+ assert(music_number(song.bpm) and math.abs(song.bpm-snapshot.tempo)<0.000001,"Der Song darf das Projekttempo nicht ändern.")
+ assert(type(song.timeSignature)=="table" and song.timeSignature[1]==snapshot.time_signature[1] and song.timeSignature[2]==snapshot.time_signature[2],"Der Song darf die Projekttaktart nicht ändern.")
+ assert(song.tempoEvents==nil or #music_list(song.tempoEvents,"Tempoereignisse",0)==0,"Die vorhandene Tempokarte bleibt erhalten.")
+ assert(type(song.title)=="string" and #song.title>0 and #song.title<=120,"Songtitel fehlt oder ist zu lang.")
+ local tracks=music_list(song.tracks,"Spuren",32)
+ assert(#tracks>0,"Song ohne Spuren.")
+ local names,count,last={ },0,0
+ for _,track in ipairs(tracks) do
+  assert(type(track)=="table" and type(track.name)=="string" and #track.name>0 and #track.name<=120,"Ungültiger Spurname.")
+  assert(not track.name:find("[|\r\n]") and track.name==track.name:match("^%s*(.-)%s*$") and not names[track.name],"Spurnamen müssen eindeutig und ohne Steuerzeichen sein.")
+  names[track.name]=true
+  assert(track.role==nil or type(track.role)=="string" and #track.role<=300,"Ungültige musikalische Rollenbeschreibung.")
+  local notes=music_list(track.notes,"Noten",music_model.max_result_notes)
+  assert(#notes>0,"Leere Songspuren können nicht übernommen werden; bitte im Ergebnis weglassen.")
+  for _,note in ipairs(notes) do
+   count=count+1
+   assert(count<=music_model.max_result_notes,"Song hat mehr als 20000 Noten.")
+   assert(type(note)=="table" and music_number(note[1]) and note[1]>=0 and music_number(note[2]) and note[2]>0,"Ungültige Songzeiten.")
+   last=math.max(last,note[1]+note[2])
+  end
+ end
+ assert(count>0,"Song enthält keine Noten.")
+ local sections=music_list(song.sections,"Abschnitte",32)
+ assert(#sections>0,"Song benötigt mindestens einen beschriebenen Abschnitt.")
+ local ids,previous={},0
+ for _,section in ipairs(sections) do
+  assert(type(section)=="table" and type(section.id)=="string" and #section.id>0 and #section.id<=80 and not ids[section.id],"Abschnittskennungen fehlen oder sind doppelt.")
+  assert(type(section.name)=="string" and #section.name>0 and #section.name<=120,"Abschnittsname fehlt.")
+  assert(music_number(section.start_qn) and math.abs(section.start_qn-previous)<0.000001 and music_number(section.end_qn) and section.end_qn>section.start_qn and section.end_qn<=4096,"Abschnitte müssen den Song lückenlos ab QN 0 beschreiben (maximal 4096 QN).")
+  assert(section.purpose==nil or type(section.purpose)=="string" and #section.purpose<=600,"Ungültige Abschnittsbeschreibung.")
+  ids[section.id]=true;previous=section.end_qn
+ end
+ assert(last<=previous+0.000001,"Songnoten reichen über den beschriebenen Werkumfang hinaus.")
+ local pedal=music_list(song.pedalEvents or {},"Pedalereignisse",20000)
+ local controls=0
+ for _,track in ipairs(tracks) do
+  local pedal_at,pedal_value=-1,0
+  for _,event in ipairs(pedal) do
+   controls=controls+1
+   assert(type(event)=="table" and music_number(event.at) and event.at>=0 and event.at<=previous,"Pedalereignis außerhalb des Songumfangs.")
+   assert(music_number(event.value) and event.value%1==0 and event.value>=0 and event.value<=127,"Ungültiger Pedalwert.")
+   if event.at>=pedal_at then pedal_at=event.at;pedal_value=event.value end
+  end
+  for _,event in ipairs(music_list(track.ccEvents or {},"Controllerereignisse",20000)) do
+   controls=controls+1
+   assert(type(event)=="table" and music_number(event.at) and event.at>=0 and event.at<=previous,"Controllerereignis außerhalb des Songumfangs.")
+   assert(music_number(event.controller) and event.controller%1==0 and event.controller>=0 and event.controller<=127 and music_number(event.value) and event.value%1==0 and event.value>=0 and event.value<=127,"Ungültiger Controllerwert.")
+   if event.controller==64 and event.at>=pedal_at then pedal_at=event.at;pedal_value=event.value end
+  end
+  assert(controls<=20000,"Zu viele Controllerereignisse im Song.")
+  assert(music_number(pedal_value) and pedal_value>=0 and pedal_value<64,"Sustain-Pedal muss innerhalb des Songs wieder gelöst werden.")
+  assert(track.pitchBend==nil or #music_list(track.pitchBend,"Pitch Bend",0)==0,"Pitch Bend ist im bestehenden Lua-JSON-Adapter nicht unterstützt.")
+ end
+ for _,relation in ipairs(music_list(song.relationships or {},"Beziehungen",64)) do
+  assert(type(relation)=="table" and ids[relation.from] and ids[relation.to],"Formbeziehung verweist auf unbekannte Abschnitte.")
+  assert(type(relation.description)=="string" and #relation.description<=600,"Ungültige Formbeziehung.")
+ end
+ return song
+end
+-- CS2-1 is a transport adapter; expanded operations retain the existing CS rules.
+do
+ local codec={max_notes=20000,max_controls=20000,max_bytes=2000000}
+ music_model.compact=codec
+ local function split(s,sep)
+  local out,at={},1
+  while true do local next_at=s:find(sep,at,true);if not next_at then out[#out+1]=s:sub(at);return out end
+   out[#out+1]=s:sub(at,next_at-1);at=next_at+#sep
+  end
+ end
+ local function finite(n) return type(n)=="number" and n==n and n~=math.huge and n~=-math.huge end
+ local function num(s,lo,hi,integer)
+  assert(type(s)=="string" and s~="" and not s:find("[^%d%.eE%+%-]"),"Ungültige Zahl.")
+  local n=tonumber(s);assert(finite(n) and n>=lo and n<=hi and (not integer or n%1==0),"Zahl außerhalb des Bereichs.");return integer and math.floor(n) or n
+ end
+ -- Shortest round-tripping decimal, expanded if legacy CS cannot read exponent notation.
+ function codec.number(n)
+  assert(finite(n),"Nichtendlicher Zahlenwert.")
+  local value
+  for digits=1,17 do value=string.format("%."..digits.."g",n);if tonumber(value)==n then break end end
+  local mantissa,exponent=value:match("^(.+)[eE]([%+%-]?%d+)$")
+  if not exponent then return value end
+  local sign="";if mantissa:sub(1,1)=="-" then sign="-";mantissa=mantissa:sub(2) end
+  local before=mantissa:find(".",1,true) or #mantissa+1
+  local digits=mantissa:gsub("%.","");local point=before-1+tonumber(exponent)
+  if point<=0 then return sign.."0."..string.rep("0",-point)..digits end
+  if point>=#digits then return sign..digits..string.rep("0",point-#digits) end
+  return sign..digits:sub(1,point).."."..digits:sub(point+1)
+ end
+ function codec.input(items)
+  local rows={"MIDI1: absolute QN; columns=start,duration,pitch,velocity,channel. ITEM refers to the matching ITEM number above."}
+  for i,it in ipairs(items) do
+   rows[#rows+1]="NOTES ITEM "..i
+   local notes={}
+   for _,n in ipairs(it.notes or {}) do
+    -- Preserve the existing five-decimal source representation; remove only redundant zeros.
+    local at=string.format("%.5f",n.start_qn):gsub("0+$",""):gsub("%.$","")
+    local duration=string.format("%.5f",n.duration_qn):gsub("0+$",""):gsub("%.$","")
+    notes[#notes+1]=at..","..duration..","..n.pitch..","..n.velocity..","..n.channel
+   end
+   rows[#rows+1]=table.concat(notes,";")
+  end
+  return table.concat(rows,"\n")
+ end
+ function codec.spec()
+  return [[Gib die vollständige Fassung im Transportformat CS2|1 aus, keine Erläuterungen.
+Erste Zeile CS2|1, letzte Zeile END. Dazwischen:
+T|id|ART|QUELLE|NAME|PROGRAM|KANAL
+N|id|start,dauer,pitch,velocity;...
+P|figur|SPANNE|relativerStart,dauer,pitch,velocity;...
+R|id|figur|START|ANZAHL
+U|SOURCE_GUID
+C|id|start|KANAL|cc|CONTROLLER|WERT
+C|id|start|KANAL|program|PROGRAM
+Die vorhandene Tempo-/Taktkarte bleibt bei Bearbeitungen erhalten; keine CSMETA-Zeilen ausgeben.
+T deklariert eine Ergebnisstimme vor deren Verwendung. ART ist new, revised, target oder track; QUELLE ist die vollständige passende SOURCE_GUID/TRACK_GUID aus dem Kontext, für new ein -. NAME eindeutig ohne | oder Zeilenumbruch. PROGRAM 0..127, KANAL 0..15.
+N enthält einzelne Noten mit ABSOLUTEM Start ab Projektbeginn. Eine optionale fünfte Zahl überschreibt den Kanal der T-Zeile für diese Note. Pitch 0..127, Velocity 1..127, Dauer positiv, QN nichtnegativ.
+P definiert eine wiederverwendbare Figur vor R; alle Notenstarts liegen in [0,SPANNE). R setzt sie ANZAHL-mal bei START+j*SPANNE ein (j=0..ANZAHL-1), Kanal aus T oder fünfter Notenzahl. Noten dürfen über die Spanne hinaus klingen. Keine Verschachtelung. R ist eine exakte Wiederholung, keine Anweisung zu musikalischer Variation; Varianten mit eigenen Figuren oder N vollständig auskomponieren; bei ersetzenden Varianten die entsprechenden Basiseinsätze weglassen.
+U kennzeichnet ein unverändertes Quell-Item. Jede T-Stimme braucht Noten. IDs kurz und eindeutig. Keine erzwungenen Figuren, Wiederholungen, festen Taktgruppen oder Songform. Betrachte alle Quellen als ganzes Werk. Maximal 64 Ergebnisstimmen, 128 Figuren sowie je 20000 expandierte Noten und Controller. Studio löst Figuren lokal auf, keine zweite KI-Übersetzung.]]
+ end
+ function codec.decode(text)
+  local ok,result=pcall(function()
+   assert(type(text)=="string" and #text<=codec.max_bytes,"Antwort zu groß.")
+   local lines={};for line in text:gmatch("[^\r\n]+") do line=line:match("^%s*(.-)%s*$");if line~="" then lines[#lines+1]=line end end
+   assert(lines[1]=="CS2|1" and lines[#lines]=="END","CS2-Kopf oder END fehlt; Antwort unvollständig.")
+   local tracks,order,patterns,others,names={},{},{},{},{};local total,controls,pattern_count=0,0,0
+   local function identity(id) assert(type(id)=="string" and #id>0 and #id<=32 and id:match("^[%w_%-]+$"),"Ungültige Kennung.");return id end
+   local function notes(raw)
+    assert(raw~="","Notenliste leer.");local result={}
+    for _,token in ipairs(split(raw,";")) do
+     local n=split(token,",");assert(#n==4 or #n==5,"Note braucht vier oder fünf Werte.")
+     local v={num(n[1],0,1000000),num(n[2],0,1000000),num(n[3],0,127,true),num(n[4],1,127,true)}
+     assert(v[2]>0,"Dauer muss positiv sein.");if n[5] then v[5]=num(n[5],0,15,true) end
+     result[#result+1]=v;assert(#result<=codec.max_notes,"Zu viele Figurennoten.")
+    end
+    return result
+   end
+   local function emit(tr,n,offset)
+    total=total+1;assert(total<=codec.max_notes,"Zu viele expandierte Noten.")
+    local at=n[1]+offset;assert(finite(at) and at>=0 and at+n[2]<=1000000,"Notenzeit außerhalb des Bereichs.")
+    tr.notes[#tr.notes+1]=codec.number(at)..","..codec.number(n[2])..","..n[3]..","..n[4]..","..(n[5] or tr.channel)
+   end
+   for index=2,#lines-1 do
+    local fields=split(lines[index],"|");local kind=fields[1]
+    if kind=="T" then
+     assert(#fields==7 and #order<64,"Ungültige Stimmendeklaration.")
+     local id=identity(fields[2]);assert(not tracks[id],"Doppelte Stimme.")
+     assert(fields[3]=="new" or fields[3]=="revised" or fields[3]=="target" or fields[3]=="track","Unbekannte Operation.")
+     assert(#fields[4]>0 and #fields[4]<=100 and (fields[3]~="new" or fields[4]=="-"),"Ungültige Quelle.")
+     local name=fields[5];assert(#name>0 and #name<=120 and name==name:match("^%s*(.-)%s*$") and not name:find("[%z\1-\31]") and not names[name],"Ungültiger/doppelter Name.");names[name]=true
+     tracks[id]={kind=fields[3],source=fields[4],name=name,program=num(fields[6],0,127,true),channel=num(fields[7],0,15,true),notes={}};order[#order+1]=id
+    elseif kind=="N" then
+     local tr=tracks[fields[2]];assert(#fields==3 and tr,"Unbekannte Stimme.")
+     for _,n in ipairs(notes(fields[3])) do emit(tr,n,0) end
+    elseif kind=="P" then
+     pattern_count=pattern_count+1;assert(pattern_count<=128 and #fields==4,"Ungültige/zu viele Figuren.");local id=identity(fields[2]);assert(not patterns[id],"Doppelte Figur.")
+     local span=num(fields[3],0,1000000);assert(span>0,"Figurenspanne muss positiv sein.")
+     local ns=notes(fields[4]);for _,n in ipairs(ns) do assert(n[1]<span,"Figurenstart außerhalb der Spanne.") end
+     patterns[id]={span=span,notes=ns}
+    elseif kind=="R" then
+     local tr,pattern=tracks[fields[2]],patterns[fields[3]];assert(#fields==5 and tr and pattern,"Stimme/Figur fehlt.")
+     local at,count=num(fields[4],0,1000000),num(fields[5],1,codec.max_notes,true)
+     assert(total+#pattern.notes*count<=codec.max_notes,"Expansion zu groß.")
+     for repeat_index=0,count-1 do for _,n in ipairs(pattern.notes) do emit(tr,n,at+repeat_index*pattern.span) end end
+    elseif kind=="U" then
+     assert(#fields==2 and #fields[2]>0 and #fields[2]<=100,"Ungültige unveränderte Quelle.");others[#others+1]="CS|unchanged|"..fields[2]
+    elseif kind=="C" then
+     local tr=tracks[fields[2]];assert(tr,"Controller ohne Stimme.")
+     local at,ch=num(fields[3],0,1000000),num(fields[4],0,15,true);local tail
+     if fields[5]=="cc" then assert(#fields==7,"Ungültiger CC.");tail="cc|"..num(fields[6],0,127,true).."|"..num(fields[7],0,127,true)
+     else assert(fields[5]=="program" and #fields==6,"Ungültiger Program Change.");tail="program|"..num(fields[6],0,127,true) end
+     controls=controls+1;assert(controls<=codec.max_controls,"Zu viele Controller.")
+     others[#others+1]="CSCTRL|"..tr.name.."|"..codec.number(at).."|"..ch.."|"..tail
+    elseif kind=="CSMETA" then
+     local at=num(fields[3],0,1000000)
+     if fields[2]=="tempo" then assert(#fields==4,"Ungültiges Tempo.");others[#others+1]="CSMETA|tempo|"..codec.number(at).."|"..codec.number(num(fields[4],1,1000))
+     else assert(fields[2]=="timesig" and #fields==5,"Ungültige Taktart.");others[#others+1]="CSMETA|timesig|"..codec.number(at).."|"..num(fields[4],1,32,true).."|"..num(fields[5],1,64,true) end
+    else error("Unbekannte CS2-Zeile: "..tostring(kind)) end
+   end
+   local result={}
+   for _,id in ipairs(order) do local tr=tracks[id];assert(#tr.notes>0,"Stimme ohne Noten.");result[#result+1]="CS|"..tr.kind.."|"..tr.source.."|"..tr.name.."|"..tr.program.."|"..table.concat(tr.notes,";") end
+   for _,line in ipairs(others) do result[#result+1]=line end
+   assert(#result>0,"Leere Komposition.")
+   local expanded=table.concat(result,"\n");assert(#expanded<=codec.max_bytes,"Expandierte Antwort zu groß.");return expanded
+  end)
+  if ok then return result end
+  return nil,"Kompakte Komposition ungültig: "..tostring(result)
+ end
+end
+
 local function item_guid(item) local ok,g=reaper.GetSetMediaItemInfo_String(item,"GUID","",false); return ok and g or "" end
 local function track_guid(track) return reaper.GetTrackGUID(track) or "" end
 local function selected_tracks() local a={}; for i=0,reaper.CountSelectedTracks(0)-1 do local tr=reaper.GetSelectedTrack(0,i); local _,n=reaper.GetTrackName(tr); a[#a+1]={track=tr,guid=track_guid(tr),name=n~="" and n or "Unbenannte Spur",index=math.floor(reaper.GetMediaTrackInfo_Value(tr,"IP_TRACKNUMBER"))} end; return a end
@@ -706,7 +945,11 @@ local function selected_items(with_notes,scope) if scope~="items" then local row
 local function track_context_items(tracks) local a={}; local seen={}; for _,t in ipairs(tracks) do for i=0,reaper.CountTrackMediaItems(t.track)-1 do local item=reaper.GetTrackMediaItem(t.track,i); local take=item and reaper.GetActiveTake(item); if take and reaper.TakeIsMIDI(take) then local g=item_guid(item); if not seen[g] then seen[g]=true; local _,kn=reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME","",false); local pos=reaper.GetMediaItemInfo_Value(item,"D_POSITION"); local len=reaper.GetMediaItemInfo_Value(item,"D_LENGTH"); local it={item=item,take=take,track=t.track,guid=g,track_guid=t.guid,track_name=t.name,take_name=kn~="" and kn or "Unbenanntes MIDI-Item",start_qn=reaper.TimeMap2_timeToQN(0,pos),end_qn=reaper.TimeMap2_timeToQN(0,pos+len),notes={}}; local _,nc=reaper.MIDI_CountEvts(take); for n=0,(nc or 0)-1 do local ok,_,muted,s,e,ch,p,v=reaper.MIDI_GetNote(take,n); if ok and not muted then local st=reaper.MIDI_GetProjTimeFromPPQPos(take,s); local et=reaper.MIDI_GetProjTimeFromPPQPos(take,e); local sq=reaper.TimeMap2_timeToQN(0,st); local eq=reaper.TimeMap2_timeToQN(0,et); it.notes[#it.notes+1]={start_qn=sq,duration_qn=eq-sq,pitch=p,velocity=v,channel=ch} end end; a[#a+1]=it end end end end; return a end
 local function time_selection_context() local s,e=reaper.GetSet_LoopTimeRange(false,false,0,0,false); if not s or not e or e<=s then return "TIME_SELECTION none" end; local sq=reaper.TimeMap2_timeToQN(0,s); local eq=reaper.TimeMap2_timeToQN(0,e); local _,sm,sb=reaper.TimeMap2_timeToBeats(0,s); local _,em,eb=reaper.TimeMap2_timeToBeats(0,e); return string.format("TIME_SELECTION startQN=%.3f endQN=%.3f startBar=%d startBeat=%.3f endBar=%d endBeat=%.3f",sq,eq,(sm or 0)+1,(sb or 0)+1,(em or 0)+1,(eb or 0)+1) end
 local function compact_context(items,tracks,ignore_time) tracks=tracks or selected_tracks(); local l={string.format("Tempo %.2f BPM; selected MIDI items=%d; selected tracks=%d",reaper.Master_GetTempo(),#items,#tracks)}; l[#l+1]=ignore_time and "TIME_SELECTION ignored for free new composition" or time_selection_context(); for i,t in ipairs(tracks) do l[#l+1]=string.format("TRACK %d id=%s name=%s index=%d",i,t.guid,t.name,t.index) end; for i,it in ipairs(items) do l[#l+1]=string.format("ITEM %d id=%s trackId=%s track=%s take=%s rangeQN=%.3f..%.3f",i,it.guid,it.track_guid,it.track_name,it.take_name,it.start_qn,it.end_qn); if it.selection_source then l[#l+1]="NOTATION_SELECTION: "..#it.selection_source.." selected notes" end; if it.score_context then l[#l+1]="SCORE_CONTEXT: sichtbares MIDI-Item; musikalischer Kontext, keine Freigabe zum direkten Überschreiben" end end; return table.concat(l,"\n") end
-local function music_context(items,tracks,ignore_time) local l={compact_context(items,tracks,ignore_time)}; for _,it in ipairs(items) do if it.selection_source then l[#l+1]="NOTATION_SELECTION "..it.guid.." count="..#it.selection_source..". Only selected notes are the edit context; keep unselected notes unchanged." end end; for _,it in ipairs(items) do for _,n in ipairs(it.notes) do l[#l+1]=string.format("N %s %.5f %.5f %d %d %d",it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end end; return table.concat(l,"\n") end
+local function music_context(items,tracks,ignore_time) -- BEGIN COMPACT MUSIC INPUT
+ local scoped=false;for _,it in ipairs(items) do if it.score_context or #(it.selection_source or {})>0 then scoped=true end end
+ if not scoped then return compact_context(items,tracks,ignore_time).."\n"..music_model.compact.input(items) end
+-- END COMPACT MUSIC INPUT
+local l={compact_context(items,tracks,ignore_time)}; for _,it in ipairs(items) do if it.selection_source then l[#l+1]="NOTATION_SELECTION "..it.guid.." count="..#it.selection_source..". Only selected notes are the edit context; keep unselected notes unchanged." end end; for _,it in ipairs(items) do for _,n in ipairs(it.notes) do l[#l+1]=string.format("N %s %.5f %.5f %d %d %d",it.guid,n.start_qn,n.duration_qn,n.pitch,n.velocity,n.channel) end end; return table.concat(l,"\n") end
 local function recent_dialog() local l={}; for i=math.max(1,#history-7),#history do l[#l+1]=history[i].role..": "..history[i].text end; return table.concat(l,"\n") end
 
 local function first_program_changes_on_track(track)
@@ -783,6 +1026,14 @@ local function composition_prompt(request,items,tracks,is_new)
    break
   end
  end
+-- BEGIN COMPACT MUSIC OUTPUT
+ if music_model and #items>0 and not has_note_selection then
+  local scoped=false;for _,it in ipairs(items) do if it.score_context then scoped=true end end
+  if not scoped then return [=[Du komponierst Musik in Composition Studio. Nutze das konkret übergebene vorhandene Material als musikalischen Kontext und erfülle den freien Auftrag eigenständig; füge keine unnötigen Regeln hinzu. Bei einer reinen Ergänzung einer weiteren Stimme bleiben alle vorhandenen Stimmen unverändert: erzeuge die zusätzliche Stimme mit T/ART=new und kennzeichne vorhandene Items mit U. TIME_SELECTION ist nur bei ausdrücklichem Bezug auf den markierten Bereich ein Zielbereich. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item direkt Ziel sein. Jedes neu erzeugte MIDI-Item MUSS einen passenden General-MIDI-Program-Change (0-127) erhalten.
+Dynamik, Artikulation und Phrasierung in Velocity, Notendauern und Einsätzen konkret umsetzen.
+]=]..music_model.compact.spec().."\nAUFTRAG:\n"..request.."\nMUSIK:\n"..music_context(items,tracks,false) end
+ end
+-- END COMPACT MUSIC OUTPUT
  return [[Du komponierst Musik in Composition Studio. Nutze das konkret übergebene vorhandene Material als musikalischen Kontext und erfülle den freien Auftrag eigenständig; füge keine unnötigen Regeln hinzu. Bei einer reinen Ergänzung einer weiteren Stimme bleiben alle vorhandenen Stimmen unverändert: erzeuge die zusätzliche Stimme mit CS|new und kennzeichne vorhandene Items mit CS|unchanged. TIME_SELECTION ist nur bei ausdrücklichem Bezug auf den markierten Bereich ein Zielbereich. Eine ausgewählte TRACK_GUID kann auch ohne ausgewähltes MIDI-Item direkt Ziel sein. Jedes neu erzeugte MIDI-Item MUSS einen passenden General-MIDI-Program-Change (0-127) erhalten.
 Antworte ausschließlich:
 CS|unchanged|SOURCE_GUID
@@ -911,13 +1162,21 @@ do
   local n={input=0,output=0,cached=0,write5=0,write1=0}
   if pv=="google" then
    n.input=count(u,"promptTokenCount",true)
-   n.output=count(u,"candidatesTokenCount",true)+count(u,"thoughtsTokenCount")
+   n.answer=count(u,"candidatesTokenCount",true)
+   local thinking=count(u,"thoughtsTokenCount")
+   if u.thoughtsTokenCount and u.thoughtsTokenCount~="null" then n.reasoning=thinking end
+   n.output=n.answer+thinking
    n.cached=count(u,"cachedContentTokenCount")
   else
    n.input=count(u,"input_tokens",true); n.output=count(u,"output_tokens",true)
    if pv=="openai" then
     local details=fields(u.input_tokens_details)
     n.cached=count(details,"cached_tokens"); n.write5=count(details,"cache_write_tokens")
+    local output_details=fields(u.output_tokens_details)
+    if output_details.reasoning_tokens and output_details.reasoning_tokens~="null" then
+     n.reasoning=count(output_details,"reasoning_tokens")
+     if n.reasoning>n.output then bad=true else n.answer=n.output-n.reasoning end
+    end
    elseif pv=="anthropic" then
     n.cached=count(u,"cache_read_input_tokens")
     local writes=count(u,"cache_creation_input_tokens")
@@ -985,10 +1244,14 @@ do
  end
  function costs.begin() costs.order=summary(""); persist() end
  local function clear_call_diagnostics()
-  for _,field in ipairs({"usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_reasoning_tokens","usage_estimated_usd"}) do diag_set(field,"") end
+  for _,field in ipairs({"usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_reasoning_tokens","usage_estimated_usd","usage_answer_tokens","usage_breakdown_status","usage_provider_json","usage_provider_json_truncated","usage_output_definition","usage_input_estimated_usd","usage_output_estimated_usd","usage_answer_estimated_usd","usage_reasoning_estimated_usd"}) do diag_set(field,"") end
  end
  function costs.start(a)
   clear_call_diagnostics()
+  for _,field in ipairs({"api_stop_reason","api_error","api_response_excerpt","api_partial_answer","api_partial_answer_bytes","api_partial_retained_bytes","api_partial_truncated","api_partial_status","api_response_bytes"}) do diag_set(field,"") end
+  diag_set("api_status","PENDING")
+  diag_set("api_requested_output_tokens","Anbietervorgabe")
+  diag_set("api_request_timeout_seconds",tostring(a.timeout_seconds or ""))
   diag_set("usage_cost_status","Aufruf läuft; Verbrauch noch nicht bekannt")
   a.cost_order=costs.order; a.cost_rate=costs.rate(a.provider,a.model)
   for _,s in ipairs({costs.total,a.cost_order}) do s.calls=s.calls+1; s.unknown=s.unknown+1 end
@@ -998,6 +1261,12 @@ do
   if a.cost_recorded then return end; a.cost_recorded=true
   local n=costs.usage(a.provider,raw); local usd=costs.price(n,a.cost_rate)
   clear_call_diagnostics()
+  local raw_usage=fields(raw)[a.provider=="google" and "usageMetadata" or "usage"]
+  if raw_usage then
+   local at=math.min(#raw_usage,8192)
+   while at>0 do local b=raw_usage:byte(at+1);if not b or b<128 or b>191 then break end;at=at-1 end
+   diag_set("usage_provider_json",raw_usage:sub(1,at));diag_set("usage_provider_json_truncated",at<#raw_usage and "true" or "false")
+  end
   -- Diagnose shows real provider usage, not an estimate from response length.
   -- Anthropic reports thinking within output_tokens, not as a separate usage field.
   if n then
@@ -1006,12 +1275,24 @@ do
    diag_set("usage_cached_tokens",tostring(n.cached))
    diag_set("usage_cache_write_5m_tokens",tostring(n.write5))
    diag_set("usage_cache_write_1h_tokens",tostring(n.write1))
-   diag_set("usage_reasoning_tokens",a.provider=="anthropic" and "nicht separat ausgewiesen (in Ausgabe enthalten)" or "nicht separat ausgewiesen")
+   diag_set("usage_reasoning_tokens",n.reasoning~=nil and tostring(n.reasoning) or (a.provider=="anthropic" and "nicht separat ausgewiesen (in Ausgabe enthalten)" or "nicht separat ausgewiesen"))
+   diag_set("usage_answer_tokens",n.answer~=nil and tostring(n.answer) or "nicht separat bestimmbar")
+   diag_set("usage_output_definition",a.provider=="google" and "candidatesTokenCount + gemeldete thoughtsTokenCount" or "output_tokens enthält Denktokens; nicht erneut addiert")
+   diag_set("usage_breakdown_status",n.reasoning~=nil and n.answer~=nil and (a.provider=="openai" and "Antwort = output_tokens minus reasoning_tokens" or "Antwort und Denken separat von Google gemeldet") or "Aufteilung unvollständig; fehlende Denktokens bleiben unbekannt")
   else
    diag_set("usage_cost_status","Verbrauchsdaten fehlen oder sind ungültig")
   end
   if usd then
    diag_set("usage_estimated_usd",string.format("%.6f",usd))
+   local input_cost=costs.price({input=n.input,output=0,cached=n.cached,write5=n.write5,write1=n.write1},a.cost_rate)
+   local output_cost=math.max(0,usd-input_cost)
+   diag_set("usage_input_estimated_usd",string.format("%.6f",input_cost))
+   diag_set("usage_output_estimated_usd",string.format("%.6f",output_cost))
+   if n.reasoning~=nil and n.answer~=nil then
+    local reasoning_cost=n.output>0 and output_cost*n.reasoning/n.output or 0
+    diag_set("usage_reasoning_estimated_usd",string.format("%.6f",reasoning_cost))
+    diag_set("usage_answer_estimated_usd",string.format("%.6f",output_cost-reasoning_cost))
+   end
    diag_set("usage_cost_status","USD-Schätzung aus API-Verbrauch und hinterlegtem Tarif")
   elseif n then
    diag_set("usage_cost_status","Verbrauch bekannt, aber kein gültiger Preis hinterlegt")
@@ -1119,6 +1400,8 @@ local function ai_command(prompt,key,output_limit)
  end
  local a={rq=rq,rs=rs,cd=cd,provider=provider,model=model,reasoning_mode=reasoning_mode,reasoning_requested=requested,timeout_seconds=timeout,deadline=reaper.time_precise()+timeout+20}
  costs.start(a)
+ diag_set("api_requested_output_tokens",output_limit and tostring(output_limit) or (provider=="anthropic" and "16000" or "Anbietervorgabe"))
+ diag_set("api_request_prompt_bytes",tostring(#prompt))
  return a,nil
 end
 
@@ -1127,6 +1410,7 @@ local function ai_poll(a)
  if not status or trim(status)=="" then
   if reaper.time_precise()<a.deadline then return nil,nil,false end
   costs.record(a,read_file(a.rs))
+  if costs.capture_partial then costs.capture_partial(a.provider,read_file(a.rs)) end
   diag_set("api_status","TIMEOUT")
   diag_set("api_error","Zeitlimit / Hintergrundprozess ohne Statusdatei")
   return nil,"KI-Zeitlimit erreicht; siehe Diagnose und CompositionStudioTemp.",true
@@ -1137,6 +1421,7 @@ local function ai_poll(a)
  -- Don't retain access credentials: API responses do not include submitted keys.
  diag_set("api_status",status); diag_set("api_stop_reason",raw and (raw:match('"stop_reason"%s*:%s*"([^"]+)"') or raw:match('"finishReason"%s*:%s*"([^"]+)"') or raw:match('"finish_reason"%s*:%s*"([^"]+)"')) or "")
  if status=="TIMEOUT" then
+  if costs.capture_partial then costs.capture_partial(a.provider,raw) end
   diag_set("api_error","Zeitlimit / KI-Antwort nicht vollständig eingetroffen")
   os.remove(a.rq);os.remove(a.rs);os.remove(a.cd)
   local usage=last_diag.usage_input_tokens and last_diag.usage_input_tokens~="" and "Vorliegende Verbrauchsdaten stehen in der Kostenübersicht." or "Verbrauch dieses Aufrufs ist unbekannt."
@@ -1155,6 +1440,8 @@ local function ai_poll(a)
  if raw:match('"reason"%s*:%s*"max_output_tokens"') then stop_reason="max_tokens" end
 -- END WHOLE TRACK STOP
  if stop_reason=="max_tokens" or stop_reason=="MAX_TOKENS" or stop_reason=="length" then
+  if costs.capture_partial then costs.capture_partial(a.provider,raw) end
+  diag_set("api_stop_reason",a.provider=="openai" and raw:match('"reason"%s*:%s*"max_output_tokens"') and "max_output_tokens" or stop_reason)
   diag_set("api_error","Tokenlimit erreicht; unvollständige Komposition")
   os.remove(a.rq); os.remove(a.rs); os.remove(a.cd)
   return nil,"Die KI hat das Tokenlimit erreicht. Keine unvollständige Komposition importiert.",true
@@ -1189,6 +1476,7 @@ launch=function(stage,prompt,key,data)
 -- BEGIN WHOLE TRACK LAUNCH
  local output_limit=data.whole_track_output_limit
 -- END WHOLE TRACK LAUNCH
+ diag_set("api_stage",stage)
  local a,e=ai_command(prompt,key,output_limit); if not a then log_communication(stage,"FEHLER",e); add("KI",e); busy=false; job=nil; return false end; job={stage=stage,ai=a,key=key,data=data or {},project=reaper.EnumProjects(-1,"")}; return true end
 
 -- The official LilyPond compiler handles the musical semantics.
@@ -1749,6 +2037,13 @@ function workflow_adapter.load()
  return ok
 end
 function workflow_adapter.offer(stage,text,data)
+-- BEGIN COMPACT MUSIC VALIDATE
+ local compact_raw
+ if stage=="composition" and text:match("^%s*CS2|1") then
+  compact_raw=text
+  local decoded,why=music_model.compact.decode(text);assert(decoded,why);text=decoded
+ end
+-- END COMPACT MUSIC VALIDATE
 -- BEGIN WHOLE TRACK VALIDATION
  if stage=="whole_track" then whole_track.to_cs(text,data.track_snapshot) end
 -- END WHOLE TRACK VALIDATION
@@ -1773,6 +2068,9 @@ function workflow_adapter.offer(stage,text,data)
  if stage=="song_construction" then r.music_snapshot=data.music_snapshot;r.song_summary=song_summary end
  if data.music_memory_context and data.music_memory_context~="" then r.music_memory_context=data.music_memory_context end
 -- END MUSIC WORKSPACE RECORD
+-- BEGIN COMPACT MUSIC RECORD
+ if compact_raw then r.raw_response=compact_raw;r.transport="CS2-1" end
+-- END COMPACT MUSIC RECORD
 -- BEGIN WHOLE TRACK RECORD
  if stage=="whole_track" then r.track_snapshot=data.track_snapshot;r.track_run_id=data.track_run_id end
 -- END WHOLE TRACK RECORD
@@ -2152,114 +2450,41 @@ end
 
 -- End shared workflow host adapter.
 
-local music_model={schema="Composition-Music-1",song_schema="Composition-Song-1",max_source_notes=2500,max_result_notes=20000}
-local function music_number(value)
- return type(value)=="number" and value==value and value~=math.huge and value~=-math.huge
-end
-local function music_list(value,name,limit)
- assert(type(value)=="table",name..": Liste fehlt.")
- local count=0
- for key in pairs(value) do
-  assert(type(key)=="number" and key%1==0 and key>=1 and key<=#value,name..": ungültige Liste.")
-  count=count+1
- end
- assert(count==#value and count<=limit,name..": technische Größenbegrenzung überschritten.")
- return value
-end
-function music_model.capture(items,tempo,num,den,source_limit)
- assert(music_number(tempo) and tempo>=20 and tempo<=400,"Tempo außerhalb des unterstützten JSON-Bereichs (20–400 BPM).")
- assert(music_number(num) and num%1==0 and num>=1 and num<=32 and music_number(den) and den%1==0 and den>=1 and den<=64,"Taktart nicht unterstützt.")
- source_limit=source_limit or music_model.max_source_notes
- assert(music_number(source_limit) and source_limit>=1 and source_limit<=20000,"Ungültiges Quellnotenlimit.")
- local snapshot={schema=music_model.schema,representation="performance",tempo=tempo,time_signature={num,den},parts={},note_count=0}
- local parts,seen_items={},{ }; local first,last=math.huge,-math.huge
- for _,item in ipairs(items) do
-  assert(type(item.guid)=="string" and item.guid~="","Quell-Item ohne Identität.")
-  assert(not seen_items[item.guid],"Doppeltes Quell-Item im Musikkontext.");seen_items[item.guid]=true
-  local id=(type(item.track_guid)=="string" and item.track_guid~="" and item.track_guid) or item.guid
-  if not parts[id] then
-   assert(#snapshot.parts<32,"Mehr als 32 Quellspuren; bitte einen kleineren Bereich auswählen.")
-   parts[id]={id=id,name=item.track_name or "Instrument",events={}}
-   snapshot.parts[#snapshot.parts+1]=parts[id]
+-- Preserve only provider-visible text, never thinking blocks or a second usable proposal.
+function costs.capture_partial(pv,raw)
+ diag_set("api_response_bytes",type(raw)=="string" and tostring(#raw) or "0")
+ if type(raw)~="string" or raw=="" then diag_set("api_partial_status","Keine Antwortdaten verfügbar.");return end
+ if #raw>2000000 then diag_set("api_partial_status","Antwort größer als 2 MB; sichere Textauswertung ausgelassen.");return end
+ local ok,object=pcall(decode_engine_json,raw)
+ if not ok or type(object)~="table" then diag_set("api_partial_status","Antwort-JSON unvollständig oder ungültig; kein sicher extrahierter Text.");return end
+ local pieces={}
+ if pv=="google" then
+  local candidate=type(object.candidates)=="table" and object.candidates[1]
+  local content=type(candidate)=="table" and candidate.content
+  for _,part in ipairs(type(content)=="table" and type(content.parts)=="table" and content.parts or {}) do
+   if type(part)=="table" and (part.thought==nil or part.thought==false) and type(part.text)=="string" then pieces[#pieces+1]=part.text end
   end
-  for ordinal,note in ipairs(item.notes or {}) do
-   snapshot.note_count=snapshot.note_count+1
-   assert(snapshot.note_count<=source_limit,"Quellnotenlimit überschritten ("..source_limit..").")
-   assert(music_number(note.start_qn) and music_number(note.duration_qn) and note.duration_qn>0,"Ungültige Quellzeiten.")
-   assert(music_number(note.pitch) and note.pitch%1==0 and note.pitch>=0 and note.pitch<=127,"Ungültige Quelltonhöhe.")
-   assert(music_number(note.velocity) and note.velocity%1==0 and note.velocity>=1 and note.velocity<=127,"Ungültige Quellvelocity.")
-   assert(music_number(note.channel) and note.channel%1==0 and note.channel>=0 and note.channel<=15,"Ungültiger Quellkanal.")
-   local event={id=item.guid..":"..ordinal,source_item=item.guid,source_ordinal=ordinal,
-    at=note.start_qn,duration=note.duration_qn,pitch=note.pitch,velocity=note.velocity,channel=note.channel}
-   parts[id].events[#parts[id].events+1]=event
-   first=math.min(first,event.at); last=math.max(last,event.at+event.duration)
+ elseif pv=="openai" then
+  for _,item in ipairs(type(object.output)=="table" and object.output or {}) do
+   if type(item)=="table" and item.type=="message" then
+    for _,part in ipairs(type(item.content)=="table" and item.content or {}) do
+     if type(part)=="table" and part.type=="output_text" and type(part.text)=="string" then pieces[#pieces+1]=part.text end
+    end
+   end
+  end
+ elseif pv=="anthropic" then
+  for _,part in ipairs(type(object.content)=="table" and object.content or {}) do
+   if type(part)=="table" and part.type=="text" and type(part.text)=="string" then pieces[#pieces+1]=part.text end
   end
  end
- assert(snapshot.note_count>0,"Keine MIDI-Noten als Ausgangsmaterial vorhanden.")
- snapshot.bounds={start_qn=first,end_qn=last}
- return snapshot
-end
-function music_model.validate_song(song,snapshot)
- assert(type(snapshot)=="table" and snapshot.schema==music_model.schema,"Gesicherter Musikkontext fehlt.")
- assert(type(song)=="table" and song.schema==music_model.song_schema,"Song-Antwort benötigt Composition-Song-1.")
- assert(music_number(song.bpm) and math.abs(song.bpm-snapshot.tempo)<0.000001,"Der Song darf das Projekttempo nicht ändern.")
- assert(type(song.timeSignature)=="table" and song.timeSignature[1]==snapshot.time_signature[1] and song.timeSignature[2]==snapshot.time_signature[2],"Der Song darf die Projekttaktart nicht ändern.")
- assert(song.tempoEvents==nil or #music_list(song.tempoEvents,"Tempoereignisse",0)==0,"Die vorhandene Tempokarte bleibt erhalten.")
- assert(type(song.title)=="string" and #song.title>0 and #song.title<=120,"Songtitel fehlt oder ist zu lang.")
- local tracks=music_list(song.tracks,"Spuren",32)
- assert(#tracks>0,"Song ohne Spuren.")
- local names,count,last={ },0,0
- for _,track in ipairs(tracks) do
-  assert(type(track)=="table" and type(track.name)=="string" and #track.name>0 and #track.name<=120,"Ungültiger Spurname.")
-  assert(not track.name:find("[|\r\n]") and track.name==track.name:match("^%s*(.-)%s*$") and not names[track.name],"Spurnamen müssen eindeutig und ohne Steuerzeichen sein.")
-  names[track.name]=true
-  assert(track.role==nil or type(track.role)=="string" and #track.role<=300,"Ungültige musikalische Rollenbeschreibung.")
-  local notes=music_list(track.notes,"Noten",music_model.max_result_notes)
-  assert(#notes>0,"Leere Songspuren können nicht übernommen werden; bitte im Ergebnis weglassen.")
-  for _,note in ipairs(notes) do
-   count=count+1
-   assert(count<=music_model.max_result_notes,"Song hat mehr als 20000 Noten.")
-   assert(type(note)=="table" and music_number(note[1]) and note[1]>=0 and music_number(note[2]) and note[2]>0,"Ungültige Songzeiten.")
-   last=math.max(last,note[1]+note[2])
-  end
- end
- assert(count>0,"Song enthält keine Noten.")
- local sections=music_list(song.sections,"Abschnitte",32)
- assert(#sections>0,"Song benötigt mindestens einen beschriebenen Abschnitt.")
- local ids,previous={},0
- for _,section in ipairs(sections) do
-  assert(type(section)=="table" and type(section.id)=="string" and #section.id>0 and #section.id<=80 and not ids[section.id],"Abschnittskennungen fehlen oder sind doppelt.")
-  assert(type(section.name)=="string" and #section.name>0 and #section.name<=120,"Abschnittsname fehlt.")
-  assert(music_number(section.start_qn) and math.abs(section.start_qn-previous)<0.000001 and music_number(section.end_qn) and section.end_qn>section.start_qn and section.end_qn<=4096,"Abschnitte müssen den Song lückenlos ab QN 0 beschreiben (maximal 4096 QN).")
-  assert(section.purpose==nil or type(section.purpose)=="string" and #section.purpose<=600,"Ungültige Abschnittsbeschreibung.")
-  ids[section.id]=true;previous=section.end_qn
- end
- assert(last<=previous+0.000001,"Songnoten reichen über den beschriebenen Werkumfang hinaus.")
- local pedal=music_list(song.pedalEvents or {},"Pedalereignisse",20000)
- local controls=0
- for _,track in ipairs(tracks) do
-  local pedal_at,pedal_value=-1,0
-  for _,event in ipairs(pedal) do
-   controls=controls+1
-   assert(type(event)=="table" and music_number(event.at) and event.at>=0 and event.at<=previous,"Pedalereignis außerhalb des Songumfangs.")
-   assert(music_number(event.value) and event.value%1==0 and event.value>=0 and event.value<=127,"Ungültiger Pedalwert.")
-   if event.at>=pedal_at then pedal_at=event.at;pedal_value=event.value end
-  end
-  for _,event in ipairs(music_list(track.ccEvents or {},"Controllerereignisse",20000)) do
-   controls=controls+1
-   assert(type(event)=="table" and music_number(event.at) and event.at>=0 and event.at<=previous,"Controllerereignis außerhalb des Songumfangs.")
-   assert(music_number(event.controller) and event.controller%1==0 and event.controller>=0 and event.controller<=127 and music_number(event.value) and event.value%1==0 and event.value>=0 and event.value<=127,"Ungültiger Controllerwert.")
-   if event.controller==64 and event.at>=pedal_at then pedal_at=event.at;pedal_value=event.value end
-  end
-  assert(controls<=20000,"Zu viele Controllerereignisse im Song.")
-  assert(music_number(pedal_value) and pedal_value>=0 and pedal_value<64,"Sustain-Pedal muss innerhalb des Songs wieder gelöst werden.")
-  assert(track.pitchBend==nil or #music_list(track.pitchBend,"Pitch Bend",0)==0,"Pitch Bend ist im bestehenden Lua-JSON-Adapter nicht unterstützt.")
- end
- for _,relation in ipairs(music_list(song.relationships or {},"Beziehungen",64)) do
-  assert(type(relation)=="table" and ids[relation.from] and ids[relation.to],"Formbeziehung verweist auf unbekannte Abschnitte.")
-  assert(type(relation.description)=="string" and #relation.description<=600,"Ungültige Formbeziehung.")
- end
- return song
+ local text=table.concat(pieces,"\n");local at=math.min(#text,262144)
+ -- Do not cut a UTF-8 codepoint in the diagnostic JSON.
+ while at>0 do local b=text:byte(at+1);if not b or b<128 or b>191 then break end;at=at-1 end
+ diag_set("api_partial_answer_bytes",tostring(#text))
+ diag_set("api_partial_retained_bytes",tostring(at))
+ diag_set("api_partial_truncated",at<#text and "true" or "false")
+ diag_set("api_partial_answer",text:sub(1,at))
+ diag_set("api_partial_status",#text>0 and "Unvollständige sichtbare Antwort, nur Diagnose; nicht zur MIDI-Übernahme freigegeben." or "Kein sichtbarer Antworttext in der Anbieterantwort.")
 end
 local music_memory={schema="Composition-Memory-1",max_entries=24,max_text=600}
 function music_memory.empty() return {schema=music_memory.schema,decisions={}} end
@@ -2994,7 +3219,7 @@ end
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
- log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
+ log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s; Antworttokens: %s; Denktokens: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?"),tostring(last_diag.usage_answer_tokens or "?"),tostring(last_diag.usage_reasoning_tokens or "?")))
 -- BEGIN WHOLE TRACK RESULT
  if stage=="whole_track_plan" or stage=="whole_track_window" then whole_track.result(stage,text,data,e,key);return end
  if not text and stage=="composition" and last_diag.api_error=="Tokenlimit erreicht; unvollständige Komposition" then

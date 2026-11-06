@@ -29,11 +29,12 @@ Callbackbindung und Persistenzverhalten erhalten.
 | [`distribution/update`](../src/distribution/update.lua) | host | `core/session`, `core/text`, `core/version`, `platform/files`, `platform/process` |
 | [`ai/response`](../src/ai/response.lua) | portable | — |
 | [`ai/credentials`](../src/ai/credentials.lua) | host | `core/session`, `core/text` |
-| [`diagnostics/state`](../src/diagnostics/state.lua) | host | `core/session`, `platform/files` |
+| [`diagnostics/state`](../src/diagnostics/state.lua) | host | `core/session`, `platform/files`, `ai/response` |
 | [`host/reaper/save_export`](../src/host/reaper/save_export.lua) | host | `core/session`, `core/text`, `diagnostics/state`, `platform/files`, `platform/process` |
 | [`music/swam`](../src/music/swam.lua) | workflow | `ai/credentials`, `core/session`, `host/reaper/save_export` |
 | [`workflow/chat`](../src/workflow/chat.lua) | host | `ai/response`, `core/session` |
-| [`host/reaper/context`](../src/host/reaper/context.lua) | host | `core/session` |
+| [`music/model`](../src/music/model.lua) | portable | — |
+| [`host/reaper/context`](../src/host/reaper/context.lua) | host | `core/session`, `music/model` |
 | [`host/reaper/instruments`](../src/host/reaper/instruments.lua) | host | — |
 | [`workflow/controller`](../src/workflow/controller.lua) | workflow | `core/text`, `diagnostics/state`, `host/reaper/context`, `host/reaper/instruments` |
 | [`music/cs_notes`](../src/music/cs_notes.lua) | portable | — |
@@ -41,7 +42,7 @@ Callbackbindung und Persistenzverhalten erhalten.
 | [`music/programs`](../src/music/programs.lua) | portable | — |
 | [`music/cs_plan`](../src/music/cs_plan.lua) | factory | `core/text`, `music/cs_notes`, `music/programs` |
 | [`host/reaper/commit`](../src/host/reaper/commit.lua) | host | `core/session`, `core/text`, `host/reaper/save_export`, `host/reaper/tracks`, `music/cs_plan` |
-| [`music/prompts`](../src/music/prompts.lua) | factory | `core/text`, `host/reaper/context`, `music/cs_notes` |
+| [`music/prompts`](../src/music/prompts.lua) | factory | `core/text`, `host/reaper/context`, `music/cs_notes`, `music/model` |
 | [`workflow/translation_chunk`](../src/workflow/translation_chunk.lua) | workflow | `core/session`, `diagnostics/state`, `music/prompts`, `music/swam` |
 | [`ai/costs`](../src/ai/costs.lua) | host | `ai/response`, `core/session`, `core/text`, `diagnostics/state` |
 | [`ai/request_state`](../src/ai/request_state.lua) | host | `core/session` |
@@ -59,11 +60,11 @@ Callbackbindung und Persistenzverhalten erhalten.
 | [`music/json_codec`](../src/music/json_codec.lua) | portable | — |
 | [`music/json_score`](../src/music/json_score.lua) | factory | `music/json_codec` |
 | [`music/lilypond_prompt`](../src/music/lilypond_prompt.lua) | portable | — |
-| [`workflow/proposals`](../src/workflow/proposals.lua) | host | `ai/request_state`, `core/session`, `core/text`, `diagnostics/state`, `host/reaper/context`, `music/json_codec`, `platform/files`, `shared/workflow`, `workflow/chat` |
+| [`workflow/proposals`](../src/workflow/proposals.lua) | host | `ai/request_state`, `core/session`, `core/text`, `diagnostics/state`, `host/reaper/context`, `music/json_codec`, `platform/files`, `shared/workflow`, `workflow/chat`, `music/model` |
 | [`host/reaper/note_commit`](../src/host/reaper/note_commit.lua) | host | `workflow/proposals` |
 | [`workflow/apply_review`](../src/workflow/apply_review.lua) | workflow | `ai/credentials`, `ai/request_state`, `core/session`, `core/text`, `diagnostics/state`, `host/reaper/commit`, `host/reaper/context`, `host/reaper/instruments`, `host/reaper/lilypond_commit`, `host/reaper/note_commit`, `music/json_score`, `music/prompts`, `music/swam`, `shared/workflow`, `workflow/chat`, `workflow/proposals` |
 | [`ai/catalog`](../src/ai/catalog.lua) | host | `core/session`, `core/text`, `music/json_codec`, `platform/files`, `platform/process`, `workflow/chat`, `workflow/proposals` |
-| [`music/model`](../src/music/model.lua) | portable | — |
+| [`diagnostics/partial_response`](../src/diagnostics/partial_response.lua) | host | `ai/costs`, `diagnostics/state`, `music/json_codec` |
 | [`music/memory`](../src/music/memory.lua) | portable | — |
 | [`workflow/music_workspace`](../src/workflow/music_workspace.lua) | workflow | `ai/credentials`, `ai/request_state`, `core/session`, `diagnostics/state`, `host/reaper/context`, `music/continuation_request`, `music/json_codec`, `music/json_direct_prompt`, `music/json_score`, `music/memory`, `music/model`, `music/prompts`, `music/swam`, `workflow/chat`, `workflow/proposals` |
 | [`workflow/continuation`](../src/workflow/continuation.lua) | workflow | `ai/credentials`, `core/session`, `diagnostics/state`, `host/reaper/context`, `music/continuation_prompt`, `music/swam`, `shared/workflow`, `workflow/chat`, `workflow/proposals` |
