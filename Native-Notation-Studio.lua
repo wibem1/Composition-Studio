@@ -108,6 +108,67 @@ local function stream(raw,changes)
  end
  return table.concat(out),changed
 end
+-- OpenAI Responses API, without placing API credentials in script files.
+-- Requires curl and an OPENAI_API_KEY environment variable available to REAPER.
+local function call_openai(promptPath)
+ local file=assert(io.open(promptPath,"rb"))
+ local prompt=file:read("*a");file:close()
+ local function escape_json(value)
+  return (value:gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t"))
+ end
+ local root=R.GetResourcePath()
+ local request=root.."/NativeNotationStudio-request.json"
+ local output=root.."/NativeNotationStudio-response.json"
+ local body=assert(io.open(request,"wb"))
+ body:write('{"model":"gpt-5.4","input":"',escape_json(prompt),'"}')
+ body:close()
+ local windows=package.config:sub(1,1)=="\\"
+ local cmd
+ if windows then
+  cmd='cmd.exe /C curl.exe -sS --fail-with-body --max-time 180 -X POST https://api.openai.com/v1/responses -H "Content-Type: application/json" -H "Authorization: Bearer %OPENAI_API_KEY%" --data-binary "@'..request..'" -o "'..output..'"'
+ else
+  cmd='/bin/sh -c '..string.format("%q",'/usr/bin/curl -sS --fail-with-body --max-time 180 -X POST https://api.openai.com/v1/responses -H "Content-Type: application/json" -H "Authorization: Bearer $OPENAI_API_KEY" --data-binary "@'..request..'" -o "'..output..'"')
+ end
+ local result=R.ExecProcess(cmd,190000)
+ os.remove(request)
+ assert(type(result)=="string","KI-Aufruf konnte nicht ausgeführt werden.")
+ local f=assert(io.open(output,"rb"),"Keine Antwort vom KI-Dienst.")
+ local data=f:read("*a");f:close()
+ -- Decode JSON string values without interpreting escaped text as JSON structure.
+ local function strings(json)
+  local out={}
+  local i=1
+  while i<=#json do
+   if json:sub(i,i)=='"' then
+    local j=i+1
+    local decoded={}
+    while j<=#json do
+     local c=json:sub(j,j)
+     if c=='"' then break end
+     if c=="\\" then
+      j=j+1
+      local e=json:sub(j,j)
+      if e=="n" then c="\n" elseif e=="r" then c="\r" elseif e=="t" then c="\t" else c=e end
+     end
+     decoded[#decoded+1]=c
+     j=j+1
+    end
+    out[#out+1]={value=table.concat(decoded),finish=j}
+    i=j+1
+   else i=i+1 end
+  end
+  return out
+ end
+ local tokens=strings(data)
+ for i=1,#tokens-1 do
+  if tokens[i].value=="text" then
+   local gap=data:sub(tokens[i].finish+1,data:find('"',tokens[i].finish+1,true) or #data)
+   if gap:match("^%s*:%s*") and tokens[i+1].value:find("DISPLAY|",1,true) then return tokens[i+1].value end
+  end
+ end
+ error("Keine gültige DISPLAY-Antwort erhalten. Bitte API-Konfiguration und Antwortdatei prüfen: "..output)
+end
+
 local function run()
  local rows=selected()
  assert(#rows>0,"Bitte mindestens ein MIDI-Item auswählen.")
@@ -133,10 +194,18 @@ local function run()
  promptFile:write([[Du bist ein Experte fuer klassische Musiknotation. Rekonstruiere fuer jede MIDI-Note den musikalisch gemeinten Einsatz und Notenwert anhand der gesamten Phrase, nicht anhand einer pauschalen Quantisierung. Unterscheide Melodie, Bass, Begleitung, Mittelstimmen und expressive Timingabweichungen. Unklare Noten, Vorschlagsnoten und mehrdeutige Faelle nicht veraendern. Gib ausschliesslich Zeilen im Format DISPLAY|ID|Start_QN|Dauer_QN|SICHER aus. Jede Zeile muss sich auf die unten genannte Originalnote beziehen. Keine erfundenen Noten. Die Antwort wird vor dem Schreiben streng validiert.
 ]],"\n",table.concat(lines,"\n"),"\n")
  promptFile:close()
- local ok,value=R.GetUserInputs("Native Notation Studio - Test",1,"DISPLAY-Zeilen-Datei (vollständiger Pfad):","")
- if not ok then return end
- local input=assert(io.open(value,"rb"),"DISPLAY-Datei nicht lesbar.")
- local response=input:read("*a");input:close()
+ local mode=R.ShowMessageBox("KI automatisch aufrufen?\nJa: OpenAI (Umgebungsvariable OPENAI_API_KEY).\nNein: vorbereitete DISPLAY-Datei verwenden.\nAbbrechen: nichts ändern.","Native Notation Studio",3)
+ if mode==2 then return end
+ local response
+ if mode==6 then
+  response=call_openai(promptPath)
+ else
+  local ok,value=R.GetUserInputs("Native Notation Studio - Test",1,"DISPLAY-Zeilen-Datei (vollständiger Pfad):","")
+  if not ok then return end
+  local input=assert(io.open(value,"rb"),"DISPLAY-Datei nicht lesbar.")
+  response=input:read("*a");input:close()
+ end
+
  local plan=parse(response,targets)
  local edits,counts={},{}
  for i,t in ipairs(targets) do
