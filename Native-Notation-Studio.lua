@@ -131,7 +131,7 @@ local function call_openai(promptPath)
  end
  local result=R.ExecProcess(cmd,190000)
  os.remove(request)
- assert(type(result)=="string","KI-Aufruf konnte nicht ausgeführt werden.")
+ assert(type(result)=="string" and not result:match("^%s*%-?%d+%s*\n[1-9]%d*"),"KI-Aufruf fehlgeschlagen; bitte API-Konfiguration pruefen.")
  local f=assert(io.open(output,"rb"),"Keine Antwort vom KI-Dienst.")
  local data=f:read("*a");f:close()
  -- Decode JSON string values without interpreting escaped text as JSON structure.
@@ -162,11 +162,13 @@ local function call_openai(promptPath)
  local tokens=strings(data)
  for i=1,#tokens-1 do
   if tokens[i].value=="text" then
-   local gap=data:sub(tokens[i].finish+1,data:find('"',tokens[i].finish+1,true) or #data)
-   if gap:match("^%s*:%s*") and tokens[i+1].value:find("DISPLAY|",1,true) then return tokens[i+1].value end
+   local between=data:sub(tokens[i].finish+1, data:find('"',tokens[i].finish+1,true)-1)
+   if between:match("^%s*:%s*$") and tokens[i+1].value:find("DISPLAY|",1,true) then
+    return tokens[i+1].value
+   end
   end
  end
- error("Keine gültige DISPLAY-Antwort erhalten. Bitte API-Konfiguration und Antwortdatei prüfen: "..output)
+ error("Keine gueltige DISPLAY-Antwort. Antwortdatei: "..output)
 end
 
 local function run()
