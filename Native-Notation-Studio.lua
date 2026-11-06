@@ -119,6 +119,7 @@ local function call_openai(promptPath)
  local root=R.GetResourcePath()
  local request=root.."/NativeNotationStudio-request.json"
  local output=root.."/NativeNotationStudio-response.json"
+ os.remove(output)
  local body=assert(io.open(request,"wb"))
  body:write('{"model":"gpt-5.4","input":"',escape_json(prompt),'"}')
  body:close()
@@ -183,6 +184,7 @@ local function run()
   end
  end
  assert(#targets>0,"Keine MIDI-Noten gefunden.")
+ assert(#targets<=500,"Analyseumfang ueberschritten.")
  local lines={}
  for i,t in ipairs(targets) do
   local n=t.note
