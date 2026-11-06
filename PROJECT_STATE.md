@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – 1.4.0 mit kompaktem Musikformat und korrigierter Diagnose veröffentlicht
+
+**Veröffentlichung auf ausdrücklichen Auftrag:** [Release-PR #19](https://github.com/wibem1/Composition-Studio/pull/19) regulär gemergt, Merge `7b68db39ecf57149996396f07bfd6fe2362bee25`. Enthält die exakten Heads aus PR #17/#18 als Vorfahren. Header und Laufzeit 1.4.0 auf main. Studio-Blob `d1f735a23f954c35863bc1371422dfd037998641`, Offline-Installer-Blob `9318e5e7cdd903c18fac424391112eaf83e87bd9`, identisch mit geprüftem Kandidaten `a327b4beaf3f02c7a4226af7824bd45179a9e244`. Tatsächlichen raw.githubusercontent.com-Update-Download nach Merge bytegenau abgeglichen.
+
+**Prüfgrundlage:** Alle 19 Python-Suiten und drei Lua-Dateien lokal sowie alle fünf CI-Jobs am exakten Release-Kandidaten bestanden, einschließlich [Gesamtbuild und vollständigem Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42189790294). Exakte Offline-Installation aus 1.3.0 mit bytegenauem Backup bestanden. Keine kostenpflichtigen Anbieteraufrufe und keine native Windows-/REAPER-/Hörabnahme. Weiterhin Testfreigabe; reale Modellantworten, Tokenersparnis und musikalische Qualität nicht zugesichert.
+
+**Jetzt verfügbar:** Studio-Menü → Update und Studio neu starten. Vollständige Quell-MIDI-Items auswählen und den Bearbeitungsauftrag normal eingeben. Der normale Weg nutzt kompakte vollständige Eingabe und optionale lokal expandierte Figuren, ohne feste Taktgruppen oder zusätzliche KI-Übersetzung. Übernahme weiterhin über **Änderungen anwenden** und bestehende Schutzregeln. Diagnose zeigt für künftige Aufrufe Antwort-/Denktokens, soweit gemeldet, sowie verfügbare sichtbare Teilantworten bei Abbruch; verlorene Altdaten bleiben nicht rekonstruierbar. [Bedienung und Grenzen](docs/RELEASE-1.4.0.md).
+
+**Nächster Schritt:** Native Gegenprobe an Projektkopie mit normalem vollständigem Trackauftrag, Diagnoseexport und Apply/Undo/Neuladen. Pausierte automatische Routing-/Abschnittssteuerung nicht integriert. Engine und Notations-PR #12 unverändert.
+
 ## 06.11.2026 – Gemeinsame Testfreigabe 1.4.0 vorbereitet
 
 **Veröffentlichungsauftrag:** Nutzer fordert „veröffentlichen“; nach Infrastrukturfehler jetzt in wieder verfügbarer Umgebung fortgesetzt. PR #17 (`16079791e8c745bb789eacad44991aa424958bc5`) und #18 (`3e09d148b26a7a3b530880dbf16acc1ebc72e438`) jeweils mit allen fünf CI-Jobs grün. Beide Implementierungsstände auf isoliertem `release/1.4.0` zusammengeführt; Quellen/Manifeste gemeinsam abgeglichen, Artefakte regeneriert. Keine Übernahme der lokal pausierten automatischen Routing-/Abschnittssteuerung und keine Änderung von Engine/Notations-PR #12.

@@ -1,6 +1,6 @@
 # Getrennte Token-Diagnose und sichtbare Teilantworten
 
-Für die ausdrücklich beauftragte Testfreigabe 1.4.0 gemeinsam mit dem kompakten Musikformat aus PR #17 vorbereitet. Keine Integration der pausierten automatischen Abschnittssteuerung.
+Als Testfreigabe 1.4.0 gemeinsam mit dem kompakten Musikformat aus PR #17 veröffentlicht. Keine Integration der pausierten automatischen Abschnittssteuerung.
 
 ## Problem und Korrektur
 

@@ -1,10 +1,10 @@
 # Composition Studio 1.4.0 – Testfreigabe
 
-Auf ausdrücklichen Nutzerauftrag zur gemeinsamen Veröffentlichung von [PR #17](https://github.com/wibem1/Composition-Studio/pull/17) und [PR #18](https://github.com/wibem1/Composition-Studio/pull/18) vorbereitet. Beide freigegebenen Implementierungsstände sind als Vorfahren im gemeinsamen Release-Branch enthalten; keine Übernahme der pausierten automatischen Abschnittssteuerung. Engine und Notations-PR #12 unverändert.
+Auf ausdrücklichen Nutzerauftrag gemeinsam veröffentlicht über [Release-PR #19](https://github.com/wibem1/Composition-Studio/pull/19), Merge `7b68db39ecf57149996396f07bfd6fe2362bee25`; enthält die Änderungen aus [PR #17](https://github.com/wibem1/Composition-Studio/pull/17) und [PR #18](https://github.com/wibem1/Composition-Studio/pull/18). Beide freigegebenen Implementierungsstände sind als Vorfahren im gemeinsamen Release-Branch enthalten; keine Übernahme der pausierten automatischen Abschnittssteuerung. Engine und Notations-PR #12 unverändert.
 
 ## Bedienung
 
-Nach Veröffentlichung **Studio-Menü → Update**, danach Studio neu starten. Die vorherige Skriptdatei wird vom Updater gesichert. Erste Gegenprobe an Projektkopie.
+**Studio-Menü → Update**, danach Studio neu starten. Die vorherige Skriptdatei wird vom Updater gesichert. Erste Gegenprobe an Projektkopie.
 
 Für die kompakte Bearbeitung beide vollständigen MIDI-Items auswählen und den Auftrag **normal** eingeben, beispielsweise:
 
@@ -18,7 +18,7 @@ Die Diagnose weist für künftige Aufrufe Eingabe, Antwort und Denken getrennt a
 
 ## Prüfgrundlage und Grenzen
 
-Beide Ausgangs-PRs jeweils mit fünf erfolgreichen CI-Jobs. Gemeinsamer Integrationsstand lokal mit **19 Python-Suiten und drei Lua-Dateien** bestanden. Release-Kandidat einschließlich exakter Offline-Installation aus 1.3.0 mit Backup ebenfalls lokal mit 19 Python-Suiten und drei Lua-Dateien bestanden. CI am endgültigen Kandidaten vor Merge und nach Merge die tatsächlichen Updatebytes abgleichen.
+Beide Ausgangs-PRs jeweils mit fünf erfolgreichen CI-Jobs. Gemeinsamer Integrationsstand lokal mit **19 Python-Suiten und drei Lua-Dateien** bestanden. Release-Kandidat einschließlich exakter Offline-Installation aus 1.3.0 mit Backup ebenfalls lokal mit 19 Python-Suiten und drei Lua-Dateien bestanden. Alle fünf CI-Jobs am endgültigen Kandidaten `a327b4b` bestanden, einschließlich [vollständigem Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42189790294). Veröffentlichte Studio-/Installerblobs entsprechen dem geprüften Kandidaten; tatsächlichen Update-Download nach Merge bytegenau verglichen.
 
 Gemessene Zeichenersparnis: etwa 59 % für den gesamten Prompt der bereitgestellten 549-Noten-Quelle; im synthetischen wiederholungsreichen 72-Takte-Dreistimmer 97,5 %, bei 500 nicht wiederholten expressiven Noten 4,8 %. Alle verglichenen Ereignisse/Planeroperationen bleiben erhalten. **Keine gemessene reale Token-/Kosteneinsparung, keine zugesicherte Reduktion der Denktokens oder garantierte erfolgreiche Modellantwort.** Kostenpflichtige KI-Aufrufe bleiben kostenpflichtig, auch bei einem Abbruch.
 
