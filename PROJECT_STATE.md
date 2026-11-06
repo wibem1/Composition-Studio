@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – Patch 1.4.1: Auswahlwechsel blockiert gespeichertes Ergebnis
+
+**Nutzerfehler:** Screenshot zeigt „Das Original wurde verändert“ nach Medien-Item-Auswahl und keine Ergebnisübernahme. Codeprüfung: Guard speichert rohe Itemchunks einschließlich top-level `SEL 0/1`; eine reine Auswahländerung löst reproduzierbar einen Fehlalarm aus. Das Ergebnis/Apply liegt außerdem im scrollbaren Chat und kann unsichtbar sein. Konkrete alte native Guard-Differenz ist im vorhandenen Diagnoseexport nicht enthalten.
+
+**Korrektur auf `fix/proposal-selection-guard-20261106`:** Nur oberstes Item-SEL für neue und alte Guards normalisieren; andere Source-/MIDI-/Timing-/Identitäts-/Tempodaten weiterhin prüfen. Neueste fertige gespeicherte Antwort nach Laden wieder anzeigen; Apply außerhalb des Chat-Scrollbereichs, adaptive kleine Layouts, bereits angewendete Ergebnisse ohne Apply-Button. Übernahme und erste abweichende Feldart in Diagnose protokollieren. Vorhandene Antwort bei Auswahlwechsel ohne neuen KI-Aufruf wiederverwenden. Header/Laufzeit als Patch-Testfreigabe 1.4.1 vorbereitet. [Wiederaufnahme und Grenzen](docs/RELEASE-1.4.1.md).
+
+**Prüfung:** Fix mit 20 Python-Suiten und drei Lua-Dateien lokal bestanden; vorhandener 1.4.0-Guard im Produktionsfunktionstest, Wechsel der Item-Auswahl, frische Lua-Sitzung und einmaliges Apply ohne Provideraufruf. Echte Änderungen bleiben blockiert. Alle 64 Dear-ImGui-Layouts geprüft; zusätzliche explizite Bounds-Prüfung der Apply-Schaltfläche ergänzt. Exakten 1.4.0-Update-/Backup-Ausgangspunkt `4da4862a10223ca6255f57ffb5c28aac4c1c925b` ergänzt; Release-Runner mit 20 Python-Suiten und drei Lua-Dateien inklusive Upgrade aus 1.4.0 und Backup bestanden; danach reine Feldnamen-Diagnose gezielt erneut geprüft. CI am finalen Kandidaten vor Veröffentlichung prüfen. Keine kostenpflichtigen KI-Aufrufe, keine native REAPER-/Windows-Abnahme. Engine/Notations-PR #12 und pausierte Abschnittssteuerung unberührt.
+
 ## 06.11.2026 – 1.4.0 mit kompaktem Musikformat und korrigierter Diagnose veröffentlicht
 
 **Veröffentlichung auf ausdrücklichen Auftrag:** [Release-PR #19](https://github.com/wibem1/Composition-Studio/pull/19) regulär gemergt, Merge `7b68db39ecf57149996396f07bfd6fe2362bee25`. Enthält die exakten Heads aus PR #17/#18 als Vorfahren. Header und Laufzeit 1.4.0 auf main. Studio-Blob `d1f735a23f954c35863bc1371422dfd037998641`, Offline-Installer-Blob `9318e5e7cdd903c18fac424391112eaf83e87bd9`, identisch mit geprüftem Kandidaten `a327b4beaf3f02c7a4226af7824bd45179a9e244`. Tatsächlichen raw.githubusercontent.com-Update-Download nach Merge bytegenau abgeglichen.

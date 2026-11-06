@@ -1557,7 +1557,8 @@
         "pcall",
         "reaper",
         "table",
-        "tostring"
+        "tostring",
+        "type"
       ],
       "host_apis": [
         "GetTrackName",

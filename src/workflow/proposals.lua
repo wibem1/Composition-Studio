@@ -7,6 +7,39 @@ function workflow_adapter.encode(v)
  elseif kind=="table" then local out={}; if #v>0 then for _,x in ipairs(v) do out[#out+1]=workflow_adapter.encode(x) end; return '['..table.concat(out,',')..']' end; for k,x in pairs(v) do out[#out+1]=workflow_adapter.encode(tostring(k))..':'..workflow_adapter.encode(x) end; table.sort(out); return '{'..table.concat(out,',')..'}' end
  error("Nicht speicherbarer Arbeitsstand")
 end
+-- The arrangement item selection is UI state, not a change to the musical source.
+function workflow_adapter.normalize_guard(raw)
+ if type(raw)~="string" then return raw end
+ local rows,depth={},0
+ for line,ending in raw:gmatch("([^\n]*)(\n?)") do
+  local token=line:match("^%s*(.-)%s*$")
+  local omit=depth==1 and token:match("^SEL%s+[01]$")
+  if depth==0 and token=="<ITEM" then depth=1
+  elseif depth>0 then
+   if token==">" then depth=depth-1
+   elseif token:sub(1,1)=="<" then depth=depth+1 end
+  end
+  if not omit then rows[#rows+1]=line..ending end
+ end
+ return table.concat(rows)
+end
+function workflow_adapter.guard_difference(before,after)
+ local old,new={},{}
+ local tags={POSITION=true,LENGTH=true,MUTE=true,VOLPAN=true,SOFFS=true,PLAYRATE=true,GUID=true,IGUID=true,NAME=true,E=true,e=true,CC=true,HASDATA=true,SEL=true,POOLEDEVTS=true,LOOP=true,TAKE=true}
+ local function field(line)
+  local key=line and line:match("^%s*([%a_][%w_]*)")
+  return tags[key] and key or "Struktur/Identität"
+ end
+ for line in tostring(before or ""):gmatch("[^\n]+") do old[#old+1]=line end
+ for line in tostring(after or ""):gmatch("[^\n]+") do new[#new+1]=line end
+ for i=1,math.max(#old,#new) do
+  if old[i]~=new[i] then
+   local a,b=field(old[i]),field(new[i])
+   return "Erste Abweichung in Zeile "..i..": "..a.." / "..b.." (keine Inhaltswerte exportiert)."
+  end
+ end
+ return "Keine Inhaltsabweichung nach Auswahl-Normalisierung."
+end
 function workflow_adapter.guard()
  local rows={}
  for i=0,reaper.CountTracks(0)-1 do
@@ -73,6 +106,10 @@ function workflow_adapter.load()
   workflow_adapter.history_error=true
   workflow_adapter.pending=nil;workflow_adapter.analysis=nil;workflow_adapter.records={}
   update_status="Arbeitsverlauf nicht verfügbar: "..tostring(err)
+ end
+ if ok and not workflow_adapter.history_error then
+  local latest=workflow_adapter.records[#workflow_adapter.records]
+  if latest and latest.state=="ready" then workflow_adapter.pending=latest end
  end
  return ok
 end

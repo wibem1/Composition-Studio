@@ -42,7 +42,7 @@ end
 
 local fresh=[====[
 -- @description Composition Studio
--- @version 1.4.0
+-- @version 1.4.1
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -86,7 +86,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.4.0"
+local VERSION="1.4.1"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -371,7 +371,7 @@ local function select_model(pv,id) provider=pv; model=id; reaper.SetExtState(EXT
 local function get_key() local kn=KEY_NAMES[provider]; local k=trim(reaper.GetExtState(EXT_SECTION,kn)); if k~="" then return k end; local ok,v=reaper.GetUserInputs("Studio – KI-Zugang",1,provider_name().." API-Key:,extrawidth=320",""); if not ok then return nil end; k=trim(v); if k~="" then reaper.SetExtState(EXT_SECTION,kn,k,true); return k end end
 local function edit_key(pv) local kn=KEY_NAMES[pv]; local old=reaper.GetExtState(EXT_SECTION,kn); local name=pv=="openai" and "OpenAI" or pv=="anthropic" and "Anthropic" or "Google"; local ok,v=reaper.GetUserInputs("Studio – KI-Zugang",1,name.." API-Key:,extrawidth=320",old or ""); if ok then reaper.SetExtState(EXT_SECTION,kn,trim(v),true) end end
 local diag_json
-local DIAG_CONFIG={key="LastDiagnosisV2",fields={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log","api_stage","api_requested_output_tokens","api_request_timeout_seconds","api_request_prompt_bytes","api_response_bytes","api_partial_answer","api_partial_answer_bytes","api_partial_retained_bytes","api_partial_truncated","api_partial_status","usage_answer_tokens","usage_breakdown_status","usage_provider_json","usage_provider_json_truncated","usage_output_definition","usage_input_estimated_usd","usage_output_estimated_usd","usage_answer_estimated_usd","usage_reasoning_estimated_usd"}}
+local DIAG_CONFIG={key="LastDiagnosisV2",fields={"version","composition_engine","composition_engine_build","provider","model","reasoning_mode","reasoning_requested","work_title","request","context","controller_prompt","controller_answer","concept_prompt","concept_result","composition_idea","communication_log","composition_mode","composition_prompt","composition_music","translation_prompt","composition_answer","apply_result","apply_guard_status","apply_guard_difference","halion_result","api_status","api_stop_reason","usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_estimated_usd","usage_reasoning_tokens","usage_cost_status","api_error","api_response_excerpt","update_error","lilypond_log","api_stage","api_requested_output_tokens","api_request_timeout_seconds","api_request_prompt_bytes","api_response_bytes","api_partial_answer","api_partial_answer_bytes","api_partial_retained_bytes","api_partial_truncated","api_partial_status","usage_answer_tokens","usage_breakdown_status","usage_provider_json","usage_provider_json_truncated","usage_output_definition","usage_input_estimated_usd","usage_output_estimated_usd","usage_answer_estimated_usd","usage_reasoning_estimated_usd"}}
 local function persist_diag()
  local ok,raw=pcall(function() return diag_json() end)
  if ok and raw then reaper.SetExtState(EXT_SECTION,DIAG_CONFIG.key,raw,true) end
@@ -2010,6 +2010,39 @@ function workflow_adapter.encode(v)
  elseif kind=="table" then local out={}; if #v>0 then for _,x in ipairs(v) do out[#out+1]=workflow_adapter.encode(x) end; return '['..table.concat(out,',')..']' end; for k,x in pairs(v) do out[#out+1]=workflow_adapter.encode(tostring(k))..':'..workflow_adapter.encode(x) end; table.sort(out); return '{'..table.concat(out,',')..'}' end
  error("Nicht speicherbarer Arbeitsstand")
 end
+-- The arrangement item selection is UI state, not a change to the musical source.
+function workflow_adapter.normalize_guard(raw)
+ if type(raw)~="string" then return raw end
+ local rows,depth={},0
+ for line,ending in raw:gmatch("([^\n]*)(\n?)") do
+  local token=line:match("^%s*(.-)%s*$")
+  local omit=depth==1 and token:match("^SEL%s+[01]$")
+  if depth==0 and token=="<ITEM" then depth=1
+  elseif depth>0 then
+   if token==">" then depth=depth-1
+   elseif token:sub(1,1)=="<" then depth=depth+1 end
+  end
+  if not omit then rows[#rows+1]=line..ending end
+ end
+ return table.concat(rows)
+end
+function workflow_adapter.guard_difference(before,after)
+ local old,new={},{}
+ local tags={POSITION=true,LENGTH=true,MUTE=true,VOLPAN=true,SOFFS=true,PLAYRATE=true,GUID=true,IGUID=true,NAME=true,E=true,e=true,CC=true,HASDATA=true,SEL=true,POOLEDEVTS=true,LOOP=true,TAKE=true}
+ local function field(line)
+  local key=line and line:match("^%s*([%a_][%w_]*)")
+  return tags[key] and key or "Struktur/Identität"
+ end
+ for line in tostring(before or ""):gmatch("[^\n]+") do old[#old+1]=line end
+ for line in tostring(after or ""):gmatch("[^\n]+") do new[#new+1]=line end
+ for i=1,math.max(#old,#new) do
+  if old[i]~=new[i] then
+   local a,b=field(old[i]),field(new[i])
+   return "Erste Abweichung in Zeile "..i..": "..a.." / "..b.." (keine Inhaltswerte exportiert)."
+  end
+ end
+ return "Keine Inhaltsabweichung nach Auswahl-Normalisierung."
+end
 function workflow_adapter.guard()
  local rows={}
  for i=0,reaper.CountTracks(0)-1 do
@@ -2076,6 +2109,10 @@ function workflow_adapter.load()
   workflow_adapter.history_error=true
   workflow_adapter.pending=nil;workflow_adapter.analysis=nil;workflow_adapter.records={}
   update_status="Arbeitsverlauf nicht verfügbar: "..tostring(err)
+ end
+ if ok and not workflow_adapter.history_error then
+  local latest=workflow_adapter.records[#workflow_adapter.records]
+  if latest and latest.state=="ready" then workflow_adapter.pending=latest end
  end
  return ok
 end
@@ -2299,8 +2336,17 @@ end
 
 function workflow_adapter.apply()
  local r=workflow_adapter.pending; if not r or busy then return end
+ local guard_problem
  local ok,err=pcall(function()
-  workflow_core.check("apply",{state=r.state,source_guard=r.source_guard,current_guard=workflow_adapter.guard()})
+  diag_set("apply_result","START: gespeicherten Vorschlag übernehmen")
+  local original=workflow_adapter.normalize_guard(r.source_guard)
+  local current=workflow_adapter.normalize_guard(workflow_adapter.guard())
+  local bound=type(original)=="string" and original:match("%S")~=nil
+  diag_set("apply_guard_status",not bound and "MISSING_BINDING" or original==current and "MATCH" or "SOURCE_CHANGED")
+  local difference=workflow_adapter.guard_difference(original,current)
+  guard_problem=bound and original~=current and difference or nil
+  diag_set("apply_guard_difference",difference)
+  workflow_core.check("apply",{state=r.state,source_guard=original,current_guard=current})
   workflow_adapter.save()
   local result,why
   if r.stage=="composition" and (r.score_scope or #(r.notation_selection or {})>0) then
@@ -2335,11 +2381,15 @@ function workflow_adapter.apply()
   end
   assert(result,why or "Vorschlag konnte nicht angewendet werden.")
   r.state=workflow_core.advance(r.state,"apply"); workflow_adapter.pending=nil; workflow_adapter.save()
+  diag_set("apply_result","SUCCESS: Vorschlag übernommen; Rückgängig über REAPER Undo.")
   add("KI",(r.stage=="notation_transpose" or r.stage=="notation_patch")
    and "Nur markierte MIDI-Noten bearbeitet; unmarkierte Noten und Steuerdaten bleiben erhalten. Rückgängig über REAPER Undo."
    or "Änderungen angewendet. Das Original bleibt erhalten. Rückgängig über REAPER Undo.")
  end)
- if not ok then update_status=tostring(err); add("KI",update_status) end
+ if not ok then
+  update_status=guard_problem and r.state=="ready" and ("Übernahme blockiert: Die gespeicherte Quelle stimmt nicht mit dem Projekt überein. Der Vorschlag bleibt im Verlauf erhalten. Kein neuer KI-Aufruf gestartet. "..guard_problem) or tostring(err)
+  diag_set("apply_result","ERROR: "..update_status);add("KI",update_status)
+ end
 end
 function workflow_adapter.review(task)
  if busy then return end
@@ -2349,7 +2399,7 @@ function workflow_adapter.review(task)
  end
  if not r then update_status="Bitte zuerst die Komposition analysieren lassen oder eine gespeicherte Analyse im Verlauf öffnen.";return end
  local ok,err=pcall(function()
-  assert(workflow_adapter.guard()==r.source_guard,"Das Original wurde verändert. Bitte neu analysieren.")
+  assert(workflow_adapter.normalize_guard(workflow_adapter.guard())==workflow_adapter.normalize_guard(r.source_guard),"Das Original wurde verändert. Bitte neu analysieren.")
   local items,tracks=workflow_adapter.bindings(r)
   if #tracks==0 then
    local seen={}; for _,it in ipairs(items) do local guid=track_guid(it.track); if not seen[guid] then seen[guid]=true; local _,name=reaper.GetTrackName(it.track); tracks[#tracks+1]={track=it.track,guid=guid,name=name} end end
@@ -2769,7 +2819,7 @@ function music_workspace.try_request(request)
   local project=reaper.EnumProjects(-1,"")
   local guard=workflow_adapter.guard()
   local key=get_key();assert(key,"API-Key fehlt.")
-  assert(reaper.EnumProjects(-1,"")==project and workflow_adapter.guard()==guard,"Projekt oder Quelle während der Auftragserfassung verändert.")
+  assert(reaper.EnumProjects(-1,"")==project and workflow_adapter.normalize_guard(workflow_adapter.guard())==workflow_adapter.normalize_guard(guard),"Projekt oder Quelle während der Auftragserfassung verändert.")
   local context=workflow_adapter.encode(snapshot)
   assert(#context<=256000,"Musikkontext zu groß; bitte einen kleineren Ausschnitt auswählen.")
   last_diag={version=VERSION,provider=provider,model=model,request=request,composition_engine="Composition Studio music workspace / JSON schema adapter"}
@@ -2826,7 +2876,7 @@ function whole_track.load()
  return state
 end
 function whole_track.check(state)
- assert(state.guard==workflow_adapter.guard(),"Projekt/Quelle verändert. Track-Auftrag neu vorbereiten.")
+ assert(workflow_adapter.normalize_guard(state.guard)==workflow_adapter.normalize_guard(workflow_adapter.guard()),"Projekt/Quelle verändert. Track-Auftrag neu vorbereiten.")
  assert(state.provider==provider and state.model==model and state.reasoning==reasoning_mode,"Anbieter, Modell oder Denkaufwand verändert. Ursprüngliche Auswahl wiederherstellen oder neu vorbereiten.")
  assert(not (provider=="google" and model:match("^gemini%-2%.5") and reasoning_mode~="auto"),"Für Gemini 2.5 ist der begrenzte Track-Aufbau nur mit Denkaufwand Automatisch unterstützt; explizite Denkbudgets können das Antwortlimit überschreiten.")
  local memory,why=music_workspace.context();assert(memory,why)
@@ -3486,11 +3536,10 @@ local function draw_model_picker(width)
 end
 local function draw_workflow_status()
  local width=reaper.ImGui_GetContentRegionAvail(ctx)
- if workflow_adapter.pending then
-  reaper.ImGui_TextWrapped(ctx,"Vorschlag: "..(workflow_adapter.labels[workflow_adapter.pending.stage] or "Musik").." · "..(workflow_adapter.states[workflow_adapter.pending.state] or ""))
+ if workflow_adapter.pending and workflow_adapter.pending.state=="ready" then
+  reaper.ImGui_TextWrapped(ctx,"Ergebnis bereit: "..(workflow_adapter.labels[workflow_adapter.pending.stage] or "Musik").." · "..(workflow_adapter.states[workflow_adapter.pending.state] or ""))
   if reaper.ImGui_Button(ctx,"Änderungen anwenden",width) then workflow_adapter.apply() end
  end
- if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end
 end
 local function draw_history()
  if history_mode then
@@ -3536,13 +3585,15 @@ end
 
 -- Update feedback must remain visible even when the conversation is scrolled.
 if update_job then reaper.ImGui_Text(ctx,"Update wird geladen …") end
+-- The result action stays visible even if the conversation is scrolled.
+draw_workflow_status()
 -- Keep variable-height messages inside the scrolling conversation.
 reaper.ImGui_Separator(ctx)
 local w,h=reaper.ImGui_GetContentRegionAvail(ctx)
 local scale=font_size/14
 local _,spacing=reaper.ImGui_GetStyleVar(ctx,reaper.ImGui_StyleVar_ItemSpacing())
 spacing=spacing or 4
-local bh=math.max(reaper.ImGui_GetFrameHeight(ctx),math.floor(34*scale+0.5))
+local bh=math.max(reaper.ImGui_GetFrameHeight(ctx),math.min(math.floor(34*scale+0.5),math.floor(h/5)))
 local ih=math.min(math.floor(112*scale+0.5),math.max(bh*2,math.floor(h*0.32)))
 local ch=math.max(1,h-ih-bh*2-spacing*5-2)
 local child_visible=reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders())
@@ -3556,7 +3607,7 @@ if child_visible then
   if reaper.ImGui_Button(ctx,"Track-Aufbau anhalten") then whole_track.cancel() end
  end
 -- END WHOLE TRACK STATUS
- draw_workflow_status()
+ if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end
  draw_history()
  reaper.ImGui_EndChild(ctx)
 end

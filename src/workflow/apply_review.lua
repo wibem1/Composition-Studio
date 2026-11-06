@@ -1,7 +1,16 @@
 function workflow_adapter.apply()
  local r=workflow_adapter.pending; if not r or busy then return end
+ local guard_problem
  local ok,err=pcall(function()
-  workflow_core.check("apply",{state=r.state,source_guard=r.source_guard,current_guard=workflow_adapter.guard()})
+  diag_set("apply_result","START: gespeicherten Vorschlag übernehmen")
+  local original=workflow_adapter.normalize_guard(r.source_guard)
+  local current=workflow_adapter.normalize_guard(workflow_adapter.guard())
+  local bound=type(original)=="string" and original:match("%S")~=nil
+  diag_set("apply_guard_status",not bound and "MISSING_BINDING" or original==current and "MATCH" or "SOURCE_CHANGED")
+  local difference=workflow_adapter.guard_difference(original,current)
+  guard_problem=bound and original~=current and difference or nil
+  diag_set("apply_guard_difference",difference)
+  workflow_core.check("apply",{state=r.state,source_guard=original,current_guard=current})
   workflow_adapter.save()
   local result,why
   if r.stage=="composition" and (r.score_scope or #(r.notation_selection or {})>0) then
@@ -36,11 +45,15 @@ function workflow_adapter.apply()
   end
   assert(result,why or "Vorschlag konnte nicht angewendet werden.")
   r.state=workflow_core.advance(r.state,"apply"); workflow_adapter.pending=nil; workflow_adapter.save()
+  diag_set("apply_result","SUCCESS: Vorschlag übernommen; Rückgängig über REAPER Undo.")
   add("KI",(r.stage=="notation_transpose" or r.stage=="notation_patch")
    and "Nur markierte MIDI-Noten bearbeitet; unmarkierte Noten und Steuerdaten bleiben erhalten. Rückgängig über REAPER Undo."
    or "Änderungen angewendet. Das Original bleibt erhalten. Rückgängig über REAPER Undo.")
  end)
- if not ok then update_status=tostring(err); add("KI",update_status) end
+ if not ok then
+  update_status=guard_problem and r.state=="ready" and ("Übernahme blockiert: Die gespeicherte Quelle stimmt nicht mit dem Projekt überein. Der Vorschlag bleibt im Verlauf erhalten. Kein neuer KI-Aufruf gestartet. "..guard_problem) or tostring(err)
+  diag_set("apply_result","ERROR: "..update_status);add("KI",update_status)
+ end
 end
 function workflow_adapter.review(task)
  if busy then return end
@@ -50,7 +63,7 @@ function workflow_adapter.review(task)
  end
  if not r then update_status="Bitte zuerst die Komposition analysieren lassen oder eine gespeicherte Analyse im Verlauf öffnen.";return end
  local ok,err=pcall(function()
-  assert(workflow_adapter.guard()==r.source_guard,"Das Original wurde verändert. Bitte neu analysieren.")
+  assert(workflow_adapter.normalize_guard(workflow_adapter.guard())==workflow_adapter.normalize_guard(r.source_guard),"Das Original wurde verändert. Bitte neu analysieren.")
   local items,tracks=workflow_adapter.bindings(r)
   if #tracks==0 then
    local seen={}; for _,it in ipairs(items) do local guid=track_guid(it.track); if not seen[guid] then seen[guid]=true; local _,name=reaper.GetTrackName(it.track); tracks[#tracks+1]={track=it.track,guid=guid,name=name} end end
