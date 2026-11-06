@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – Strategiewechsel: eigenstaendiges REAPER-Notationsskript
+
+**Neue verbindliche Benutzerentscheidung:** Die musikalisch intelligente MIDI-Notationsinterpretation soll nicht als Funktion in Composition Lab/Composition Studio eingebaut werden, sondern als **eigenstaendiges REAPER-ReaScript** weiterentwickelt werden. Der bisherige Branch und PR #12 bleiben als technische Ausgangsbasis und Nachweis erhalten; eine Integration in die bestehende Composition-Studio-Anwendung ist nicht mehr Ziel. Vor einer Migration sind die bereits realisierten Analyse-, Anzeigeoffset-, Quellschutz- und Testkomponenten zu inventarisieren und in ein unabhaengiges Skript mit eigenem Startbefehl zu ueberfuehren. Die bestehende stabile Anwendung darf dadurch nicht veraendert werden. Ein neues Ziel-Repository ist noch nicht festgelegt; kein Merge/Release durch diese Strategieentscheidung. Die Umsetzung soll einen Button `Lesbare Notation erstellen` bieten und ohne manuelle textliche KI-Anweisung auskommen. Der Benutzer uebernimmt den letzten REAPER-Praxistest.
+
+
 ## 05.11.2026 – Lesbare Notation per Button (PR #12)
 
 Die Textanalyse ist keine Voraussetzung für die Bedienung. **Lesbare Notation erstellen** sendet einen vorbereiteten Auftrag und setzt geprüfte Einsätze und Dauern als native Anzeige-Offsets. Der Ablauf bewahrt ursprüngliche MIDI-Ereignisse und manuelle Anzeige-Offsets, überspringt unsichere Vorschläge und schützt gegen veraltete Quellen sowie Schreibfehler. Ergebnis im REAPER-Noteneditor mit proportionalen Abständen und nativer Triolenerkennung. Die isolierte Testfassung ist über den bestehenden Testinstaller installierbar.
