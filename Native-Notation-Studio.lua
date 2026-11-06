@@ -116,6 +116,7 @@ local function call_openai(promptPath)
  local function escape_json(value)
   return (value:gsub("\\","\\\\"):gsub('"','\\"'):gsub("\n","\\n"):gsub("\r","\\r"):gsub("\t","\\t"))
  end
+ assert(os.getenv("OPENAI_API_KEY"),"OPENAI_API_KEY ist nicht gesetzt.")
  local root=R.GetResourcePath()
  local request=root.."/NativeNotationStudio-request.json"
  local output=root.."/NativeNotationStudio-response.json"
