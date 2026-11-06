@@ -162,8 +162,9 @@ local function call_openai(promptPath)
  local tokens=strings(data)
  for i=1,#tokens-1 do
   if tokens[i].value=="text" then
-   local between=data:sub(tokens[i].finish+1, data:find('"',tokens[i].finish+1,true)-1)
-   if between:match("^%s*:%s*$") and tokens[i+1].value:find("DISPLAY|",1,true) then
+   local nextQuote=data:find('"',tokens[i].finish+1,true)
+   local between=nextQuote and data:sub(tokens[i].finish+1,nextQuote-1)
+   if between and between:match("^%s*:%s*$") and tokens[i+1].value:find("DISPLAY|",1,true) then
     return tokens[i+1].value
    end
   end
