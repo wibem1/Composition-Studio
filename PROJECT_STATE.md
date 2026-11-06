@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – Standalone-Skript mit eigenem Analyseauftrag
+
+`Native-Notation-Studio.lua` wurde als unabhaengige REAPER-Aktion im Entwicklungsbranch angelegt (Commit `619d17a43bb1214ae921d0e49de0161a256fcbef`). Es erfasst ausgewaehlte MIDI-Items, erzeugt ein Noteninventar und kann konservativ validierte DISPLAY-Zeilen als native Anzeigeoffsets schreiben, mit Quellvergleich und Undo. Commit `31b3f5a267b27de2b5be38d08c716714777244fa` ergaenzt den Export eines vorbereiteten musikalischen KI-Auftrags in `NativeNotationStudio-prompt.txt`. **Einschraenkung:** Noch keine eigene Provider-Anbindung und deshalb noch kein Ein-Klick-KI-Ablauf; die Antwort wird aus einer extern vorbereiteten Datei geladen. Standalone-Datei bislang nicht mit REAPER ausgefuehrt oder vollstaendig kompiliert. Die produktive Composition-Studio-Fassung bleibt unveraendert. Naechster Schritt: KI-Transport mit kontrollierter Konfiguration, Tests und ein REAPER-Abnahmetest durch den Nutzer.
+
+
 ## 06.11.2026 – Strategiewechsel: eigenstaendiges REAPER-Notationsskript
 
 **Neue verbindliche Benutzerentscheidung:** Die musikalisch intelligente MIDI-Notationsinterpretation soll nicht als Funktion in Composition Lab/Composition Studio eingebaut werden, sondern als **eigenstaendiges REAPER-ReaScript** weiterentwickelt werden. Der bisherige Branch und PR #12 bleiben als technische Ausgangsbasis und Nachweis erhalten; eine Integration in die bestehende Composition-Studio-Anwendung ist nicht mehr Ziel. Vor einer Migration sind die bereits realisierten Analyse-, Anzeigeoffset-, Quellschutz- und Testkomponenten zu inventarisieren und in ein unabhaengiges Skript mit eigenem Startbefehl zu ueberfuehren. Die bestehende stabile Anwendung darf dadurch nicht veraendert werden. Ein neues Ziel-Repository ist noch nicht festgelegt; kein Merge/Release durch diese Strategieentscheidung. Die Umsetzung soll einen Button `Lesbare Notation erstellen` bieten und ohne manuelle textliche KI-Anweisung auskommen. Der Benutzer uebernimmt den letzten REAPER-Praxistest.
