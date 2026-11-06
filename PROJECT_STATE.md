@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – Direkter KI-Aufruf im Standalone-Skript (experimentell)
+
+`Native-Notation-Studio.lua` enthaelt nun optional einen direkten OpenAI-Responses-API-Aufruf via curl und `OPENAI_API_KEY` (Commit `af45cffb4dd59f34fc881e06960eefa827a12902`). Alternativ bleibt der Datei-Testmodus erhalten. Das Skript erstellt den Prompt aus ausgewaehlten MIDI-Noten, liest die KI-Antwort und uebernimmt nur konservativ validierte Anzeigeoffsets mit Rueckfrage und Undo. **Status: implementiert, nicht praktisch geprueft.** Der Aufruf ist derzeit synchron, auf OpenAI begrenzt, und die API-Antwortauswertung ist vorlaeufig. Es wurde kein echter API-Aufruf ausgefuehrt; die plattformuebergreifende Funktionsfaehigkeit und die Notationsqualitaet sind nicht nachgewiesen. Nicht freigeben, bevor Transport, Syntax, Fehlerszenarien und REAPER getestet sind. Stable Composition Studio unveraendert.
+
+
 ## 06.11.2026 – Standalone-Skript mit eigenem Analyseauftrag
 
 `Native-Notation-Studio.lua` wurde als unabhaengige REAPER-Aktion im Entwicklungsbranch angelegt (Commit `619d17a43bb1214ae921d0e49de0161a256fcbef`). Es erfasst ausgewaehlte MIDI-Items, erzeugt ein Noteninventar und kann konservativ validierte DISPLAY-Zeilen als native Anzeigeoffsets schreiben, mit Quellvergleich und Undo. Commit `31b3f5a267b27de2b5be38d08c716714777244fa` ergaenzt den Export eines vorbereiteten musikalischen KI-Auftrags in `NativeNotationStudio-prompt.txt`. **Einschraenkung:** Noch keine eigene Provider-Anbindung und deshalb noch kein Ein-Klick-KI-Ablauf; die Antwort wird aus einer extern vorbereiteten Datei geladen. Standalone-Datei bislang nicht mit REAPER ausgefuehrt oder vollstaendig kompiliert. Die produktive Composition-Studio-Fassung bleibt unveraendert. Naechster Schritt: KI-Transport mit kontrollierter Konfiguration, Tests und ein REAPER-Abnahmetest durch den Nutzer.
