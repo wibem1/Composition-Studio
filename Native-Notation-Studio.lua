@@ -128,6 +128,11 @@ local function run()
  local file=assert(io.open(path,"wb"))
  file:write("NATIVE NOTATION STUDIO - Noteninventar\n",table.concat(lines,"\n"),"\n")
  file:close()
+ local promptPath=R.GetResourcePath().."/NativeNotationStudio-prompt.txt"
+ local promptFile=assert(io.open(promptPath,"wb"))
+ promptFile:write([[Du bist ein Experte fuer klassische Musiknotation. Rekonstruiere fuer jede MIDI-Note den musikalisch gemeinten Einsatz und Notenwert anhand der gesamten Phrase, nicht anhand einer pauschalen Quantisierung. Unterscheide Melodie, Bass, Begleitung, Mittelstimmen und expressive Timingabweichungen. Unklare Noten, Vorschlagsnoten und mehrdeutige Faelle nicht veraendern. Gib ausschliesslich Zeilen im Format DISPLAY|ID|Start_QN|Dauer_QN|SICHER aus. Jede Zeile muss sich auf die unten genannte Originalnote beziehen. Keine erfundenen Noten. Die Antwort wird vor dem Schreiben streng validiert.
+]],"\n",table.concat(lines,"\n"),"\n")
+ promptFile:close()
  local ok,value=R.GetUserInputs("Native Notation Studio - Test",1,"DISPLAY-Zeilen-Datei (vollständiger Pfad):","")
  if not ok then return end
  local input=assert(io.open(value,"rb"),"DISPLAY-Datei nicht lesbar.")
