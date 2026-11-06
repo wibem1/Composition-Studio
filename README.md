@@ -6,6 +6,8 @@ Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAP
 `src/`; `python tools/build_studio.py` erzeugt weiterhin dieselben eigenständigen
 Lua-Dateien für Studio und Installation. [Modulgrenzen, Build und Prüfungen](docs/MODULARIZATION-DEVELOPMENT.md).
 
+**In Vorbereitung, noch nicht veröffentlicht:** Wahl der [Platzierung neuer MIDI-Spuren](docs/TRACK-PLACEMENT.md) beim Anwenden, über einen eigenen Dialog ohne Scrollen.
+
 **Neu ab 1.4.0 – Diagnose:** Antwort- und Denktokens getrennt ausweisen, verfügbare sichtbare Teilantworten bei Tokenabbruch erhalten und nach Neustart wiederherstellen. [Felder und Grenzen](docs/TOKEN-DIAGNOSTICS.md).
 
 **Neu ab 1.4.0 – kompaktes Musikformat:** kompakte Musikeingabe und Figurenreferenzen für die Ausgabe, ohne Taktgruppen-Zerlegung oder zusätzliche KI-Übersetzung. [Format und Offline-Nachweise](docs/COMPACT-MUSIC-TRANSPORT.md).

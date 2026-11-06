@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – Wahl der Spurplatzierung vorbereitet (noch nicht veröffentlicht)
+
+**Auftrag:** Neue KI-Spuren wahlweise einzeln hinter ihren Originalspuren oder als zusammenhängenden Block dahinter einfügen; Auswahl ohne Scrollen zum Gesprächsanfang erreichbar.
+
+**Implementiert auf `feat/track-placement-choice-20261106`, Basis main `b1eadfbc9589d5df4667562c02595826e1ddf503`:** Nach **Änderungen anwenden** erscheint im gemeinsamen MIDI-Commit ein nativer Ja/Nein/Abbrechen-Dialog. Ja behält Varianten bei ihrer jeweiligen Quelle; zusätzliche Stimmen ohne Quelle kommen ans Projektende. Nein fügt alle neuen Spuren in Antwortreihenfolge direkt hinter der letzten gebundenen Originalspur ein. Mehrere Varianten derselben Quelle behalten auch beim einzelnen Einfügen ihre Antwortreihenfolge. Der Dialog erscheint unabhängig von der Chat-Scrollposition; die Anwenden-Schaltfläche bleibt außerhalb des Chat-Scrollbereichs. Abbrechen erzeugt keine Spuren/Noten/Tempoänderungen und keinen Undo-Block; der bezahlte Vorschlag bleibt ready, gespeichert und wieder anwendbar. Keine Abfrage bei rein bestehenden Zielen oder Neuanlage ohne Quellkontext. [Bedienung und Abgrenzung](docs/TRACK-PLACEMENT.md).
+
+**Prüfung:** Vollständiger Offline-Runner: 21 Python-Suiten und drei Lua-Dateien bestanden. Neue Produktionsfunktionstests mit tatsächlich verschobenen Mock-Spuridentitäten für beide Modi, Lücken zwischen Quellen, Antwortreihenfolge, wiederholte Quelle, reine Spurauswahl, Abbruch/Wiederaufnahme, bestehende Ziele und Undo-Rollback. Workflow-Abbruch mit gespeichertem Vorschlag und Reload geprüft; 60 bestehende differentielle Plan/Commit-Fälle und 64 echte Dear-ImGui-Layouts weiterhin grün. Zwei HTTP-Tests benötigen lokale Mockserver außerhalb der Socket-Sandbox; vollständiger Lauf dort erfolgreich. Keine kostenpflichtigen KI-Aufrufe, keine native REAPER-/Windows-Abnahme.
+
+**Status/nächster Schritt:** Zur Prüfung auf separatem Branch; keine Versionsänderung, kein Merge und keine Veröffentlichung. Native Gegenprobe an Projektkopie mit beiden Einfügearten, Abbrechen und Undo vor einer Freigabe. Bestehende Spuren werden nicht nachträglich umgeordnet; LilyPond-Importpfad, Engine, Notations-PR #12 und pausierte automatische Abschnittssteuerung unverändert.
+
 ## 06.11.2026 – 1.4.1-Patch für gespeicherte Ergebnisübernahme veröffentlicht
 
 **Veröffentlichung der Reparatur:** [PR #20](https://github.com/wibem1/Composition-Studio/pull/20) regulär gemergt, Merge `4ee614b5202bede74dda930a53f1221cb3c043a6`. Header/Laufzeit 1.4.1 auf main. Studio-Blob `200636d8000f318a3cfdde167c5c31ccb824cab0`, Offline-Installer-Blob `c7080eb08c8b4511afcb28249964d5681c542db1`, identisch mit Kandidaten `c12d05d20d7d3f3d263807b712819c7693ffd1f7`. Tatsächlichen Update-Download nach Merge bytegenau verglichen.

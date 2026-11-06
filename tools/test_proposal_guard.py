@@ -33,7 +33,7 @@ local function item_guid()return "item1"end
 local function track_guid()return "track1"end
 local function read_file(p)local f=io.open(p,"rb");if not f then return nil end;local s=f:read("*a");f:close();return s end
 local function write_file(p,s)local f=io.open(p,"wb");if not f then return false end;f:write(s);f:close();return true end
-local function apply_composition()writes=writes+1;return {1}end
+local function apply_composition()if CANCEL_APPLY then return nil,"Einfügen abgebrochen; der Vorschlag bleibt erhalten.","cancelled" end;writes=writes+1;return {1}end
 local function initialize_halion_project()end
 local function launch()error("Recovery must never call a provider")end
 local function get_key()error("Recovery must not request an API key")end
@@ -63,6 +63,16 @@ return {a=workflow_adapter,diagnostics=diagnostics,messages=messages,
  writes=function()return writes end,normalize=workflow_adapter.normalize_guard}
 '''
     return lua,lua.execute(code)
+
+# Cancelling placement retains the paid proposal, including across reload, without writes or retry calls.
+with TemporaryDirectory() as folder:
+    lua,api=setup(folder);api.offer();lua.globals().CANCEL_APPLY=True
+    api.a.apply()
+    assert api.writes()==0 and api.a.pending.state=='ready'
+    assert api.diagnostics.apply_result.startswith('CANCELLED')
+    api.a.load();assert api.a.pending.state=='ready'
+    lua.globals().CANCEL_APPLY=False;api.a.apply()
+    assert api.writes()==1 and api.a.pending is None
 
 with TemporaryDirectory() as folder:
     lua,api=setup(folder);api.offer()

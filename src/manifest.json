@@ -860,6 +860,7 @@
         "MIDI_Sort",
         "Master_GetTempo",
         "SetTempoTimeSigMarker",
+        "ShowMessageBox",
         "TimeMap2_QNToTime",
         "Undo_BeginBlock2",
         "Undo_DoUndo2",
