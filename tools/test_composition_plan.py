@@ -22,6 +22,7 @@ def environment(source, use_module):
 events={};fail_midi=false;fail_track=false
 local function log(...) local values={...};for i,v in ipairs(values)do values[i]=tostring(v)end;events[#events+1]=table.concat(values,":") end
 reaper={
+ ShowMessageBox=function()return 6 end,
  Undo_BeginBlock2=function()log("begin")end,
  Undo_EndBlock2=function(_,label)log("end",label)end,
  Undo_DoUndo2=function()log("rollback")end,

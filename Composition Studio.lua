@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.4.1
+-- @version 1.4.2
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.4.1"
+local VERSION="1.4.2"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -1005,7 +1005,21 @@ local function plan_composition(text,items,tracks,force_single_piano) local src,
 end
 
 local function create_midi(track,name,notes,program) local lo,hi=math.huge,-math.huge; for _,n in ipairs(notes) do lo=math.min(lo,n.start_qn); hi=math.max(hi,n.start_qn+n.duration_qn) end; if hi<=lo then return nil end; local item=reaper.CreateNewMIDIItemInProj(track,reaper.TimeMap2_QNToTime(0,lo),reaper.TimeMap2_QNToTime(0,hi),false); local take=item and reaper.GetActiveTake(item); if not take then return nil end; reaper.GetSetMediaItemTakeInfo_String(take,"P_NAME",name,true); local ch=math.max(0,math.min(15,(notes[1].channel or 0))); local ppq=reaper.MIDI_GetPPQPosFromProjTime(take,reaper.TimeMap2_QNToTime(0,lo)); local pg=math.max(0,math.min(127,program or 0)); reaper.MIDI_InsertCC(take,false,false,ppq,0xB0,ch,0,0); reaper.MIDI_InsertCC(take,false,false,ppq,0xB0,ch,32,0); reaper.MIDI_InsertCC(take,false,false,ppq,0xC0,ch,pg,0); for _,n in ipairs(notes) do local s=reaper.MIDI_GetPPQPosFromProjTime(take,reaper.TimeMap2_QNToTime(0,n.start_qn)); local e=reaper.MIDI_GetPPQPosFromProjTime(take,reaper.TimeMap2_QNToTime(0,n.start_qn+n.duration_qn)); reaper.MIDI_InsertNote(take,false,false,s,e,n.channel,n.pitch,n.velocity,true) end; reaper.MIDI_Sort(take); return item end
-local function apply_composition(text,items,tracks,force_single_piano) local jobs,musical_map,controls,src,targets=plan_composition(text,items,tracks,force_single_piano); if not jobs then return nil,musical_map end; reaper.Undo_BeginBlock2(0); local made={}; local ok,err=xpcall(function() if #musical_map>0 then for i=reaper.CountTempoTimeSigMarkers(0)-1,0,-1 do reaper.DeleteTempoTimeSigMarker(0,i) end; table.sort(musical_map,function(a,b) return a.qn<b.qn end); local cur_bpm=reaper.Master_GetTempo(); local cur_num,cur_den=4,4; for _,m in ipairs(musical_map) do if m.kind=="tempo" then cur_bpm=m.bpm else cur_num,cur_den=m.num,m.den end; local tm=reaper.TimeMap2_QNToTime(0,m.qn); reaper.SetTempoTimeSigMarker(0,-1,tm,-1,-1,cur_bpm,cur_num,cur_den,false) end end; local takes_by_name={}; for _,j in ipairs(jobs) do local tr; if j.kind=="revised" then local no=math.floor(reaper.GetMediaTrackInfo_Value(src[j.guid].track,"IP_TRACKNUMBER")); tr=create_track(j.name.." [Variante]",no) elseif j.kind=="target" then tr=src[j.guid].track elseif j.kind=="track" then tr=targets[j.guid] else tr=create_track(j.name) end; local inherited=(j.kind~="new") and existing_program(tr) or nil; local it=create_midi(tr,j.name,j.notes,inherited or j.program); if not it then error("MIDI konnte nicht erzeugt werden") end; made[#made+1]=it; local tk=reaper.GetActiveTake(it); if tk then takes_by_name[j.name]=tk end end; for _,c in ipairs(controls) do local tk=takes_by_name[c.name]; if tk then local ppq=reaper.MIDI_GetPPQPosFromProjTime(tk,reaper.TimeMap2_QNToTime(0,c.qn)); if c.kind=="cc" then reaper.MIDI_InsertCC(tk,false,false,ppq,0xB0,c.ch,c.a,c.b) else reaper.MIDI_InsertCC(tk,false,false,ppq,0xC0,c.ch,c.a,0) end; reaper.MIDI_Sort(tk) end end end,debug.traceback); if not ok then reaper.Undo_EndBlock2(0,"Composition Studio – fehlgeschlagen",-1); reaper.Undo_DoUndo2(0); return nil,err end; reaper.UpdateArrange(); reaper.Undo_EndBlock2(0,"Composition Studio – KI-Komposition",-1); return made end
+local function apply_composition(text,items,tracks,force_single_piano) local jobs,musical_map,controls,src,targets=plan_composition(text,items,tracks,force_single_piano); if not jobs then return nil,musical_map end;
+ -- Decide placement only after validation and before the first project write.
+ local has_new=false
+ for _,j in ipairs(jobs) do if j.kind=="new" or j.kind=="revised" then has_new=true end end
+ local block_index
+ if has_new and (#items>0 or #(tracks or {})>0) then
+  local choice=reaper.ShowMessageBox("Wie sollen die neuen Spuren eingefügt werden?\n\nJa: Einzeln hinter der jeweiligen Originalspur. Zusätzliche Stimmen ohne Originalspur kommen ans Projektende.\n\nNein: Alle neuen Spuren als Block hinter der letzten beteiligten Originalspur.\n\nAbbrechen: Vorschlag behalten und nichts einfügen.","Neue Spuren einfügen – einzeln oder als Block",3)
+  if choice~=6 and choice~=7 then return nil,"Einfügen abgebrochen; der Vorschlag bleibt erhalten.","cancelled" end
+  if choice==7 then
+   block_index=0
+   for _,it in ipairs(items) do block_index=math.max(block_index,math.floor(reaper.GetMediaTrackInfo_Value(it.track,"IP_TRACKNUMBER"))) end
+   for _,t in ipairs(tracks or {}) do block_index=math.max(block_index,math.floor(reaper.GetMediaTrackInfo_Value(t.track,"IP_TRACKNUMBER"))) end
+  end
+ end
+ reaper.Undo_BeginBlock2(0); local made={}; local variant_tails={}; local ok,err=xpcall(function() if #musical_map>0 then for i=reaper.CountTempoTimeSigMarkers(0)-1,0,-1 do reaper.DeleteTempoTimeSigMarker(0,i) end; table.sort(musical_map,function(a,b) return a.qn<b.qn end); local cur_bpm=reaper.Master_GetTempo(); local cur_num,cur_den=4,4; for _,m in ipairs(musical_map) do if m.kind=="tempo" then cur_bpm=m.bpm else cur_num,cur_den=m.num,m.den end; local tm=reaper.TimeMap2_QNToTime(0,m.qn); reaper.SetTempoTimeSigMarker(0,-1,tm,-1,-1,cur_bpm,cur_num,cur_den,false) end end; local takes_by_name={}; for _,j in ipairs(jobs) do local tr; if block_index and (j.kind=="new" or j.kind=="revised") then tr=create_track(j.name..(j.kind=="revised" and " [Variante]" or ""),block_index); block_index=block_index+1 elseif j.kind=="revised" then local no=math.floor(reaper.GetMediaTrackInfo_Value(variant_tails[src[j.guid].track] or src[j.guid].track,"IP_TRACKNUMBER")); tr=create_track(j.name.." [Variante]",no); variant_tails[src[j.guid].track]=tr elseif j.kind=="target" then tr=src[j.guid].track elseif j.kind=="track" then tr=targets[j.guid] else tr=create_track(j.name) end; local inherited=(j.kind~="new") and existing_program(tr) or nil; local it=create_midi(tr,j.name,j.notes,inherited or j.program); if not it then error("MIDI konnte nicht erzeugt werden") end; made[#made+1]=it; local tk=reaper.GetActiveTake(it); if tk then takes_by_name[j.name]=tk end end; for _,c in ipairs(controls) do local tk=takes_by_name[c.name]; if tk then local ppq=reaper.MIDI_GetPPQPosFromProjTime(tk,reaper.TimeMap2_QNToTime(0,c.qn)); if c.kind=="cc" then reaper.MIDI_InsertCC(tk,false,false,ppq,0xB0,c.ch,c.a,c.b) else reaper.MIDI_InsertCC(tk,false,false,ppq,0xC0,c.ch,c.a,0) end; reaper.MIDI_Sort(tk) end end end,debug.traceback); if not ok then reaper.Undo_EndBlock2(0,"Composition Studio – fehlgeschlagen",-1); reaper.Undo_DoUndo2(0); return nil,err end; reaper.UpdateArrange(); reaper.Undo_EndBlock2(0,"Composition Studio – KI-Komposition",-1); return made end
 export_last_midi=function()
  local made=last_made; if #made==0 then made=recover_last_made() end
  local valid=0; for _,it in ipairs(made) do if reaper.ValidatePtr2(0,it,"MediaItem*") then valid=valid+1 end end
@@ -2305,7 +2319,7 @@ function workflow_adapter.apply()
   diag_set("apply_guard_difference",difference)
   workflow_core.check("apply",{state=r.state,source_guard=original,current_guard=current})
   workflow_adapter.save()
-  local result,why
+  local result,why,cancelled
   if r.stage=="composition" and (r.score_scope or #(r.notation_selection or {})>0) then
    assert(not r.payload:find("CS|target|",1,true),"Notenauswahl darf Original-Item nicht überschreiben.")
    assert(not r.payload:find("CS|track|",1,true),"Notenauswahl darf nicht ungeprüft in bestehende Spuren schreiben.")
@@ -2327,7 +2341,10 @@ function workflow_adapter.apply()
 -- END MUSIC WORKSPACE APPLY
    if r.stage=="engine_json" then text,why=engine_translate_json(text); assert(text,why) end
    local items,tracks=workflow_adapter.bindings(r)
-   result,why=apply_composition(text,items,tracks,r.chunk_piano)
+   result,why,cancelled=apply_composition(text,items,tracks,r.chunk_piano)
+   if cancelled=="cancelled" then
+    diag_set("apply_result","CANCELLED: "..why);update_status=why;return
+   end
    if result then
     if r.stage=="swam_translation" then swam_last_made=result else last_made=result end
     local ids={}; for _,it in ipairs(result) do ids[#ids+1]=item_guid(it) end

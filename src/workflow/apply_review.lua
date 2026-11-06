@@ -12,7 +12,7 @@ function workflow_adapter.apply()
   diag_set("apply_guard_difference",difference)
   workflow_core.check("apply",{state=r.state,source_guard=original,current_guard=current})
   workflow_adapter.save()
-  local result,why
+  local result,why,cancelled
   if r.stage=="composition" and (r.score_scope or #(r.notation_selection or {})>0) then
    assert(not r.payload:find("CS|target|",1,true),"Notenauswahl darf Original-Item nicht überschreiben.")
    assert(not r.payload:find("CS|track|",1,true),"Notenauswahl darf nicht ungeprüft in bestehende Spuren schreiben.")
@@ -34,7 +34,10 @@ function workflow_adapter.apply()
 -- END MUSIC WORKSPACE APPLY
    if r.stage=="engine_json" then text,why=engine_translate_json(text); assert(text,why) end
    local items,tracks=workflow_adapter.bindings(r)
-   result,why=apply_composition(text,items,tracks,r.chunk_piano)
+   result,why,cancelled=apply_composition(text,items,tracks,r.chunk_piano)
+   if cancelled=="cancelled" then
+    diag_set("apply_result","CANCELLED: "..why);update_status=why;return
+   end
    if result then
     if r.stage=="swam_translation" then swam_last_made=result else last_made=result end
     local ids={}; for _,it in ipairs(result) do ids[#ids+1]=item_guid(it) end
