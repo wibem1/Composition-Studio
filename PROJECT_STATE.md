@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – Testfreigabe 1.4.2: Spurplatzierung
+
+**Veröffentlichungsauftrag:** Nutzer fordert Veröffentlichung von PR #21. Alle fünf bisherigen CI-Jobs am Featurestand `0b381835429590a575d272b04d66170a78aa0d66` bestanden. Header und Laufzeit auf 1.4.2 synchronisiert, Artefakte neu erzeugt und exakte Installation aus dem veröffentlichten 1.4.1-Stand `b1eadfbc9589d5df4667562c02595826e1ddf503` mit Backup ergänzt. Vollständiger lokaler Release-Runner mit 21 Python-Suiten und drei Lua-Dateien bestanden, einschließlich exaktem Upgrade/Backup aus 1.4.1. CI am finalen Release-Kandidaten vor Merge prüfen; anschließend Update-Download bytegenau abgleichen.
+
+**Bedienung:** Studio-Menü → Update, Studio neu starten. Fertigen Vorschlag anwenden: eigener, scrollunabhängiger Dialog. Ja = Varianten einzeln hinter Originalen (zusätzliche Stimmen ohne Quelle ans Projektende); Nein = neue Spuren als Block hinter der letzten gebundenen Quelle; Abbrechen = gespeicherten Vorschlag behalten. Keine erneute KI-Generierung nötig. [Details und Grenzen](docs/TRACK-PLACEMENT.md).
+
+**Grenzen:** Weiterhin Testfreigabe ohne native REAPER-/Windows-Abnahme; keine kostenpflichtigen Anbieteraufrufe. Kein Umbau bereits eingefügter Spuren. Engine, Notations-PR #12 und pausierte Abschnittssteuerung unverändert.
+
 ## 06.11.2026 – Wahl der Spurplatzierung vorbereitet (noch nicht veröffentlicht)
 
 **Auftrag:** Neue KI-Spuren wahlweise einzeln hinter ihren Originalspuren oder als zusammenhängenden Block dahinter einfügen; Auswahl ohne Scrollen zum Gesprächsanfang erreichbar.

@@ -6,7 +6,7 @@ Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAP
 `src/`; `python tools/build_studio.py` erzeugt weiterhin dieselben eigenständigen
 Lua-Dateien für Studio und Installation. [Modulgrenzen, Build und Prüfungen](docs/MODULARIZATION-DEVELOPMENT.md).
 
-**In Vorbereitung, noch nicht veröffentlicht:** Wahl der [Platzierung neuer MIDI-Spuren](docs/TRACK-PLACEMENT.md) beim Anwenden, über einen eigenen Dialog ohne Scrollen.
+**Neu ab 1.4.2:** Wahl der [Platzierung neuer MIDI-Spuren](docs/TRACK-PLACEMENT.md) beim Anwenden, über einen eigenen Dialog ohne Scrollen.
 
 **Neu ab 1.4.0 – Diagnose:** Antwort- und Denktokens getrennt ausweisen, verfügbare sichtbare Teilantworten bei Tokenabbruch erhalten und nach Neustart wiederherstellen. [Felder und Grenzen](docs/TOKEN-DIAGNOSTICS.md).
 
@@ -22,7 +22,7 @@ Installation über **Studio-Menü → Update**, anschließend Studio neu starten
 **Langfristige Architektur-Zielsetzung (05.11.2026):** [Modularer, später für REAPER, MuseScore und Maestro nutzbarer Kompositionskern](docs/MODULAR-ARCHITECTURE-VISION.md). Quellmodularisierung, Projektgedächtnis und erster begrenzter Song-Aufbau umgesetzt; weitere musikalische Fähigkeiten folgen schrittweise. Die laufende Notationsentwicklung bleibt getrennt.
 
 
-Aktueller Stand: **v1.4.1 · 06.11.2026 · TESTFREIGABE**. Gespeicherte Ergebnisse nach bloßem Wechsel der Item-Auswahl weiterverwenden; Übernahme dauerhaft sichtbar und protokolliert. [Korrektur und Wiederaufnahme](docs/RELEASE-1.4.1.md). Native REAPER-Gegenprobe ausstehend.
+Aktueller Stand: **v1.4.2 · 06.11.2026 · TESTFREIGABE**. Wahl der Platzierung neuer Spuren beim Anwenden; [Bedienung](docs/TRACK-PLACEMENT.md). Gespeicherte Ergebnisse nach bloßem Wechsel der Item-Auswahl weiterverwenden; Übernahme dauerhaft sichtbar und protokolliert. [Korrektur und Wiederaufnahme](docs/RELEASE-1.4.1.md). Native REAPER-Gegenprobe ausstehend.
 
 Update: **Studio-Menü → Update**, anschließend Studio neu starten. Der bestehende Updater sichert die vorherige Skriptdatei. Einstellungen und Projektdaten werden nicht migriert; der REAPER-Sitzungszustand bleibt teilweise gemeinsam.
 

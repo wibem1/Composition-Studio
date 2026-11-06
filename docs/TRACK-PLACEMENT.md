@@ -1,6 +1,6 @@
 # Neue MIDI-Spuren platzieren
 
-Status: auf Entwicklungsbranch implementiert und mit Simulation getestet; noch nicht veröffentlicht. Produktionsversion bleibt 1.4.1. Native REAPER-Abnahme steht aus.
+Status: als Testfreigabe 1.4.2 zur Veröffentlichung vorbereitet; automatisiert mit Simulation getestet. Native REAPER-Abnahme steht aus.
 
 ## Bedienung
 
