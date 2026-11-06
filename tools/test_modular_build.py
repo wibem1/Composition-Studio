@@ -21,7 +21,7 @@ runtime = render()
 legacy_runtime = runtime
 # Intentional timeout/diagnostic fixes have dedicated behavioral regressions.
 for unit in manifest['units']:
-    if unit['id'] in ('platform/process', 'platform/files', 'ai/requests', 'ai/costs', 'diagnostics/state', 'workflow/jobs'):
+    if unit['id'] in ('platform/process', 'platform/files', 'ai/requests', 'ai/costs', 'diagnostics/state', 'workflow/jobs', 'workflow/proposals', 'workflow/apply_review', 'ui/reaper'):
         previous = subprocess.check_output(['git', 'show', '31b5849af27b67dab488bda72c07c9a2d83e3166:' + unit['path']], cwd=ROOT, text=True)
         legacy_runtime = legacy_runtime.replace(inline(unit), previous, 1)
 for unit in manifest['units']:

@@ -89,11 +89,10 @@ local function draw_model_picker(width)
 end
 local function draw_workflow_status()
  local width=reaper.ImGui_GetContentRegionAvail(ctx)
- if workflow_adapter.pending then
-  reaper.ImGui_TextWrapped(ctx,"Vorschlag: "..(workflow_adapter.labels[workflow_adapter.pending.stage] or "Musik").." · "..(workflow_adapter.states[workflow_adapter.pending.state] or ""))
+ if workflow_adapter.pending and workflow_adapter.pending.state=="ready" then
+  reaper.ImGui_TextWrapped(ctx,"Ergebnis bereit: "..(workflow_adapter.labels[workflow_adapter.pending.stage] or "Musik").." · "..(workflow_adapter.states[workflow_adapter.pending.state] or ""))
   if reaper.ImGui_Button(ctx,"Änderungen anwenden",width) then workflow_adapter.apply() end
  end
- if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end
 end
 local function draw_history()
  if history_mode then
@@ -139,13 +138,15 @@ end
 
 -- Update feedback must remain visible even when the conversation is scrolled.
 if update_job then reaper.ImGui_Text(ctx,"Update wird geladen …") end
+-- The result action stays visible even if the conversation is scrolled.
+draw_workflow_status()
 -- Keep variable-height messages inside the scrolling conversation.
 reaper.ImGui_Separator(ctx)
 local w,h=reaper.ImGui_GetContentRegionAvail(ctx)
 local scale=font_size/14
 local _,spacing=reaper.ImGui_GetStyleVar(ctx,reaper.ImGui_StyleVar_ItemSpacing())
 spacing=spacing or 4
-local bh=math.max(reaper.ImGui_GetFrameHeight(ctx),math.floor(34*scale+0.5))
+local bh=math.max(reaper.ImGui_GetFrameHeight(ctx),math.min(math.floor(34*scale+0.5),math.floor(h/5)))
 local ih=math.min(math.floor(112*scale+0.5),math.max(bh*2,math.floor(h*0.32)))
 local ch=math.max(1,h-ih-bh*2-spacing*5-2)
 local child_visible=reaper.ImGui_BeginChild(ctx,"##chat",w,ch,reaper.ImGui_ChildFlags_Borders())
@@ -159,7 +160,7 @@ if child_visible then
   if reaper.ImGui_Button(ctx,"Track-Aufbau anhalten") then whole_track.cancel() end
  end
 -- END WHOLE TRACK STATUS
- draw_workflow_status()
+ if update_status~="" then reaper.ImGui_TextWrapped(ctx,update_status) end
  draw_history()
  reaper.ImGui_EndChild(ctx)
 end

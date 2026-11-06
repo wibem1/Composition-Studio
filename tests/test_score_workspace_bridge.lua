@@ -158,7 +158,7 @@ local rev={reaper=api,busy=false,input="",trim=function(x)return x end,
   return rows[1].score_context and "READ ONLY SCORE" or rows[1].selection_source and "SELECTED NOTES ONLY" or "UNSCOPED"
  end,
  launch=function(stage,prompt,key,data)launched={stage=stage,prompt=prompt,data=data}end,
- workflow_adapter={guard=function()return "guard" end,bindings=function()return {},{{track="tr1",guid="tr1",name="Melody"}}end},
+ workflow_adapter={normalize_guard=function(v)return v end,guard=function()return "guard" end,bindings=function()return {},{{track="tr1",guid="tr1",name="Melody"}}end},
 }
 compile("function workflow_adapter.review","workflow_adapter_guard=",rev)
 local saved={stage="analysis",source_guard="guard",raw_response="analysis",bindings={"it1"},score_scope=true}
@@ -180,9 +180,9 @@ assert(not launched,"stale saved analysis never launches")
 
 -- Exercise the actual apply boundary with malicious whole-item AI output.
 local reported
-local blocked={busy=false,workflow_core={check=function()end},
+local blocked={busy=false,diag_set=function()end,workflow_core={check=function()end},
  workflow_adapter={pending={stage="composition",state="ready",score_scope=true,payload="CS|target|it1|bad"},
- guard=function()return "guard"end,save=function()end},add=function(_,text)reported=text end}
+ normalize_guard=function(v)return v end,guard_difference=function()return "difference"end,guard=function()return "guard"end,save=function()end},add=function(_,text)reported=text end}
 compile("function workflow_adapter.apply","function workflow_adapter.review",blocked)
 blocked.workflow_adapter.apply()
 assert(reported and reported:find("überschreiben",1,true),"score context cannot overwrite original item")

@@ -106,7 +106,7 @@ function music_workspace.try_request(request)
   local project=reaper.EnumProjects(-1,"")
   local guard=workflow_adapter.guard()
   local key=get_key();assert(key,"API-Key fehlt.")
-  assert(reaper.EnumProjects(-1,"")==project and workflow_adapter.guard()==guard,"Projekt oder Quelle während der Auftragserfassung verändert.")
+  assert(reaper.EnumProjects(-1,"")==project and workflow_adapter.normalize_guard(workflow_adapter.guard())==workflow_adapter.normalize_guard(guard),"Projekt oder Quelle während der Auftragserfassung verändert.")
   local context=workflow_adapter.encode(snapshot)
   assert(#context<=256000,"Musikkontext zu groß; bitte einen kleineren Ausschnitt auswählen.")
   last_diag={version=VERSION,provider=provider,model=model,request=request,composition_engine="Composition Studio music workspace / JSON schema adapter"}

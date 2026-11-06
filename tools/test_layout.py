@@ -95,7 +95,8 @@ def case(width,height,font_size,state):
         if frame==0:lua.execute(ui+'\nTEST_LOOP=loop')
         else:lua.globals().TEST_LOOP()
         imgui.render()
-    for name in ('##request','Senden','Verlauf','Chat leeren','Schließen'):
+    controls=('##request','Senden','Verlauf','Chat leeren','Schließen') + (('Änderungen anwenden',) if state!='empty' else ())
+    for name in controls:
         x,y,right,bottom=rectangles[name]
         assert x>=0 and y>=0 and right<=width-7 and bottom<=height-7,(width,height,font_size,state,name,rectangles[name])
     assert scroll[-1]==(0,0),(width,height,font_size,state,'outer window scrolls',scroll[-1])

@@ -21,7 +21,7 @@ function whole_track.load()
  return state
 end
 function whole_track.check(state)
- assert(state.guard==workflow_adapter.guard(),"Projekt/Quelle verändert. Track-Auftrag neu vorbereiten.")
+ assert(workflow_adapter.normalize_guard(state.guard)==workflow_adapter.normalize_guard(workflow_adapter.guard()),"Projekt/Quelle verändert. Track-Auftrag neu vorbereiten.")
  assert(state.provider==provider and state.model==model and state.reasoning==reasoning_mode,"Anbieter, Modell oder Denkaufwand verändert. Ursprüngliche Auswahl wiederherstellen oder neu vorbereiten.")
  assert(not (provider=="google" and model:match("^gemini%-2%.5") and reasoning_mode~="auto"),"Für Gemini 2.5 ist der begrenzte Track-Aufbau nur mit Denkaufwand Automatisch unterstützt; explizite Denkbudgets können das Antwortlimit überschreiten.")
  local memory,why=music_workspace.context();assert(memory,why)
