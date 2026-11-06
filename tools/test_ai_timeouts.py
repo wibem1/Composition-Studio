@@ -41,6 +41,7 @@ local function response_text(raw)return first_text_field(raw)end
 local launch
 '''
     code += source('platform/process') + source('platform/files') + source('ai/response') + source('ai/reasoning') + source('ai/costs')
+    code += source('music/json_codec') + source('diagnostics/partial_response')
     requests = source('ai/requests')
     if fast:
         assert requests.count('local timeout=600') == 1
@@ -71,6 +72,8 @@ with TemporaryDirectory() as temporary:
             api.set_reasoning(effort)
             request, error = api.command('bounded fixture', 'FIXTURE-KEY', 2048)
             assert request.timeout_seconds == 120 and request.deadline == 150
+            assert api.diagnostics.api_requested_output_tokens == "2048"
+            assert api.diagnostics.api_request_prompt_bytes == str(len("bounded fixture"))
             body = json.loads(Path(request.rq).read_text())
             if provider == 'google':
                 assert body['generationConfig']['maxOutputTokens'] == 2048

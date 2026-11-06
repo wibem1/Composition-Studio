@@ -42,13 +42,21 @@ do
   local n={input=0,output=0,cached=0,write5=0,write1=0}
   if pv=="google" then
    n.input=count(u,"promptTokenCount",true)
-   n.output=count(u,"candidatesTokenCount",true)+count(u,"thoughtsTokenCount")
+   n.answer=count(u,"candidatesTokenCount",true)
+   local thinking=count(u,"thoughtsTokenCount")
+   if u.thoughtsTokenCount and u.thoughtsTokenCount~="null" then n.reasoning=thinking end
+   n.output=n.answer+thinking
    n.cached=count(u,"cachedContentTokenCount")
   else
    n.input=count(u,"input_tokens",true); n.output=count(u,"output_tokens",true)
    if pv=="openai" then
     local details=fields(u.input_tokens_details)
     n.cached=count(details,"cached_tokens"); n.write5=count(details,"cache_write_tokens")
+    local output_details=fields(u.output_tokens_details)
+    if output_details.reasoning_tokens and output_details.reasoning_tokens~="null" then
+     n.reasoning=count(output_details,"reasoning_tokens")
+     if n.reasoning>n.output then bad=true else n.answer=n.output-n.reasoning end
+    end
    elseif pv=="anthropic" then
     n.cached=count(u,"cache_read_input_tokens")
     local writes=count(u,"cache_creation_input_tokens")
@@ -116,10 +124,14 @@ do
  end
  function costs.begin() costs.order=summary(""); persist() end
  local function clear_call_diagnostics()
-  for _,field in ipairs({"usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_reasoning_tokens","usage_estimated_usd"}) do diag_set(field,"") end
+  for _,field in ipairs({"usage_input_tokens","usage_output_tokens","usage_cached_tokens","usage_cache_write_5m_tokens","usage_cache_write_1h_tokens","usage_reasoning_tokens","usage_estimated_usd","usage_answer_tokens","usage_breakdown_status","usage_provider_json","usage_provider_json_truncated","usage_output_definition","usage_input_estimated_usd","usage_output_estimated_usd","usage_answer_estimated_usd","usage_reasoning_estimated_usd"}) do diag_set(field,"") end
  end
  function costs.start(a)
   clear_call_diagnostics()
+  for _,field in ipairs({"api_stop_reason","api_error","api_response_excerpt","api_partial_answer","api_partial_answer_bytes","api_partial_retained_bytes","api_partial_truncated","api_partial_status","api_response_bytes"}) do diag_set(field,"") end
+  diag_set("api_status","PENDING")
+  diag_set("api_requested_output_tokens","Anbietervorgabe")
+  diag_set("api_request_timeout_seconds",tostring(a.timeout_seconds or ""))
   diag_set("usage_cost_status","Aufruf läuft; Verbrauch noch nicht bekannt")
   a.cost_order=costs.order; a.cost_rate=costs.rate(a.provider,a.model)
   for _,s in ipairs({costs.total,a.cost_order}) do s.calls=s.calls+1; s.unknown=s.unknown+1 end
@@ -129,6 +141,12 @@ do
   if a.cost_recorded then return end; a.cost_recorded=true
   local n=costs.usage(a.provider,raw); local usd=costs.price(n,a.cost_rate)
   clear_call_diagnostics()
+  local raw_usage=fields(raw)[a.provider=="google" and "usageMetadata" or "usage"]
+  if raw_usage then
+   local at=math.min(#raw_usage,8192)
+   while at>0 do local b=raw_usage:byte(at+1);if not b or b<128 or b>191 then break end;at=at-1 end
+   diag_set("usage_provider_json",raw_usage:sub(1,at));diag_set("usage_provider_json_truncated",at<#raw_usage and "true" or "false")
+  end
   -- Diagnose shows real provider usage, not an estimate from response length.
   -- Anthropic reports thinking within output_tokens, not as a separate usage field.
   if n then
@@ -137,12 +155,24 @@ do
    diag_set("usage_cached_tokens",tostring(n.cached))
    diag_set("usage_cache_write_5m_tokens",tostring(n.write5))
    diag_set("usage_cache_write_1h_tokens",tostring(n.write1))
-   diag_set("usage_reasoning_tokens",a.provider=="anthropic" and "nicht separat ausgewiesen (in Ausgabe enthalten)" or "nicht separat ausgewiesen")
+   diag_set("usage_reasoning_tokens",n.reasoning~=nil and tostring(n.reasoning) or (a.provider=="anthropic" and "nicht separat ausgewiesen (in Ausgabe enthalten)" or "nicht separat ausgewiesen"))
+   diag_set("usage_answer_tokens",n.answer~=nil and tostring(n.answer) or "nicht separat bestimmbar")
+   diag_set("usage_output_definition",a.provider=="google" and "candidatesTokenCount + gemeldete thoughtsTokenCount" or "output_tokens enthält Denktokens; nicht erneut addiert")
+   diag_set("usage_breakdown_status",n.reasoning~=nil and n.answer~=nil and (a.provider=="openai" and "Antwort = output_tokens minus reasoning_tokens" or "Antwort und Denken separat von Google gemeldet") or "Aufteilung unvollständig; fehlende Denktokens bleiben unbekannt")
   else
    diag_set("usage_cost_status","Verbrauchsdaten fehlen oder sind ungültig")
   end
   if usd then
    diag_set("usage_estimated_usd",string.format("%.6f",usd))
+   local input_cost=costs.price({input=n.input,output=0,cached=n.cached,write5=n.write5,write1=n.write1},a.cost_rate)
+   local output_cost=math.max(0,usd-input_cost)
+   diag_set("usage_input_estimated_usd",string.format("%.6f",input_cost))
+   diag_set("usage_output_estimated_usd",string.format("%.6f",output_cost))
+   if n.reasoning~=nil and n.answer~=nil then
+    local reasoning_cost=n.output>0 and output_cost*n.reasoning/n.output or 0
+    diag_set("usage_reasoning_estimated_usd",string.format("%.6f",reasoning_cost))
+    diag_set("usage_answer_estimated_usd",string.format("%.6f",output_cost-reasoning_cost))
+   end
    diag_set("usage_cost_status","USD-Schätzung aus API-Verbrauch und hinterlegtem Tarif")
   elseif n then
    diag_set("usage_cost_status","Verbrauch bekannt, aber kein gültiger Preis hinterlegt")

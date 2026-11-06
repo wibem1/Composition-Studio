@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 05.11.2026 – Token-Diagnose korrigiert, separate Antwort-/Denkzahlen
+
+**Anlass:** Nutzer beanstandet, dass die Diagnose trotz vorhandener Anbieterfelder nicht erkennen lässt, ob Denken oder Antwort den Verbrauch verursacht. Fix unabhängig vom kompakten Format aus PR #17 auf `fix/token-diagnostics-20261105`; keine Übernahme der pausierten Routing-/Abschnittssteuerung, keine neue Version/Veröffentlichung.
+
+**Implementiert:** Getrennte Antwort-/Denktokens mit anbieterabhängiger Definition, ursprüngliche Usage-Metadaten, Kostenanteile und Aufrufstufe/tatsächlich angeforderte Limits. Google getrennt übernehmen; OpenAI-Denken ist Teil der Gesamtausgabe und wird nicht doppelt addiert; fehlende Werte/Anthropic-Aufteilung bleiben unbekannt. Kommunikationslog enthält die Aufteilung pro Aufruf. Bei Tokenabbruch/Timeout sichtbaren Teiltext vor Transportbereinigung für Diagnose sichern, bis 262144 Bytes mit ausdrücklichen Längen-/Trunkierungsangaben; keine Thinking-Blöcke, keine MIDI-Übernahme/Retry. Gemeinsame Feldliste für Export/Neustart; Steuerzeichen sicher als JSON exportieren. [Felder und Grenzen](docs/TOKEN-DIAGNOSTICS.md).
+
+**Prüfung:** 18 Python-Suiten und drei Lua-Dateien im vollständigen Offline-Runner bestanden. Tatsächliche Produktionsfunktionen mit Google/OpenAI/Anthropic-Fixtures, identischer Gesamtausgabe bei unterschiedlichen Denkanteilen, unveränderter Kostensumme, Teilantworten, Unicode/Steuerzeichen, Neustart und Altdateien geprüft. Keine kostenpflichtigen Anbieteraufrufe, keine native REAPER-/Windows-Abnahme. Bereits verlorene historische Aufteilungen bleiben nicht rekonstruierbar.
+
+**Nächster Schritt:** PR/CI prüfen, danach mit dem Format-Prototyp abgestimmt zur Releaseprüfung vorlegen. Engine und Notations-PR #12 unverändert. Die Diagnose verbessert Messbarkeit; sie ist keine Zusage niedrigerer Kosten oder erfolgreicher Komposition.
+
 ## 05.11.2026 – Kompakte Ein-/Ausgabe prototypisch implementiert
 
 **Auftrag:** „versuche ein kompakteres Format für Eingabe und Ausgabe.“ Umsetzung separat auf `feat/compact-music-format-20261105`, ausgehend vom dokumentierten Tokenaudit. Die zuvor pausierten Routing-/Abschnittsänderungen wurden nicht übernommen. Keine neue Version oder Veröffentlichung.

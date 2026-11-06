@@ -21,11 +21,11 @@ runtime = render()
 legacy_runtime = runtime
 # Intentional timeout/diagnostic fixes have dedicated behavioral regressions.
 for unit in manifest['units']:
-    if unit['id'] in ('platform/process', 'ai/requests', 'ai/costs'):
+    if unit['id'] in ('platform/process', 'platform/files', 'ai/requests', 'ai/costs', 'diagnostics/state', 'workflow/jobs'):
         previous = subprocess.check_output(['git', 'show', '31b5849af27b67dab488bda72c07c9a2d83e3166:' + unit['path']], cwd=ROOT, text=True)
         legacy_runtime = legacy_runtime.replace(inline(unit), previous, 1)
 for unit in manifest['units']:
-    if unit['id'] in ('music/model', 'music/memory', 'workflow/music_workspace', 'music/whole_track', 'workflow/whole_track'):
+    if unit['id'] in ('music/model', 'music/memory', 'workflow/music_workspace', 'music/whole_track', 'workflow/whole_track', 'diagnostics/partial_response'):
         legacy_runtime = legacy_runtime.replace(inline(unit), '', 1)
 # Compact transport is checked separately for exact event/operation preservation.
 legacy_runtime = re.sub(r'-- BEGIN COMPACT MUSIC ([A-Z]+)\n.*?-- END COMPACT MUSIC \1\n', '', legacy_runtime, flags=re.S)

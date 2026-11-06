@@ -21,7 +21,7 @@ end
 local function poll_job()
  if not job then return end; if reaper.EnumProjects(-1,"")~=job.project then job=nil; busy=false; update_status="KI-Auftrag wegen Projektwechsel verworfen."; return end; local text,e,done=ai_poll(job.ai); if not done then return end; local stage,data,key=job.stage,job.data,job.key; job=nil
  log_communication(stage,"KI → APP ("..(text and "Antwort" or "Fehler")..")",text or e)
- log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?")))
+ log_communication(stage,"SYSTEM/API Verbrauch",string.format("Eingabe: %s; Ausgabe: %s; Kosten USD: %s; Status: %s; Antworttokens: %s; Denktokens: %s",tostring(last_diag.usage_input_tokens or "?"),tostring(last_diag.usage_output_tokens or "?"),tostring(last_diag.usage_estimated_usd or "?"),tostring(last_diag.api_status or "?"),tostring(last_diag.usage_answer_tokens or "?"),tostring(last_diag.usage_reasoning_tokens or "?")))
 -- BEGIN WHOLE TRACK RESULT
  if stage=="whole_track_plan" or stage=="whole_track_window" then whole_track.result(stage,text,data,e,key);return end
  if not text and stage=="composition" and last_diag.api_error=="Tokenlimit erreicht; unvollständige Komposition" then
