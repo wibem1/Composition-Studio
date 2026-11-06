@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – 1.4.1-Patch für gespeicherte Ergebnisübernahme veröffentlicht
+
+**Veröffentlichung der Reparatur:** [PR #20](https://github.com/wibem1/Composition-Studio/pull/20) regulär gemergt, Merge `4ee614b5202bede74dda930a53f1221cb3c043a6`. Header/Laufzeit 1.4.1 auf main. Studio-Blob `200636d8000f318a3cfdde167c5c31ccb824cab0`, Offline-Installer-Blob `c7080eb08c8b4511afcb28249964d5681c542db1`, identisch mit Kandidaten `c12d05d20d7d3f3d263807b712819c7693ffd1f7`. Tatsächlichen Update-Download nach Merge bytegenau verglichen.
+
+**Nachweis:** 20 Python-Suiten und drei Lua-Dateien lokal bestanden, alle fünf CI-Jobs am finalen Kandidaten grün, einschließlich [Gesamtbuild und vollständigem Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42212738082). Produktionsfunktionstest mit altem 1.4.0-Guard, reiner Item-Auswahländerung, Wiederöffnung und einmaligem Apply ohne Provideraufruf; echte Datenänderungen bleiben blockiert. 64 echte Dear-ImGui-Layouts einschließlich sichtbarer Apply-Schaltfläche bestanden. Exaktes Upgrade aus 1.4.0 mit Backup geprüft. Keine bezahlten KI-Aufrufe und keine native REAPER-/Windows-Abnahme: weiterhin Testfreigabe.
+
+**Nutzerweg:** Aktuelles Projekt speichern, Studio-Menü → Update, Studio neu starten. Vorhandenen gespeicherten Vorschlag wiederverwenden; bei Bedarf über Verlauf auswählen und **Änderungen anwenden**. Den Kompositionsauftrag nicht erneut an die KI senden. Bei weiterer Sperre Diagnose nach dem Anwenden-Versuch exportieren: Apply-Status und erste abweichende Feldart sind nun vorhanden. Der exakte damalige native Unterschied war nicht in der alten Diagnose gespeichert; die Korrektur behebt den reproduzierten Auswahl-Fehlalarm, ohne unbekannte tatsächliche Änderungen zu übergehen. [Details](docs/RELEASE-1.4.1.md).
+
+**Nächster Schritt:** Native Gegenprobe mit dem erhaltenen Vorschlag. Guard-Rohdaten, bisherige Ergebnisse, Quell-/Notenschutz und Undo bleiben erhalten. Engine, Notations-PR #12 und pausierte Abschnittssteuerung unverändert.
+
 ## 06.11.2026 – Patch 1.4.1: Auswahlwechsel blockiert gespeichertes Ergebnis
 
 **Nutzerfehler:** Screenshot zeigt „Das Original wurde verändert“ nach Medien-Item-Auswahl und keine Ergebnisübernahme. Codeprüfung: Guard speichert rohe Itemchunks einschließlich top-level `SEL 0/1`; eine reine Auswahländerung löst reproduzierbar einen Fehlalarm aus. Das Ergebnis/Apply liegt außerdem im scrollbaren Chat und kann unsichtbar sein. Konkrete alte native Guard-Differenz ist im vorhandenen Diagnoseexport nicht enthalten.
