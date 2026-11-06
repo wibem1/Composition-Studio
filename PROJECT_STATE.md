@@ -1,8 +1,8 @@
 # Projektstand – Composition-Studio
 
-## 06.11.2026 – Testfreigabe 1.4.2: Spurplatzierung
+## 06.11.2026 – Testfreigabe 1.4.2 veröffentlicht: Spurplatzierung
 
-**Veröffentlichungsauftrag:** Nutzer fordert Veröffentlichung von PR #21. Alle fünf bisherigen CI-Jobs am Featurestand `0b381835429590a575d272b04d66170a78aa0d66` bestanden. Header und Laufzeit auf 1.4.2 synchronisiert, Artefakte neu erzeugt und exakte Installation aus dem veröffentlichten 1.4.1-Stand `b1eadfbc9589d5df4667562c02595826e1ddf503` mit Backup ergänzt. Vollständiger lokaler Release-Runner mit 21 Python-Suiten und drei Lua-Dateien bestanden, einschließlich exaktem Upgrade/Backup aus 1.4.1. CI am finalen Release-Kandidaten vor Merge prüfen; anschließend Update-Download bytegenau abgleichen.
+**Veröffentlichungsauftrag:** Nutzer fordert Veröffentlichung von PR #21. Alle fünf bisherigen CI-Jobs am Featurestand `0b381835429590a575d272b04d66170a78aa0d66` bestanden. Header und Laufzeit auf 1.4.2 synchronisiert, Artefakte neu erzeugt und exakte Installation aus dem veröffentlichten 1.4.1-Stand `b1eadfbc9589d5df4667562c02595826e1ddf503` mit Backup ergänzt. Vollständiger lokaler Release-Runner mit 21 Python-Suiten und drei Lua-Dateien bestanden, einschließlich exaktem Upgrade/Backup aus 1.4.1. Alle fünf CI-Jobs am finalen Kandidaten `0330065ae875ff4b08725417f90029a36f5b43d3` erfolgreich, einschließlich [vollständigem Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42229077772). [PR #21](https://github.com/wibem1/Composition-Studio/pull/21) regulär gemergt: `b0368233bf4be23f5214dcf8266bdf3e9c4fcb33`. Studio und Offline-Installer auf main byteidentisch zum geprüften Kandidaten; tatsächlichen Update-Download ebenfalls bytegenau verifiziert.
 
 **Bedienung:** Studio-Menü → Update, Studio neu starten. Fertigen Vorschlag anwenden: eigener, scrollunabhängiger Dialog. Ja = Varianten einzeln hinter Originalen (zusätzliche Stimmen ohne Quelle ans Projektende); Nein = neue Spuren als Block hinter der letzten gebundenen Quelle; Abbrechen = gespeicherten Vorschlag behalten. Keine erneute KI-Generierung nötig. [Details und Grenzen](docs/TRACK-PLACEMENT.md).
 

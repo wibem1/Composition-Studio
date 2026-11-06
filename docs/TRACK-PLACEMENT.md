@@ -1,6 +1,6 @@
 # Neue MIDI-Spuren platzieren
 
-Status: als Testfreigabe 1.4.2 zur Veröffentlichung vorbereitet; automatisiert mit Simulation getestet. Native REAPER-Abnahme steht aus.
+Status: als Testfreigabe 1.4.2 über [PR #21](https://github.com/wibem1/Composition-Studio/pull/21) veröffentlicht. Installation: Studio-Menü → Update, danach Studio neu starten. Automatisierte Tests und alle fünf CI-Jobs am finalen Kandidaten bestanden; veröffentlichtes Skript, Offline-Installer und tatsächlichen Update-Download bytegenau geprüft. Native REAPER-Abnahme steht aus.
 
 ## Bedienung
 
@@ -29,4 +29,4 @@ Die Auswahl liegt nach der CS-Planvalidierung und vor dem ersten nativen Schreib
 
 `tools/test_track_placement.py` prüft den Produktions-Commit mit verschiebbaren Spuridentitäten. `tools/test_proposal_guard.py` prüft den Abbruch im gespeicherten Workflow einschließlich Reload und erneutem Apply. 60 differentielle Plan/Commit-Fälle sichern die bisherige Einzelfall-Semantik; 64 reale Dear-ImGui-Layouts sichern die sichtbare Anwenden-Schaltfläche. Vollständiger Offline-Runner: 21 Python-Suiten und drei Lua-Dateien bestanden, keine bezahlten KI-Aufrufe.
 
-Vor Veröffentlichung noch in REAPER an einer Projektkopie prüfen: beide Reihenfolgen, Quellen mit dazwischenliegenden Spuren, Abbrechen und erneutes Anwenden, Undo sowie Dialoganzeige bei nach unten gescrolltem Chat.
+Native Gegenprobe in REAPER an einer Projektkopie steht aus: beide Reihenfolgen, Quellen mit dazwischenliegenden Spuren, Abbrechen und erneutes Anwenden, Undo sowie Dialoganzeige bei nach unten gescrolltem Chat.
