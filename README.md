@@ -6,9 +6,9 @@ Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAP
 `src/`; `python tools/build_studio.py` erzeugt weiterhin dieselben eigenständigen
 Lua-Dateien für Studio und Installation. [Modulgrenzen, Build und Prüfungen](docs/MODULARIZATION-DEVELOPMENT.md).
 
-**Diagnosekorrektur in Prüfung:** Antwort- und Denktokens getrennt ausweisen, verfügbare sichtbare Teilantworten bei Tokenabbruch erhalten und nach Neustart wiederherstellen. Noch nicht veröffentlicht. [Felder und Grenzen](docs/TOKEN-DIAGNOSTICS.md).
+**Neu ab 1.4.0 – Diagnose:** Antwort- und Denktokens getrennt ausweisen, verfügbare sichtbare Teilantworten bei Tokenabbruch erhalten und nach Neustart wiederherstellen. [Felder und Grenzen](docs/TOKEN-DIAGNOSTICS.md).
 
-**Prototyp in Prüfung:** kompakte Musikeingabe und Figurenreferenzen für die Ausgabe, ohne Taktgruppen-Zerlegung oder zusätzliche KI-Übersetzung. Noch nicht veröffentlicht. [Format und Offline-Nachweise](docs/COMPACT-MUSIC-TRANSPORT.md).
+**Neu ab 1.4.0 – kompaktes Musikformat:** kompakte Musikeingabe und Figurenreferenzen für die Ausgabe, ohne Taktgruppen-Zerlegung oder zusätzliche KI-Übersetzung. [Format und Offline-Nachweise](docs/COMPACT-MUSIC-TRANSPORT.md).
 
 **Neu ab 1.3.0:** vollständigen Track mit begrenzten KI-Aufrufen und gesicherten Zwischenständen bearbeiten. [Ablauf und Kostengrenzen](docs/WHOLE-TRACK-WORKFLOW.md).
 
@@ -20,7 +20,7 @@ Installation über **Studio-Menü → Update**, anschließend Studio neu starten
 **Langfristige Architektur-Zielsetzung (05.11.2026):** [Modularer, später für REAPER, MuseScore und Maestro nutzbarer Kompositionskern](docs/MODULAR-ARCHITECTURE-VISION.md). Quellmodularisierung, Projektgedächtnis und erster begrenzter Song-Aufbau umgesetzt; weitere musikalische Fähigkeiten folgen schrittweise. Die laufende Notationsentwicklung bleibt getrennt.
 
 
-Aktueller Stand: **v1.3.0 · 05.11.2026 · TESTFREIGABE**. Ganzer Track mit Werkplan, gesicherten Abschnitten und geschätztem Ausgabenbudget. Native Windows-/REAPER-/Hörabnahme ausstehend. [Änderungen und Prüfgrenzen](docs/RELEASE-1.3.0.md).
+Aktueller Stand: **v1.4.0 · 06.11.2026 · TESTFREIGABE**. Kompakte Ein-/Ausgabe für die Bearbeitung vorhandener MIDI-Items und verbesserte Token-Diagnose. Native Windows-/REAPER-/Hörabnahme und reale Tokenersparnis offen. [Änderungen und Bedienung](docs/RELEASE-1.4.0.md).
 
 Update: **Studio-Menü → Update**, anschließend Studio neu starten. Der bestehende Updater sichert die vorherige Skriptdatei. Einstellungen und Projektdaten werden nicht migriert; der REAPER-Sitzungszustand bleibt teilweise gemeinsam.
 

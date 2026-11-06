@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – Gemeinsame Testfreigabe 1.4.0 vorbereitet
+
+**Veröffentlichungsauftrag:** Nutzer fordert „veröffentlichen“; nach Infrastrukturfehler jetzt in wieder verfügbarer Umgebung fortgesetzt. PR #17 (`16079791e8c745bb789eacad44991aa424958bc5`) und #18 (`3e09d148b26a7a3b530880dbf16acc1ebc72e438`) jeweils mit allen fünf CI-Jobs grün. Beide Implementierungsstände auf isoliertem `release/1.4.0` zusammengeführt; Quellen/Manifeste gemeinsam abgeglichen, Artefakte regeneriert. Keine Übernahme der lokal pausierten automatischen Routing-/Abschnittssteuerung und keine Änderung von Engine/Notations-PR #12.
+
+**Prüfung:** Gemeinsame Integration mit 19 Python-Suiten und drei Lua-Dateien lokal vollständig bestanden. Header und Laufzeit für Release 1.4.0 synchronisiert, exakter letzter veröffentlichter Stand 1.3.0 (`9a339b90f7a4dfb8b58f27268efc66e7c18ff93b`) als Offline-Update-/Backup-Ausgangspunkt ergänzt. Endgültiger Release-Kandidat lokal ebenfalls vollständig bestanden: 19 Python-Suiten und drei Lua-Dateien, einschließlich exakter Offline-Installation aus 1.3.0 mit Backup. Vor Merge CI am endgültigen Commit prüfen und danach veröffentlichte Dateien samt tatsächlichem Update-Download bytegenau vergleichen. [Releaseumfang und Bedienung](docs/RELEASE-1.4.0.md).
+
+**Grenzen:** Testfreigabe ohne bezahlte Anbieteraufrufe und ohne native Windows-/REAPER-/Hörabnahme. Kompaktes Format spart gemessene Zeichen; reale Tokenersparnis und Modellqualität nicht zugesichert. Diagnose macht künftige Antwort-/Denkanteile überprüfbar, rekonstruiert keine verlorenen Altdaten. Für den kompakten Bearbeitungsweg den normalen Auftrag verwenden; gesamtes Material bleibt Kontext, keine feste Taktgruppensteuerung.
+
 ## 05.11.2026 – Token-Diagnose korrigiert, separate Antwort-/Denkzahlen
 
 **Anlass:** Nutzer beanstandet, dass die Diagnose trotz vorhandener Anbieterfelder nicht erkennen lässt, ob Denken oder Antwort den Verbrauch verursacht. Fix unabhängig vom kompakten Format aus PR #17 auf `fix/token-diagnostics-20261105`; keine Übernahme der pausierten Routing-/Abschnittssteuerung, keine neue Version/Veröffentlichung.

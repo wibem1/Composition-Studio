@@ -1,6 +1,6 @@
 # Kompaktes Musikformat – Prototyp
 
-Implementiert auf `feat/compact-music-format-20261105`, noch nicht veröffentlicht. Keine neue Versionsnummer, keine Integration der pausierten automatischen Abschnittssteuerung. Composition-Engine und Notations-PR #12 bleiben unverändert.
+Für die ausdrücklich beauftragte Testfreigabe 1.4.0 gemeinsam mit der Diagnosekorrektur vorbereitet. Keine Integration der pausierten automatischen Abschnittssteuerung. Composition-Engine und Notations-PR #12 bleiben unverändert.
 
 ## Ziel und tatsächlich angeschlossener Ablauf
 

@@ -1,6 +1,6 @@
 # Getrennte Token-Diagnose und sichtbare Teilantworten
 
-Fix auf `fix/token-diagnostics-20261105`, noch nicht veröffentlicht. Keine neue Versionsnummer. Unabhängig vom kompakten Musikformat in PR #17 und ohne die pausierte automatische Abschnittssteuerung.
+Für die ausdrücklich beauftragte Testfreigabe 1.4.0 gemeinsam mit dem kompakten Musikformat aus PR #17 vorbereitet. Keine Integration der pausierten automatischen Abschnittssteuerung.
 
 ## Problem und Korrektur
 
