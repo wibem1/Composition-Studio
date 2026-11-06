@@ -56,14 +56,33 @@ reaper={GetExtState=function()return "" end,
  SetExtState=function()end}
 '''
 
-def setup(directory):
+def setup(directory, production_prompts=False):
     lua=LuaRuntime(unpack_returned_tuples=True)
     lua.globals().TEST_ROOT=directory
     lua.globals().MAKE_DIR=lambda p: Path(p).mkdir(parents=True,exist_ok=True)
     code=HEADER
+    if production_prompts:
+        code+='''
+local COMPOSITION_ENGINE_NAME="Engine";local COMPOSITION_ENGINE_VERSION="test";local COMPOSITION_ENGINE_BUILD=1
+local DIAG_CACHE_PATH=TEST_ROOT.."/diag.json"
+local CONTROLLER="controller fixture"
+local function notation_selection_items()return {},0 end
+local function recent_dialog()return ""end
+local function compact_context()return "ITEM 1 id=item1; all source notes below"end
+local function persist_diag()end
+local function diag_json()return "{}"end
+reaper.CountSelectedMediaItems=function()return #source_items end
+'''
     for name in ['shared/workflow','core/text','music/cs_notes','music/programs','music/json_codec','music/json_score','music/continuation_request','music/json_direct_prompt','music/model','music/memory','music/whole_track']:
         code+=unit(name)
-    code+='local function analysis_prompt(r)return r end;local function composition_prompt(r)return r end\n'
+    if production_prompts:
+        native=(Path(__file__).resolve().parents[1]/'src/host/reaper/context.lua').read_text()
+        native=native[native.index('local function music_context('):native.index('local function recent_dialog(')]
+        code+=native.replace('local function music_context(', 'music_context=function(',1)
+        code+=unit('music/prompts')
+    else:
+        code+='local function analysis_prompt(r)return r end;local function composition_prompt(r)return r end\n'
+
     code+=unit('ai/request_state')+unit('ai/requests')
     code+='''
 ai_command=function(prompt,key,limit)
@@ -204,3 +223,39 @@ with TemporaryDirectory() as directory:
     api.submit('Track-Aufbau fortsetzen');assert len(api.calls)==1
 
 print('PASS complete fractional 36-bar track, shared plan/tails, cost preview and budget, durable partial recovery, no retries/partial commit, reload/apply once, source/project/cancel guards and MIDI contracts')
+
+# The ordinary free-text composition path requests CS2 and stores expanded payload separately.
+with TemporaryDirectory() as directory:
+    lua,api=setup(directory,production_prompts=True);fixture(api,lua)
+    api.submit('Erstelle eine Techno-Version dieser beiden Tracks über die gesamte Länge.')
+    assert len(api.calls)==1
+    api.complete('NEED_MUSIC|Techno-Version aus vollständigem Material',None,'0.001')
+    assert len(api.calls)==2 and 'CS2|1' in api.calls[2].prompt
+    assert 'MIDI1:' in api.calls[2].prompt and 'NOTES ITEM 1' in api.calls[2].prompt
+    assert '1,1.125,60,80,0' in api.calls[2].prompt
+    wire='CS2|1\nT|v|new|-|Synth|80|0\nP|a|4|0,1,60,90;2,1,64,85\nR|v|a|1|36\nEND'
+    api.complete(wire,None,'0.01')
+    record=api.workflow.pending
+    assert record.transport=='CS2-1' and record.raw_response==wire
+    assert record.payload.startswith('CS|new|-|Synth|80|') and record.payload.count(';')==71
+    assert api.writes()==0 and len(api.calls)==2
+    api.workflow.load();api.workflow.pending=api.workflow.records[1]
+    api.workflow.apply();assert api.writes()==1
+    api.workflow.apply();assert api.writes()==1
+with TemporaryDirectory() as directory:
+    lua,api=setup(directory,production_prompts=True);fixture(api,lua)
+    api.submit('Erstelle eine Techno-Version.');api.complete('NEED_MUSIC|Version',None,'0.001')
+    api.complete('CS2|1\nT|v|new|-|Synth|80|0\nN|v|0,1,60,90',None,'0.01')
+    assert api.workflow.pending is None and api.writes()==0 and not api.busy()
+    assert len(api.calls)==2
+print('PASS actual free-text controller→compact prompt→CS2 response→durable raw/expanded proposal→apply once, truncation rejected, two provider mocks and no translation request')
+
+# Even a compact answer cannot expand a selected-note edit into a whole-item overwrite.
+with TemporaryDirectory() as directory:
+    lua,api=setup(directory,production_prompts=True)
+    scoped=table(lua,{'guid':'item1','selection_source':[{'index':0,'pitch':60}]})
+    data=table(lua,{'request':'Überarbeite markierte Noten','full':[],'workflow_guard':api.workflow.guard()})
+    data.full=lua.table_from([scoped])
+    api.workflow.offer('composition','CS2|1\nT|v|target|item1|Voice|0|0\nN|v|0,1,60,90\nEND',data)
+    api.workflow.apply();assert api.writes()==0
+print('PASS compact transport preserves selected-note overwrite protection')

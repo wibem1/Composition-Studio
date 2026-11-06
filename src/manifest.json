@@ -527,6 +527,36 @@
       ]
     },
     {
+      "id": "music/model",
+      "path": "src/music/model.lua",
+      "kind": "portable",
+      "exports": [
+        "music_model"
+      ],
+      "parameters": [],
+      "requires": [],
+      "provides": [
+        "music_list",
+        "music_model",
+        "music_number"
+      ],
+      "writes": [],
+      "globals": [
+        "assert",
+        "error",
+        "ipairs",
+        "math",
+        "pairs",
+        "pcall",
+        "string",
+        "table",
+        "tonumber",
+        "tostring",
+        "type"
+      ],
+      "host_apis": []
+    },
+    {
       "id": "host/reaper/context",
       "path": "src/host/reaper/context.lua",
       "kind": "host",
@@ -551,7 +581,8 @@
         "track_guid"
       ],
       "requires": [
-        "history"
+        "history",
+        "music_model"
       ],
       "writes": [],
       "globals": [
@@ -850,7 +881,8 @@
       "parameters": [
         "music_context",
         "parse_notes",
-        "trim"
+        "trim",
+        "music_model"
       ],
       "provides": [
         "analysis_prompt",
@@ -862,6 +894,7 @@
       ],
       "requires": [
         "music_context",
+        "music_model",
         "parse_notes",
         "trim"
       ],
@@ -1376,6 +1409,7 @@
         "diag_set",
         "item_guid",
         "model",
+        "music_model",
         "music_workspace",
         "provider",
         "read_file",
@@ -1579,30 +1613,6 @@
         "ShowMessageBox",
         "time_precise"
       ]
-    },
-    {
-      "id": "music/model",
-      "path": "src/music/model.lua",
-      "kind": "portable",
-      "exports": [
-        "music_model"
-      ],
-      "parameters": [],
-      "requires": [],
-      "provides": [
-        "music_list",
-        "music_model",
-        "music_number"
-      ],
-      "writes": [],
-      "globals": [
-        "assert",
-        "ipairs",
-        "math",
-        "pairs",
-        "type"
-      ],
-      "host_apis": []
     },
     {
       "id": "music/memory",
