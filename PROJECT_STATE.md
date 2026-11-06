@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 06.11.2026 – API-Antwortparser korrigiert
+
+In `Native-Notation-Studio.lua` wurde der OpenAI-Antwortparser korrigiert (Commits `a641abc9c93c8e5d8469da7adf36e60dd7a4edd9`, `df1d9a63497e70b3f7a14270ff0c16e04af59148`): Das JSON-Textfeld wird nun an seinem Feldtrenner erkannt und eine fehlende Wertbegrenzung abgefangen. **Noch keine Laufzeit- oder REAPER-Pruefung.** Weitere Risiken: synchroner curl-Aufruf, rudimentaere JSON-Auswertung, fehlende plattformuebergreifende API-Transporttests und fehlender Live-KI-Test. Kein Release.
+
+
 ## 06.11.2026 – Direkter KI-Aufruf im Standalone-Skript (experimentell)
 
 `Native-Notation-Studio.lua` enthaelt nun optional einen direkten OpenAI-Responses-API-Aufruf via curl und `OPENAI_API_KEY` (Commit `af45cffb4dd59f34fc881e06960eefa827a12902`). Alternativ bleibt der Datei-Testmodus erhalten. Das Skript erstellt den Prompt aus ausgewaehlten MIDI-Noten, liest die KI-Antwort und uebernimmt nur konservativ validierte Anzeigeoffsets mit Rueckfrage und Undo. **Status: implementiert, nicht praktisch geprueft.** Der Aufruf ist derzeit synchron, auf OpenAI begrenzt, und die API-Antwortauswertung ist vorlaeufig. Es wurde kein echter API-Aufruf ausgefuehrt; die plattformuebergreifende Funktionsfaehigkeit und die Notationsqualitaet sind nicht nachgewiesen. Nicht freigeben, bevor Transport, Syntax, Fehlerszenarien und REAPER getestet sind. Stable Composition Studio unveraendert.
