@@ -303,6 +303,87 @@ local function read_file(path,limit)
 end
 local function quote_sh(s) return "'"..s:gsub("'","'\\''").."'" end
 local function quote_ps(s) return "'"..s:gsub("'","''").."'" end
+-- Windows first-run key setup. The secret is entered inside PowerShell's modal
+-- password dialog and encrypted by Windows DPAPI for the current user.
+-- The Lua process never receives or persists the plaintext credential.
+local function windows_credential_path()
+ local appdata=os.getenv("APPDATA")
+ assert(appdata and appdata~="" and not appdata:find('[\r\n]'),"Windows APPDATA ist nicht verfuegbar.")
+ return appdata:gsub("\\","/").."/NativeNotationStudio/api-key.dpapi"
+end
+local function windows_powershell_command(script,sta)
+ local root=os.getenv("SystemRoot") or "C:/Windows"
+ assert(not root:find('["\r\n]') and not script:find('["\r\n]'),"Ungueltiger PowerShell-Pfad.")
+ return '"'..root..'/System32/WindowsPowerShell/v1.0/powershell.exe" -NoLogo -NoProfile -NonInteractive'..
+  (sta and " -STA" or "")..' -ExecutionPolicy Bypass -WindowStyle Hidden -File "'..script..'"'
+end
+local function ensure_windows_credential()
+ if os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_API_KEY"):match("%S") then return end
+ local path=windows_credential_path()
+ if read_file(path,32768) then return end
+ local script=R.GetResourcePath().."/NNS-credential-"..R.genGuid():gsub("[^%w]","")..".ps1"
+ local q=quote_ps
+ local body=[[
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$form = New-Object System.Windows.Forms.Form
+$form.Text = 'Native Notation Studio - OpenAI API-Key'
+$form.Width = 510
+$form.Height = 190
+$form.StartPosition = 'CenterScreen'
+$form.TopMost = $true
+$form.FormBorderStyle = 'FixedDialog'
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$label = New-Object System.Windows.Forms.Label
+$label.Text = 'API-Key einmal eingeben (wird fuer dieses Windows-Konto geschuetzt gespeichert):'
+$label.AutoSize = $true
+$label.Left = 16
+$label.Top = 16
+$form.Controls.Add($label)
+$input = New-Object System.Windows.Forms.TextBox
+$input.Left = 16
+$input.Top = 44
+$input.Width = 460
+$input.UseSystemPasswordChar = $true
+$form.Controls.Add($input)
+$save = New-Object System.Windows.Forms.Button
+$save.Text = 'Speichern'
+$save.Left = 292
+$save.Top = 83
+$save.Width = 88
+$save.DialogResult = [System.Windows.Forms.DialogResult]::OK
+$form.Controls.Add($save)
+$cancel = New-Object System.Windows.Forms.Button
+$cancel.Text = 'Abbrechen'
+$cancel.Left = 388
+$cancel.Top = 83
+$cancel.Width = 88
+$cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+$form.Controls.Add($cancel)
+$form.AcceptButton = $save
+$form.CancelButton = $cancel
+$form.Add_Shown({ $input.Focus() })
+if ($form.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { exit 2 }
+if (-not $input.Text.StartsWith('sk-') -or $input.Text.Length -lt 20) {
+ [System.Windows.Forms.MessageBox]::Show('Bitte einen gueltigen OpenAI API-Key eingeben.')
+ exit 3
+}
+$secret = ConvertTo-SecureString -String $input.Text -AsPlainText -Force
+$encrypted = ConvertFrom-SecureString -SecureString $secret
+$folder = [IO.Path]::GetDirectoryName(__PATH__)
+[IO.Directory]::CreateDirectory($folder) | Out-Null
+[IO.File]::WriteAllText(__PATH__, $encrypted, [Text.Encoding]::ASCII)
+$input.Clear()
+]] 
+ body=body:gsub("__PATH__",q(path))
+ write_file(script,"\239\187\191"..body)
+ local ok,result=pcall(R.ExecProcess,windows_powershell_command(script,true),120000)
+ os.remove(script)
+ assert(ok and result~=nil,"API-Key-Dialog konnte nicht ausgefuehrt werden.")
+ assert(read_file(path,32768),"API-Key wurde nicht gespeichert. Eingabe abgebrochen oder ungueltig.")
+end
 -- ExecProcess parses executable arguments, not shell expressions. Scripts contain
 -- literal quoted paths; credentials are expanded by the child, never stored here.
 local function transport_files(base,windows,prompt,model)
@@ -312,8 +393,14 @@ local function transport_files(base,windows,prompt,model)
  local command,body
  if windows then
   local q=quote_ps
-  body="$ErrorActionPreference='Stop'\r\n$code=999\r\ntry {\r\n& ($env:SystemRoot + '/System32/curl.exe')"..args..
-   " -H 'Content-Type: application/json' -H (\"Authorization: Bearer \" + $env:OPENAI_API_KEY) --data-binary "..q('@'..req).." -o "..q(out).." 'https://api.openai.com/v1/responses'\r\n$code=$LASTEXITCODE\r\n} finally {\r\n[IO.File]::WriteAllText("..q(done..".pending")..",[string]$code)\r\nMove-Item -LiteralPath "..q(done..".pending").." -Destination "..q(done).." -Force\r\n}\r\n"
+  body="$ErrorActionPreference='Stop'\r\n$code=999\r\ntry {\r\n"..
+   "$key=$env:OPENAI_API_KEY\r\nif ([string]::IsNullOrWhiteSpace($key)) {\r\n"..
+   "$encrypted=[IO.File]::ReadAllText("..q(windows_credential_path())..")\r\n"..
+   "$secure=ConvertTo-SecureString -String $encrypted\r\n"..
+   "$ptr=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)\r\n"..
+   "try { $key=[Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr) }\r\n}\r\n"..
+   "& ($env:SystemRoot + '/System32/curl.exe')"..args..
+   " -H 'Content-Type: application/json' -H (\"Authorization: Bearer \" + $key) --data-binary "..q('@'..req).." -o "..q(out).." 'https://api.openai.com/v1/responses'\r\n$code=$LASTEXITCODE\r\n} finally {\r\n[IO.File]::WriteAllText("..q(done..".pending")..",[string]$code)\r\nMove-Item -LiteralPath "..q(done..".pending").." -Destination "..q(done).. " -Force\r\n}\r\n"
   local root=os.getenv("SystemRoot") or "C:/Windows"
   assert(not root:find('["\r\n]'),"Ungueltiger SystemRoot.")
   command='"'..root..'/System32/WindowsPowerShell/v1.0/powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File "'..script..'"'
@@ -332,7 +419,12 @@ local function cleanup(job)
 end
 local function call_openai(prompt,complete)
  local key=os.getenv("OPENAI_API_KEY")
- assert(key and key:match("%S") and not key:find("[\r\n]"),"OPENAI_API_KEY fehlt in der REAPER-Umgebung.")
+ if R.GetOS():match("Win") then
+  if key and key:find("[\r\n]") then error("Ungueltiger OPENAI_API_KEY.") end
+  ensure_windows_credential()
+ else
+  assert(key and key:match("%S") and not key:find("[\r\n]"),"OPENAI_API_KEY fehlt in der REAPER-Umgebung.")
+ end
  local model=os.getenv("NATIVE_NOTATION_MODEL") or "gpt-5.4"
  assert(model:match("^[%w._%-]+$"),"Ungueltige Modellkennung.")
  local base=R.GetResourcePath().."/NNS-"..R.genGuid():gsub("[^%w]","")
