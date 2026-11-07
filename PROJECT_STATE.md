@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 07.11.2026 – Abschlusspruefung: Dialogfehler korrigiert, keine Freigabe
+
+Commit `da0beef27b7677e323cbdd3b8ead701380d8b5d5` korrigiert die REAPER-Rueckgabecodes des Ja/Nein/Abbrechen-Dialogs: Nur Ja (6) und Nein (7) duerfen den Ablauf fortsetzen; Abbrechen (2) beendet die Aktion. Bei der Pruefung wurde festgestellt, dass in dieser Entwicklungsumgebung weder REAPER noch eine lokale Lua-Laufzeit fuer einen vollstaendigen End-to-End-Test zur Verfuegung stehen. **Das Skript ist daher weiterhin eine experimentelle Entwicklungsfassung, keine freigegebene Version.** Offene Punkte: plattformgerechter API-Transport, vollstaendige JSON-Dekodierung, Lua-Laufzeittest, MIDI-Mocktests, REAPER-Abnahme und musikalische Ergebnispruefung. Kein API-Aufruf und kein kostenpflichtiger Test erfolgte.
+
+
 ## 07.11.2026 – Fehlerantworten und Antwortgroesse begrenzt
 
 Commit `d45468c8f5198faefdd48ae7a392995d4582b838` aktualisiert den Header des eigenstaendigen Skripts und fuegt Abbruchbedingungen fuer Antworten groesser als 1 MiB sowie erkennbare API-Fehlerantworten hinzu. Die Aenderungen sind implementiert, **nicht laufzeitgetestet**. Weiterhin offen: robuster JSON-Parser, sichere plattformuebergreifende Ausfuehrung von curl, automatisierte Lua-Tests und REAPER-Abnahme. Kein Release.
