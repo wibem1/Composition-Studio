@@ -222,13 +222,13 @@ end
 local function vertical_zoom(editor,section,takes)
  local zoomIn=require_action(section,{'view: zoom in vertically'})
  local zoomOut=require_action(section,{'view: zoom out vertically'})
- local height=nil
+ -- Conservative fallback when js_ReaScriptAPI is absent: 700px.
+ -- This affects only a handful of native zoom commands, never MIDI content.
+ local height=700
  if R.JS_Window_GetClientSize then
   local ok,_,h=pcall(R.JS_Window_GetClientSize,editor)
   if ok and finite(h) and h>=300 and h<=12000 then height=h end
  end
- -- Without reliable dimensions, preserve the user-selected vertical zoom.
- if not height then return false end
  local tracks={}
  for _,take in ipairs(takes) do
   local item=R.GetMediaItemTake_Item(take)
