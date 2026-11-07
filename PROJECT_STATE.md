@@ -1,3 +1,8 @@
+
+## 07.11.2026 – Automatische Zoom-Aktion (experimentell)
+
+Auf ausdruecklichen Nutzerwunsch wurde `Native-Notation-Studio-Zoom.lua` von der Prozent-Eingabe auf einen dialogfreien Ein-Klick-Ablauf umgestellt (Commit `5d78f3036430eb61d82092d5be39f4057cd0f818`). Horizontal werden anhand Editorbreite und aktueller Taktlaenge rund vier Takte eingepasst; vertikal werden – soweit im MIDI-Aktionsbereich verfuegbar – native Zoomaktionen aus einem reproduzierbaren Ausgangsniveau in Abhaengigkeit von Editorhoehe und Zahl der dargestellten Tracks aufgerufen. Die Hauptaktion und MIDI-Inhalte bleiben unberuehrt. Bei fehlender optionaler JS-Fenster-API werden konservative Ersatzabmessungen verwendet. Die REAPER-API bietet keine direkte, auslesbare Notensystemhoehe: Die vertikale Anpassung ist eine Heuristik, keine nachgewiesene pixelgenaue Optimierung. **Nachweis:** GitHub-Code gespeichert und Ruecklesepruefung; kein Lua-Laufzeit- oder visueller REAPER-Windows-Test, keine Produktionsfreigabe. Naechster Schritt: gezielter Praxistest im echten REAPER-Notationseditor und erst danach Feinkorrektur der vertikalen Notengroesse.
+
 # Projektstand – Composition-Studio
 
 ## 07.11.2026 – Windows: API-Key-Ersteinrichtung mit DPAPI (nicht nativ abgenommen)
