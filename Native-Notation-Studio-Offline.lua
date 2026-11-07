@@ -1,7 +1,7 @@
 -- @description Native Notation Studio - Notenansicht optimieren (offline)
 -- @version 0.1.0-test
 -- @author Klangwerke
--- @about No API, no MIDI note writing. Display quantization, proportional spacing, horizontal zoom.
+-- @about No API, no MIDI note writing. Display quantization, spacing, safe optional horizontal zoom.
 -- Vertical notation zoom and track clef editing excluded until validated.
 local R=reaper
 local function require_action(section,names)
@@ -42,29 +42,36 @@ local function run()
  assert(timebase==0 or timebase==1,'Zeitbasis des Editors nicht unterstuetzt.')
  local _,startQN,endQN=R.TimeMap_QNToMeasures(project,firstQN or 0)
  assert(type(startQN)=='number' and type(endQN)=='number' and endQN>startQN,'Taktlaenge nicht lesbar.')
- local width=1100
+ -- Never guess a window width: a wrong guess made the previous Windows
+ -- zoom results unreliable. JS_ReaScriptAPI is optional; without it, keep
+ -- the user's existing horizontal zoom.
+ local desired=nil
  if R.JS_Window_GetClientSize then
-  local ok,w=pcall(R.JS_Window_GetClientSize,editor)
-  if ok and type(w)=='number' and w>400 then width=w end
+  local ok,width=pcall(R.JS_Window_GetClientSize,editor)
+  if ok and type(width)=='number' and width>=500 and width<20000 then
+   local pxPerQN=(width-240)/(4*(endQN-startQN))
+   if timebase==0 then
+    local bpm=R.TimeMap2_GetDividedBpmAtTime(project,R.GetCursorPositionEx(project))
+    assert(type(bpm)=='number' and bpm>0,'Tempo fuer horizontale Skalierung fehlt.')
+    pxPerQN=pxPerQN*bpm/60
+   end
+   local value=math.floor(pxPerQN*1024+0.5)
+   assert(value>0 and value<2147483647,'Ungueltiger horizontaler Zoom.')
+   desired=value
+  end
  end
- local pxPerQN=math.max(360,width-240)/(4*(endQN-startQN))
- if timebase==0 then
-  local bpm=R.TimeMap2_GetDividedBpmAtTime(project,R.GetCursorPositionEx(project))
-  assert(type(bpm)=='number' and bpm>0,'Tempo fuer horizontale Skalierung fehlt.')
-  pxPerQN=pxPerQN*bpm/60
- end
- local desired=math.floor(pxPerQN*1024+0.5)
- assert(desired>0 and desired<2147483647,'Ungueltiger horizontaler Zoom.')
  R.MIDIEditor_OnCommand(editor,notation)
  R.MIDIEditor_OnCommand(editor,quant)
  R.MIDIEditor_OnCommand(editor,minimum)
  if R.GetToggleCommandStateEx(32060,proportional)==0 then
   R.MIDIEditor_OnCommand(editor,proportional)
  end
- if not R.MIDIEditor_SetSetting_int(editor,'pixels_per_timebase_unit',desired) or
-  R.MIDIEditor_GetSetting_int(editor,'pixels_per_timebase_unit')~=desired then
-  R.MIDIEditor_SetSetting_int(editor,'pixels_per_timebase_unit',old)
-  error('Horizontaler Zoom konnte nicht gesetzt werden.')
+ if desired and desired~=old then
+  if not R.MIDIEditor_SetSetting_int(editor,'pixels_per_timebase_unit',desired) or
+   R.MIDIEditor_GetSetting_int(editor,'pixels_per_timebase_unit')~=desired then
+   R.MIDIEditor_SetSetting_int(editor,'pixels_per_timebase_unit',old)
+   error('Horizontaler Zoom konnte nicht gesetzt werden.')
+  end
  end
  -- Deliberately omit unverified vertical zoom sequences and SCORE/clef edits.
 end
