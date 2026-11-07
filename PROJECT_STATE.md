@@ -1,3 +1,9 @@
+## 07.11.2026 – Offline-Notation: sicherer horizontaler Zoom ohne erfundene Fensterbreite
+
+In `Native-Notation-Studio-Offline.lua` (Commit `faa8448f17c1c2d9c8a245208d26ada0c57a48d7`) wurde die bisher feste Ersatz-Fensterbreite von 1100 Pixeln entfernt. Die Aktion setzt einen horizontalen Zoom für ungefähr vier Takte **nur**, wenn die optionale `JS_Window_GetClientSize`-Schnittstelle eine plausible echte Editorbreite liefert; andernfalls bleibt der vorhandene Zoom unverändert. Anzeigequantisierung 1/16, minimale dargestellte Notenlänge 1/64 und proportionale Abstände bleiben Bestandteil der unabhängigen Offline-Aktion. Keinerlei API- oder MIDI-Notenschreibzugriffe.
+
+**Nachweis:** GitHub-Rückleseprüfung und sechs statische Sicherheits-/Funktionsprüfungen erfolgreich. **Keine Windows-REAPER-Laufzeit- oder Sichtprüfung** durchgeführt. Die vorige Aussage eines lokalen REAPER-Tests bezieht sich auf den früheren Prototyp, nicht auf diese neue Änderung. Automatische Schlüsselwahl und vertikaler Zoom bleiben bewusst ausgesetzt, solange die bereits gescheiterten Praxisbefunde nicht gezielt diagnostiziert sind. Vor dem nächsten visuellen Versuch muss die tatsächlich in der REAPER-Aktionsliste aufgerufene Skriptdatei eindeutig zugeordnet sein (früher mehrere Kopien `(1)`/`(2)`).
+
 ## 07.11.2026 – Strategieentscheidung: Native Notation Studio ohne KI, erste Offline-Aktion
 
 **Verbindliche Zieländerung:** Der Nutzer reduziert den Anspruch ausdrücklich auf eine möglichst gut lesbare native REAPER-Notenansicht. Keine weitere KI-basierte Einzelnoten-Interpretation, keine API-Schlüssel oder laufende Kosten im Standardablauf. Die früheren KI-Experimente werden als historischer Entwicklungsstand bewahrt, jedoch nicht weiter ausgebaut. Das Vorhaben bleibt eine eigenständige REAPER-Aktion im bisherigen Entwicklungsbranch. Eine professionelle Dorico-artige Notation ist nicht Ziel.
