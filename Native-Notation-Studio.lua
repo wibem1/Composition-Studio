@@ -133,7 +133,9 @@ local function call_openai(promptPath)
  end
  local result=R.ExecProcess(cmd,190000)
  os.remove(request)
- assert(type(result)=="string" and not result:match("^%s*%-?%d+%s*\n[1-9]%d*"),"KI-Aufruf fehlgeschlagen; bitte API-Konfiguration pruefen.")
+ assert(type(result)=="string","KI-Aufruf konnte nicht ausgefuehrt werden.")
+ local code=tonumber(result:match("^%s*(-?%d+)"))
+ assert(code==0,"KI-Transport fehlgeschlagen (Exitcode "..tostring(code or "unbekannt")..").")
  local f=assert(io.open(output,"rb"),"Keine Antwort vom KI-Dienst.")
  local data=f:read("*a");f:close()
  -- Decode JSON string values without interpreting escaped text as JSON structure.
@@ -180,7 +182,7 @@ local function run()
  local targets={}
  for _,row in ipairs(rows) do
   for _,note in ipairs(row.notes) do
-   if #targets>=500 then break end
+   assert(#targets<500,"Mehr als 500 Noten ausgewaehlt: Bitte Auswahl verkleinern. Keine Teilbearbeitung.")
    targets[#targets+1]={row=row,note=note}
   end
  end
