@@ -377,7 +377,7 @@ $folder = [IO.Path]::GetDirectoryName(__PATH__)
 [IO.File]::WriteAllText(__PATH__, $encrypted, [Text.Encoding]::ASCII)
 $input.Clear()
 ]] 
- body=body:gsub("__PATH__",q(path))
+ body=body:gsub("__PATH__",function() return q(path) end)
  write_file(script,"\239\187\191"..body)
  local ok,result=pcall(R.ExecProcess,windows_powershell_command(script,true),120000)
  os.remove(script)
