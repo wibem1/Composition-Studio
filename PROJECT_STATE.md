@@ -1,9 +1,13 @@
-
 ## 07.11.2026 – Automatische Zoom-Aktion (experimentell)
 
 Auf ausdruecklichen Nutzerwunsch wurde `Native-Notation-Studio-Zoom.lua` von der Prozent-Eingabe auf einen dialogfreien Ein-Klick-Ablauf umgestellt (Commit `5d78f3036430eb61d82092d5be39f4057cd0f818`). Horizontal werden anhand Editorbreite und aktueller Taktlaenge rund vier Takte eingepasst; vertikal werden – soweit im MIDI-Aktionsbereich verfuegbar – native Zoomaktionen aus einem reproduzierbaren Ausgangsniveau in Abhaengigkeit von Editorhoehe und Zahl der dargestellten Tracks aufgerufen. Die Hauptaktion und MIDI-Inhalte bleiben unberuehrt. Bei fehlender optionaler JS-Fenster-API werden konservative Ersatzabmessungen verwendet. Die REAPER-API bietet keine direkte, auslesbare Notensystemhoehe: Die vertikale Anpassung ist eine Heuristik, keine nachgewiesene pixelgenaue Optimierung. **Nachweis:** GitHub-Code gespeichert und Ruecklesepruefung; kein Lua-Laufzeit- oder visueller REAPER-Windows-Test, keine Produktionsfreigabe. Naechster Schritt: gezielter Praxistest im echten REAPER-Notationseditor und erst danach Feinkorrektur der vertikalen Notengroesse.
 
 # Projektstand – Composition-Studio
+
+## 07.11.2026 – Praxisbefund: Notationsqualität unbrauchbar, Erfolgsmeldung korrigiert
+
+Windows-REAPER-Screenshot nach Anwenden von Native Notation Studio: `0 Rhythmus-Anzeigeaenderungen, 1 Track-Schluessel gesetzt. Zoom 100%`. Die Notationsdarstellung wurde vom Nutzer zurecht als unbrauchbar beanstandet. Codeanalyse: Das aktuelle `DISPLAY`-Protokoll und die konservativen Grenzen erlauben nur kleine Noten-Offsets, keine echte Stimmen-/Hand-/Rhythmusrekonstruktion. Die reine Schlüsseländerung darf nicht als erfolgreich abgeschlossene Notationsverbesserung gelten. Im Entwicklungsbranch wurde daher ein **Fail-closed-Schutz** eingefügt: Bei 0 übernommenen Rhythmusänderungen erfolgen keine Track-/MIDI-Schreibzugriffe; es erscheint eine ehrliche Meldung. Commit `5bc572e7a1a1a799318c1e7356870f1868c701ff`. **Nur GitHub-Rückleseprüfung, keine Lua-/Windows-/REAPER-Abnahme.** Es ist ausdrücklich keine musikalisch brauchbare Lösung; diese Aufgabe ist in Issue #24 dokumentiert. Der Nutzer sollte die zuvor gesetzten Schlüssel mit REAPER Undo rückgängig machen.
+
 
 ## 07.11.2026 – Windows: API-Key-Ersteinrichtung mit DPAPI (nicht nativ abgenommen)
 
