@@ -279,9 +279,6 @@ local function run()
  local quant=require_action(section,{'notation: set display quantization to 1/8'})
  local minimum=require_action(section,{'notation: set minimum display quantization note length to 1/16'})
  local proportional=require_action(section,{'notation: proportional (musical) note spacing'})
- -- Resolve vertical zoom actions before making any view or track changes.
- local verticalIn=require_action(section,{'view: zoom in vertically'})
- local verticalOut=require_action(section,{'view: zoom out vertically'})
  -- Optional REAPER-native setting: reduce unnecessary ties in the score.
  -- Never toggle if the action state cannot be read reliably.
  local minimizeTies=nil
