@@ -1,4 +1,9 @@
 
+## 07.11.2026 – Zweiter Windows-Praxisbefund: automatische Zoom-Korrektur nicht erfolgreich
+
+Zweiter Screenshot REAPER 7.83/Windows: Bei `Techno Bass` erscheint weiterhin ein Klavier-Doppelsystem mit leerer oberer Notenzeile und vielen Hilfslinien weit unter dem Basssystem. Der Benutzer bestaetigt, dass die geaenderte Zoomfassung das Ergebnis nicht verbessert. In der Action-Liste sind mehrere mit `(1)`/`(2)` benannte Kopien der Zoom-Aktion sichtbar; die ausgefuehrte Skriptdatei ist dadurch nicht eindeutig belegt. **Verbindliche Konsequenz gemaess Entwicklungsstandards:** Keine weiteren Zoom-Heuristiken ohne Diagnose der tatsaechlich ausgefuehrten Datei und der Track-SCORE-Schluesselkonfiguration. Die Aktion `Native-Notation-Studio-Zoom.lua` nimmt derzeit keine Schluesselkorrektur vor, sondern nur Zoom-Aktionen. Zuerst doppelten/ungeeigneten Track-Stand (Grand Staff) und oktavierte Bass-Notierung getrennt analysieren; danach erst ein gezielter visueller REAPER-Test. Vorige Korrekturen bleiben nicht abgenommen.
+
+
 ## 07.11.2026 – Screenshot-Rueckmeldung: vertikaler Zoom zu klein
 
 Der Nutzer hat unter REAPER 7.83/Windows eine unbefriedigende Notationsansicht gezeigt: Kleine Noten, grosse ungenutzte Systemflaechen, ein weitgehend leeres Basssystem. Code-Ursache in `Native-Notation-Studio-Zoom.lua`: 18 native Zoom-out-Schritte als Ausgangsbasis und danach zu wenige Zoom-in-Schritte. Mit Commit `ab68b9a09e3c79dd0be43ee5701e13f5c03c20ff` wurde die Richtung der Ausgangskalibrierung umgedreht (zunaechst Zoom-in, dann begrenzte Reduktion nach Editorhoehe/Trackzahl). **Nur implementiert, nicht visuell oder unter Windows 7.83 getestet.** Offener Befund: Unnoetiges Klavier-Doppelsystem bei offenbar einstimmigem Synthesizer ist ein gesondertes Schluessel-/Notationsproblem und laesst sich nicht allein durch Zoom beheben. Vor Freigabe ist ein realer Praxistest erforderlich.
