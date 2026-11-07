@@ -784,7 +784,12 @@ local function run()
   local output,n=stream(now,unique)
   if n>0 then writes[#writes+1]={row=row,before=now,after=output};changed=changed+n end
  end
- if changed==0 and clefCount==0 then show();apply_zoom(rows,editor);fail("Keine sicheren Rhythmusaenderungen; Schluessel bereits passend, Zoom angewendet.");return end
+ -- A clef-only edit is NOT a successful notation reconstruction.
+ -- Do not alter the score when the interpretation produced no accepted display edits.
+ if changed==0 then
+  fail("Keine sicheren Notationsverbesserungen ermittelt. Es wurden keine MIDI-Daten oder Track-Schluessel geaendert.\nDie automatische Notationsrekonstruktion ist fuer dieses Material noch nicht ausreichend.")
+  return
+ end
  source_guard(rows,stamp)
  guard_visible(rows,editor)
  for _,target in ipairs(tracks) do assert(read_track(target.track)==target.before,"Track-State wurde waehrend der Analyse geaendert.") end
