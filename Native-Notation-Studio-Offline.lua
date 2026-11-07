@@ -1,7 +1,7 @@
 -- @description Native Notation Studio - Notenansicht optimieren (offline)
 -- @version 0.1.0-test
 -- @author Klangwerke
--- @about No API, no MIDI note writing. Display quantization, spacing, safe optional horizontal zoom.
+-- @about No API, no MIDI note writing. Display quantization, minimize ties, spacing and safe optional horizontal zoom.
 -- Vertical notation zoom and track clef editing excluded until validated.
 local R=reaper
 local function require_action(section,names)
@@ -34,8 +34,18 @@ local function run()
  -- Resolve actions before changing anything. Do not call MIDI-data quantization.
  local notation=require_action(section,{'view: mode: musical notation','view: mode: notation','mode: notation'})
  local quant=require_action(section,{'notation: set display quantization to 1/16 (default)'})
- local minimum=require_action(section,{'notation: set minimum display quantization note length to 1/64'})
+ local minimum=require_action(section,{'notation: set minimum display quantization note length to 1/64 (default)','notation: set minimum display quantization note length to 1/64'})
  local proportional=require_action(section,{'notation: proportional (musical) note spacing'})
+ -- Optional REAPER-native setting: reduce unnecessary ties in the score.
+ -- Never toggle if the action state cannot be read reliably.
+ local minimizeTies=nil
+ for i=0,19999 do
+  local id,label=R.kbd_enumerateActions(section,i)
+  if not id or id==0 then break end
+  if (label or ''):lower()=='notation: minimize ties for all notes by default' then
+   minimizeTies=id;break
+  end
+ end
  local old=R.MIDIEditor_GetSetting_int(editor,'pixels_per_timebase_unit')
  assert(type(old)=='number' and old>=0,'Horizontaler Zoom nicht lesbar.')
  local timebase=R.MIDIEditor_GetSetting_int(editor,'timebase_unit')
@@ -65,6 +75,9 @@ local function run()
  R.MIDIEditor_OnCommand(editor,minimum)
  if R.GetToggleCommandStateEx(32060,proportional)==0 then
   R.MIDIEditor_OnCommand(editor,proportional)
+ end
+ if minimizeTies and R.GetToggleCommandStateEx(32060,minimizeTies)==0 then
+  R.MIDIEditor_OnCommand(editor,minimizeTies)
  end
  if desired and desired~=old then
   if not R.MIDIEditor_SetSetting_int(editor,'pixels_per_timebase_unit',desired) or
