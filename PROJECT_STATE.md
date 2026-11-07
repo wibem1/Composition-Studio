@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 07.11.2026 – Standalone-Schutzpruefung
+
+In `Native-Notation-Studio.lua` wurde die bisher stille Teilverarbeitung bei mehr als 500 Noten durch einen vollstaendigen Abbruch ersetzt und der Rueckgabecode des KI-Transportprozesses wird ausgewertet (Commit `14484a1dd2d452c1dbc01126d9c4bc7680a47611`). Sieben gezielte statische Quellcodepruefungen bestanden (Auswahlgrenze, Exitcode, Antwortdatei, Schluessel, Quellschutz, Undo, Eigenstaendigkeit). Dies ist **kein** Lua-Syntax- oder REAPER-Laufzeittest. Es erfolgten keine API-Aufrufe. Weitere Arbeit: plattformgerechter sicherer Transport, robuster JSON-Parser, Simulation und echter REAPER-Test vor Freigabe.
+
+
 ## 06.11.2026 – API-Antwortparser korrigiert
 
 In `Native-Notation-Studio.lua` wurde der OpenAI-Antwortparser korrigiert (Commits `a641abc9c93c8e5d8469da7adf36e60dd7a4edd9`, `df1d9a63497e70b3f7a14270ff0c16e04af59148`): Das JSON-Textfeld wird nun an seinem Feldtrenner erkannt und eine fehlende Wertbegrenzung abgefangen. **Noch keine Laufzeit- oder REAPER-Pruefung.** Weitere Risiken: synchroner curl-Aufruf, rudimentaere JSON-Auswertung, fehlende plattformuebergreifende API-Transporttests und fehlender Live-KI-Test. Kein Release.
