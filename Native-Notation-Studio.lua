@@ -205,7 +205,7 @@ local function run()
 ]],"\n",table.concat(lines,"\n"),"\n")
  promptFile:close()
  local mode=R.ShowMessageBox("KI automatisch aufrufen?\nJa: OpenAI (Umgebungsvariable OPENAI_API_KEY).\nNein: vorbereitete DISPLAY-Datei verwenden.\nAbbrechen: nichts ändern.","Native Notation Studio",3)
- if mode==2 then return end
+ if mode~=6 and mode~=7 then return end
  local response
  if mode==6 then
   response=call_openai(promptPath)
