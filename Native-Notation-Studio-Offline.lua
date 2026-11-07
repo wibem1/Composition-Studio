@@ -275,7 +275,6 @@ local function run()
    desired=value
   end
  end
- local clefTargets=prepare_clef_targets(takes)
  R.MIDIEditor_OnCommand(editor,notation)
  R.MIDIEditor_OnCommand(editor,quant)
  R.MIDIEditor_OnCommand(editor,minimum)
@@ -292,6 +291,8 @@ local function run()
    error('Horizontaler Zoom konnte nicht gesetzt werden.')
   end
  end
+ -- Prepare after view commands: those commands may change TRACK SCORE state.
+ local clefTargets=prepare_clef_targets(takes)
  -- The clef is a track-level notation setting; MIDI events remain byte-identical.
  commit_clefs(clefTargets,project)
  -- Vertical zoom remains excluded until its real notation behavior is known.
