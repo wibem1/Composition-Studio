@@ -1,5 +1,10 @@
 # Projektstand – Composition-Studio
 
+## 07.11.2026 – Fehlerantworten und Antwortgroesse begrenzt
+
+Commit `d45468c8f5198faefdd48ae7a392995d4582b838` aktualisiert den Header des eigenstaendigen Skripts und fuegt Abbruchbedingungen fuer Antworten groesser als 1 MiB sowie erkennbare API-Fehlerantworten hinzu. Die Aenderungen sind implementiert, **nicht laufzeitgetestet**. Weiterhin offen: robuster JSON-Parser, sichere plattformuebergreifende Ausfuehrung von curl, automatisierte Lua-Tests und REAPER-Abnahme. Kein Release.
+
+
 ## 07.11.2026 – Standalone-Schutzpruefung
 
 In `Native-Notation-Studio.lua` wurde die bisher stille Teilverarbeitung bei mehr als 500 Noten durch einen vollstaendigen Abbruch ersetzt und der Rueckgabecode des KI-Transportprozesses wird ausgewertet (Commit `14484a1dd2d452c1dbc01126d9c4bc7680a47611`). Sieben gezielte statische Quellcodepruefungen bestanden (Auswahlgrenze, Exitcode, Antwortdatei, Schluessel, Quellschutz, Undo, Eigenstaendigkeit). Dies ist **kein** Lua-Syntax- oder REAPER-Laufzeittest. Es erfolgten keine API-Aufrufe. Weitere Arbeit: plattformgerechter sicherer Transport, robuster JSON-Parser, Simulation und echter REAPER-Test vor Freigabe.
