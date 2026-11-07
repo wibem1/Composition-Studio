@@ -1,0 +1,75 @@
+PASS complete standalone Lua 5.4 load
+PASS all displayed takes, all notes regardless selection
+PASS reject unsupported source pool
+PASS reject unsupported source rate
+PASS reject unsupported source loop
+PASS valid conservative display plan
+PASS reject invalid DISPLAY 1
+PASS reject invalid DISPLAY 2
+PASS reject invalid DISPLAY 3
+PASS reject invalid DISPLAY 4
+PASS reject invalid DISPLAY 5
+PASS reject invalid DISPLAY 6
+PASS reject invalid DISPLAY 7
+PASS reject invalid DISPLAY 8
+PASS reject invalid DISPLAY 9
+PASS reject invalid DISPLAY 10
+PASS preserve absolute MIDI events, flags, bytes, pedal, sysex and tail
+PASS ambiguous simultaneous note-ons 2
+PASS ambiguous simultaneous note-ons 3
+PASS ambiguous simultaneous note-ons 4
+PASS ambiguous metadata 2
+PASS ambiguous metadata 3
+PASS truncated raw stream fails before write
+PASS complete run writes two takes and native view; simulated undo restores originals
+PASS second take write failure restores every attempted stream
+PASS rollback failure is reported and undo block closes
+PASS over 500 visible notes fails as whole, no API and no MIDI writes
+PASS disk failure before API or MIDI write
+PASS missing API key fails before background launch
+PASS closed MIDI editor fails before processing
+PASS process launch failure no write
+PASS write readback corruption triggers verified rollback
+PASS 6/8 triplets accepted; grace-length notes and off-grid proposals skipped
+PASS JSON Unicode surrogate pair, escapes, controls and multi-part text
+PASS reject malformed JSON 1
+PASS reject malformed JSON 2
+PASS reject malformed JSON 3
+PASS reject malformed JSON 4
+PASS reject malformed JSON 5
+PASS reject malformed JSON 6
+PASS reject malformed JSON 7
+PASS reject malformed JSON 8
+PASS reject malformed JSON 9
+PASS reject malformed JSON 10
+PASS reject malformed JSON 11
+PASS reject bad API envelope 1
+PASS reject bad API envelope 2
+PASS reject bad API envelope 3
+PASS reject bad API envelope 4
+PASS reject bad API envelope 5
+PASS reject bad API envelope 6
+PASS transport path quoting and no persisted key false
+PASS transport path quoting and no persisted key true
+PASS deferred live path with simulated successful API and two-take write
+PASS cancel while API running never writes, even after response arrives
+PASS stale project fails before writing
+PASS stale stamp fails before writing
+PASS stale visibility fails before writing
+PASS stale deleted fails before writing
+PASS stale bytes fails before writing
+PASS stale editor fails before writing
+PASS HTTP/process error 22 no write
+PASS HTTP/process error 28 no write
+PASS HTTP/process error 999 no write
+PASS gfx focus does not invalidate the captured MIDI editor
+PASS early or malformed completion marker keeps waiting safely
+PASS oversized response fails without writes
+PASS strict JSON rejects invalid UTF-8 and whitespace
+PASS timeout no write
+PASS no valid interpretation leaves MIDI and undo unchanged
+PASS 70 standalone tests; no live API traffic
+PASS real Unix wrapper: literal paths, header, request and exit 0
+PASS real Unix wrapper: literal paths, header, request and exit 22
+PASS real Unix wrapper: literal paths, header, request and exit 28
+PASS standalone offline suite; no external requests, no paid API calls

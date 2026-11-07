@@ -1,5 +1,7 @@
 # Composition Studio
 
+**Eigenstaendiges Native Notation Studio (07.11.2026):** Aktuell dargestellte Tracks per Knopfdruck im nativen REAPER-Notationseditor interpretieren. Technisch simulierte Testfassung, keine Integration/Produktionsfreigabe. [Einrichtung, Pruefnachweis und ein abschliessender Praxistest](docs/NATIVE-NOTATION-STANDALONE.md).
+
 **Separater Entwicklungstest (PR #12):** Der Button **Lesbare Notation erstellen** überträgt notierte Einsätze und Dauern in REAPERs Noteneditor. [Installation, Bedienung und Prüfnachweis](docs/NATIVE-NOTATION-BUTTON.md).
 
 Composition Studio ist die KI-Kompositions- und Bearbeitungsebene direkt in REAPER.
