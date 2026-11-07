@@ -27,32 +27,75 @@ local function ordinary(raw)
 end
 local function harness(options)
  local o=options or {};local state={streams={fixture(),fixture()},undo=0,writes=0,messages={},files={},queue={},time=0,actions={},visible={1,2},stamp=0,project=42,failAt=o.failAt}
+ state.chunks={}
+ state.chunkWrites=0
+ state.zoom=81920;state.zoomSets=0;state.generation=0
+ local function itemID(t) return t%1000 end
+ local function trackItems(t) return o.hidden and t==1 and {1,3} or {t} end
+ if o.hidden then state.streams[3]=fixture() end
+ local function hex(raw) return (raw:gsub('.',function(c) return ('%02x'):format(c:byte()) end)) end
+ local function unhex(raw) return (raw:gsub('..',function(c) return string.char(tonumber(c,16)) end)) end
+ local function defaultChunk(t)
+  local s='<TRACK {TRACK'..t..'}\nNAME "Untouched name"\nSCORE 6 '..(o.currentClef or 1)..' 0.125 0.25\n<FXCHAIN\nSCORE nested must stay\n>\n'
+  for _,id in ipairs(trackItems(t)) do s=s..'<ITEM\nGUID {I'..id..'}\nNNS_RAW '..id..' %RAW'..id..'%\n>\n' end
+  return s..'>\n'
+ end
  local notes={{true,false,false,30,450,0,60,87},{true,true,false,510,900,1,67,94}}
  local r={
  EnumProjects=function() return state.project end,
  MIDIEditor_GetActive=function() if state.editorClosed then return nil end;return 50 end,
  MIDIEditor_GetMode=function() return state.editorClosed and -1 or 0 end,
  MIDIEditor_EnumTakes=function(_,i,editable) assert(editable==false);return state.visible[i+1] end,
- GetMediaItemTake_Item=function(t) return t end,
+ GetMediaItem_Track=function(item) return item==3 and 1 or item end,
+ GetSetMediaItemInfo_String=function(item) return true,'{I'..item..'}' end,
+ GetSetMediaItemTakeInfo_String=function(t) return true,'{T'..itemID(t)..'}' end,
+ CountMediaItems=function() return o.hidden and 3 or 2 end,
+ GetMediaItem=function(_,i) return i+1 end,
+ CountTrackMediaItems=function(t) return #trackItems(t) end,
+ GetTrackMediaItem=function(t,i) return trackItems(t)[i+1] end,
+ CountTakes=function() return 1 end,
+ GetTake=function(item) return item+1000*state.generation end,
+ GetTrackStateChunk=function(t)
+  local template=state.chunks[t] or defaultChunk(t)
+  return true,(template:gsub('%%RAW(%d+)%%',function(id) return hex(state.streams[tonumber(id)]) end))
+ end,
+ SetTrackStateChunk=function(t,chunk)
+  state.chunkWrites=state.chunkWrites+1
+  local template=chunk:gsub('NNS_RAW (%d+) ([%x]+)',function(id,data)
+   state.streams[tonumber(id)]=unhex(data);return 'NNS_RAW '..id..' %RAW'..id..'%'
+  end)
+  state.chunks[t]=template
+  if o.recreate then state.generation=state.generation+1 end
+  if o.chunkCorrupt and state.chunkWrites==1 then state.streams[o.hidden and 3 or t]='changed' end
+  if o.chunkFailAt==state.chunkWrites then return false end
+  return true
+ end,
+ GetMediaItemTake_Item=function(t) return itemID(t) end,
  GetMediaItemTake_Source=function(t) return t end,
  GetMediaSourceLength=function() return o.sourceLength or 4,o.sourceSeconds~=true end,
  MIDI_GetProjTimeFromPPQPos=function(_,p) return (o.origin or 0)+p/960 end,
  GetActiveTake=function(t) return t end,
  TakeIsMIDI=function() return true end,
  MIDI_CountEvts=function() return not o.countFail,o.noteCount or #notes end,
- MIDI_GetNote=function(_,i) if o.noteFail then return false end;return table.unpack(o.badNote or notes[i%2+1]) end,
- MIDI_GetAllEvts=function(t) return true,state.streams[t] end,
+ MIDI_GetNote=function(t,i) if o.noteFail then return false end;return table.unpack(o.badNote or (o.trackNotes and o.trackNotes[itemID(t)] and o.trackNotes[itemID(t)][i%2+1]) or notes[i%2+1]) end,
+ MIDI_GetAllEvts=function(t) if o.recreate and t<1000*state.generation then return false end;return true,state.streams[itemID(t)] end,
  MIDI_GetProjQNFromPPQPos=function(_,p) if o.badQN then return 0/0 end;return (o.origin or 0)+p/960 end,
  MIDI_GetPPQPosFromProjQN=function(_,q) return q*960 end,
  GetMediaItemInfo_Value=function(_,key) return ({D_POSITION=0,D_LENGTH=4,B_LOOPSRC=o.loop and 1 or 0})[key] end,
  GetMediaItemTakeInfo_Value=function(_,key) return ({D_PLAYRATE=o.rate or 1,D_STARTOFFS=0})[key] end,
- GetItemStateChunk=function() return true,o.chunk or (o.pool and 'POOLEDEVTS {1234-1111}' or '<ITEM\n>') end,
+ GetItemStateChunk=function(item) return true,o.chunk or (o.pool and 'POOLEDEVTS {1234-1111}' or (o.uniquePools and ('POOLEDEVTS {1234-'..item..'}') or '<ITEM\n>')) end,
  TimeMap2_timeToQN=function(_,v) return v end,
  TimeMap_QNToMeasures=function(_,q) return math.floor(q/4),math.floor(q/4)*4,math.floor(q/4)*4+4 end,
  GetProjectStateChangeCount=function() return state.stamp end,
  ValidatePtr2=function() return not state.deleted end,
  GetResourcePath=function() return '/fixture space/Ümlaut' end,
- GetExtState=function() return o.live and '' or '/response.txt' end,
+ GetExtState=function(_,key) if key=='ZoomPercent' then return state.zoomPercent or '' end;return o.live and '' or '/response.txt' end,
+ SetExtState=function(_,key,value) assert(key=='ZoomPercent');state.zoomPercent=value end,
+ GetUserInputs=function() return not o.zoomCancel,o.zoomInput or '150' end,
+ MIDIEditor_GetSetting_int=function(_,key) return key=='timebase_unit' and (o.timebase or 1) or state.zoom end,
+ MIDIEditor_SetSetting_int=function(_,key,value) assert(key=='pixels_per_timebase_unit');state.zoomSets=state.zoomSets+1;state.zoom=value;return true end,
+ GetCursorPositionEx=function() return 0 end,
+ TimeMap2_GetDividedBpmAtTime=function() return o.bpm or 120 end,
  GetOS=function() return o.windows and 'Win64' or 'OSX64' end,
  genGuid=function() return '{1234-5678}' end,
  ExecProcess=function(command,timeout) assert(timeout==-2);state.command=command;return o.launchFail and nil or '0\n' end,
@@ -64,10 +107,10 @@ local function harness(options)
   state.writes=state.writes+1
   if state.failAt==state.writes then state.streams[t]='damaged';return false end
   if o.rollbackFail and state.writes>2 then return false end
-  state.streams[t]=raw;state.stamp=state.stamp+1;return true
+  state.streams[itemID(t)]=raw;state.stamp=state.stamp+1;return true
  end,
- Undo_BeginBlock2=function(p) assert(p==42);state.undo=state.undo+1;state.snapshot={table.unpack(state.streams)} end,
- Undo_EndBlock2=function(p,_,flags) assert(p==42 and flags==4);state.undo=state.undo-1 end,
+ Undo_BeginBlock2=function(p) assert(p==42);state.undo=state.undo+1;state.snapshot={table.unpack(state.streams)};state.snapshotChunks={table.unpack(state.chunks)} end,
+ Undo_EndBlock2=function(p,_,flags) assert(p==42 and (flags==4 or flags==5));state.undoFlags=flags;state.undo=state.undo-1 end,
  UpdateItemInProject=function() end,
  SectionFromUniqueID=function(id) assert(id==32060);return id end,
  kbd_enumerateActions=function(_,i)
@@ -93,7 +136,7 @@ local function harness(options)
  env._G=env
  local api=assert(load(source,'@Native-Notation-Studio.lua','t',env))()
  state.poll=function() local f=table.remove(state.queue,1);assert(f);f() end
- return api,state,r
+ return api,state,r,env
 end
 local api,state=harness()
 test('complete standalone Lua 5.4 load',function() assert(type(api.run)=='function') end)
@@ -226,4 +269,149 @@ test('cancelled oversized response is discarded and cleaned without an error',fu
 end)
 test('timeout no write',function() local a,s=harness({live=true});a.run();s.time=101;s.poll();assert(s.writes==0 and #s.messages>0 and #s.queue==0) end)
 test('no valid interpretation leaves MIDI and undo unchanged',function() local a,s=harness();s.files['/response.txt']='uncertain';a.run();assert(s.writes==0 and s.undo==0) end)
+local function score(notes,current) return api.choose_clef(notes,current or 0) end
+local function n(p,start,duration,ch,muted)
+ return {pitch=p,start_qn=start or 0,duration_qn=duration or 1,channel=ch or 0,muted=muted or false}
+end
+for _,case in ipairs({{'high',{{72,76,79}},1},{'low',{{36,40,48}},2},{'central single line',{{60}},1},{'wide single line',{{36,84}},nil}}) do
+ test('automatic clef '..case[1],function()
+  local notes={};for i,p in ipairs(case[2][1]) do notes[#notes+1]=n(p,i) end
+  local chosen=score(notes)
+  if case[3] then assert(chosen==case[3]) else assert(chosen==1 or chosen==2) end
+ end)
+end
+for name,values in pairs({alto={3,60},tenor={4,58},octave={5,36},percussion={10,84},one_line={11,60},chart={12,60}}) do
+ test('preserve suitable/conventional clef '..name,function() assert(score({n(values[2])},values[1])==values[1]) end)
+end
+test('GM percussion receives percussion clef',function() assert(score({n(38,0,1,9)},1)==10) end)
+test('muted outlier does not change treble clef',function() assert(score({n(72),n(24,0,20,0,true)},1)==1) end)
+test('clear existing two-hand chord keeps piano staff',function() assert(score({n(48),n(60),n(76)},0)==0) end)
+test('wide sequential melody never creates piano staff',function() assert(score({n(36,0),n(60,1),n(84,2)},0)~=0) end)
+test('same chord does not create piano staff from treble',function() assert(score({n(48),n(60),n(76)},1)~=0) end)
+test('empty or fully muted track keeps current clef',function() assert(score({},0)==0 and score({n(36,0,1,0,true)},1)==1) end)
+local complex='<TRACK {X}\r\nSCORE 6 1 0.125 0.25 extra\r\n<ITEM\r\nSCORE 0 9 9 9\r\n<SOURCE MIDI\r\nDATA preserved\r\n>\r\n>\r\n>\r\n'
+test('only top-level clef changes; other fields and nested data are byte-exact',function()
+ local patched,current=api.track_clef_chunk(complex,2)
+ assert(current==1 and patched==complex:gsub('SCORE 6 1 0.125','SCORE 6 2 0.125',1))
+ assert(api.track_clef_chunk(patched,2)==patched)
+end)
+test('default SCORE line can be inserted with CRLF preserved',function()
+ local chunk='<TRACK {X}\r\nNAME "x"\r\n>\r\n'
+ local patched,current=api.track_clef_chunk(chunk,1)
+ assert(current==0 and patched=='<TRACK {X}\r\nSCORE 0 1 0 0\r\nNAME "x"\r\n>\r\n')
+end)
+for name,chunk in pairs({duplicate='<TRACK\nSCORE 0 1 0 0\nSCORE 0 2 0 0\n>\n',unclosed='<TRACK\n<ITEM\n>\n',wrong_root='<TRACKING\n>\n',unknown='<TRACK\nSCORE 0 99 0 0\n>\n',bad_fields='<TRACK\nSCORE 0 1 ??? 0\n>\n',extra_close='<TRACK\n>\n>\n'}) do
+ test('reject ambiguous/unsupported track chunk '..name,function() reject(function() api.track_clef_chunk(chunk,2) end) end)
+end
+local function notePair(p,q)
+ return {{true,false,false,30,450,0,p,87},{true,false,false,510,900,1,q,94}}
+end
+local function pitched(p,q)
+ return (fixture():gsub(string.char(0x90,60,87),string.char(0x90,p,87),1):gsub(string.char(0x80,60,35),string.char(0x80,p,35),1)
+  :gsub('NOTE 0 60','NOTE 0 '..p,1):gsub(string.char(0x91,67,94),string.char(0x91,q,94),1):gsub(string.char(0x91,67,0),string.char(0x91,q,0),1))
+end
+local function clefHarness(extra)
+ local opts=extra or {};opts.trackNotes={[1]=notePair(36,43),[2]=notePair(72,79)}
+ local a,s,r=harness(opts);s.streams[1]=pitched(36,43);s.streams[2]=pitched(72,79)
+ return a,s,r
+end
+test('different visible tracks receive independent clefs with unchanged performance',function()
+ local a,s,r=clefHarness({hidden=true,recreate=true})
+ local originals={table.unpack(s.streams)};a.run()
+ assert(s.writes==2 and s.chunkWrites==1 and s.undo==0)
+ local _,chunk=r.GetTrackStateChunk(1);local _,clef=a.track_clef_chunk(chunk);assert(clef==2)
+ for i=1,3 do assert(ordinary(s.streams[i])==ordinary(originals[i])) end
+ assert(s.streams[3]==originals[3] and s.generation>0)
+end)
+test('clef still applies when AI offers no safe rhythm offsets',function()
+ local a,s,r=clefHarness();s.files['/response.txt']='uncertain';a.run();assert(s.writes==0 and s.chunkWrites==1)
+ local _,chunk=r.GetTrackStateChunk(1);local _,clef=a.track_clef_chunk(chunk);assert(clef==2)
+end)
+test('clef setter failure rolls back chunks and MIDI with recreated pointers',function()
+ local a,s,r=clefHarness({chunkFailAt=1,recreate=true});local raw1,raw2=s.streams[1],s.streams[2]
+ local _,chunk=r.GetTrackStateChunk(1)
+ reject(a.run);assert(s.undo==0 and s.streams[1]==raw1 and s.streams[2]==raw2)
+ local _,after=r.GetTrackStateChunk(1);assert(after==chunk and s.chunkWrites==2)
+end)
+test('hidden take corruption is detected and rolled back',function()
+ local a,s,r=clefHarness({hidden=true,chunkCorrupt=true,recreate=true});local originals={table.unpack(s.streams)}
+ reject(a.run);assert(s.undo==0)
+ for i=1,3 do assert(s.streams[i]==originals[i]) end
+end)
+test('several visible takes on same track share one clef decision',function()
+ local a,s,r=clefHarness({hidden=true});s.visible={1,3}
+ local rows=a.selected();local targets=a.prepare_clefs(rows);assert(#targets==1 and #targets[1].notes==4)
+end)
+test('zoom repeats are absolute and do not accumulate',function()
+ local a,s,r=harness();local rows=a.selected();a.apply_zoom(rows,50);local once=s.zoom;a.apply_zoom(rows,50)
+ assert(once==81920 and s.zoom==once and s.writes==0 and not s.command)
+end)
+test('stored zoom factor is respected',function()
+ local a,s=harness();s.zoomPercent='150';a.apply_zoom(a.selected(),50);assert(s.zoom==122880)
+end)
+test('seconds timebase uses tempo conversion',function()
+ local a,s=harness({timebase=0,bpm=120});a.apply_zoom(a.selected(),50,100);assert(s.zoom==163840)
+end)
+test('dense bars get more horizontal space',function()
+ local a,s=harness();local notes={};for i=1,28 do notes[i]=n(60,i/100) end
+ local v,factor,base=a.zoom_value({{item=1,notes=notes}},50,100);assert(base==120 and v==122880)
+end)
+for _,factor in ipairs({0,49,251,math.huge}) do test('zoom factor limit '..tostring(factor),function()
+ local a,s=harness();reject(function() a.apply_zoom(a.selected(),50,factor) end);assert(s.zoomSets==0)
+end) end
+test('zoom setting dialog persists factor and performs no API call',function()
+ local a,s=harness({zoomInput='175'});a.zoom_dialog();assert(s.zoomPercent=='175' and s.zoom==143360 and s.writes==0 and not s.command)
+end)
+test('cancelled zoom dialog leaves view untouched',function()
+ local a,s=harness({zoomCancel=true});a.zoom_dialog();assert(s.zoomSets==0 and not s.zoomPercent and not s.command)
+end)
+test('zoom readback failure restores original scale',function()
+ local a,s,r=harness();local read=r.MIDIEditor_GetSetting_int
+ r.MIDIEditor_GetSetting_int=function(ed,key) if key=='pixels_per_timebase_unit' and s.zoomSets==1 then return -1 end;return read(ed,key) end
+ reject(function() a.apply_zoom(a.selected(),50,150) end);assert(s.zoom==81920)
+end)
+test('clefs and rhythm share simulated Undo/Redo block with item and track flags',function()
+ local a,s,r=clefHarness();a.run();assert(s.undoFlags==5)
+ local changedStreams,changedChunks={table.unpack(s.streams)},{table.unpack(s.chunks)}
+ s.streams=s.snapshot;s.chunks=s.snapshotChunks
+ local _,chunk=r.GetTrackStateChunk(1);local _,clef=a.track_clef_chunk(chunk);assert(clef==1 and s.streams[1]==pitched(36,43))
+ s.streams=changedStreams;s.chunks=changedChunks
+ local _,after=r.GetTrackStateChunk(1);local _,restored=a.track_clef_chunk(after);assert(restored==2)
+end)
+test('non-MIDI track change during analysis invalidates the whole result',function()
+ local a,s,r=clefHarness({live=true});a.run()
+ local _,before=r.GetTrackStateChunk(1);s.chunks[1]=before:gsub('Untouched name','changed name')
+ finish(a,s,'0',response(good));assert(s.writes==0 and s.chunkWrites==0 and #s.messages>0)
+end)
+test('zoom setter failure that changes the scale is restored',function()
+ local a,s,r=harness();local set=r.MIDIEditor_SetSetting_int
+ r.MIDIEditor_SetSetting_int=function(ed,key,value) set(ed,key,value);return s.zoomSets~=1 end
+ reject(function() a.apply_zoom(a.selected(),50,150) end);assert(s.zoom==81920 and s.zoomSets==2)
+end)
+test('companion zoom action loads the actual main file in module mode with no AI',function()
+ local a,s,r,env=harness({zoomInput='125'})
+ assert(loadfile('Native-Notation-Studio-Zoom.lua','t',env))()
+ assert(s.zoomPercent=='125' and s.zoom==102400 and s.writes==0 and not s.command and #s.messages==0)
+end)
+test('ordinary unique POOLEDEVTS identities are not shared pools',function()
+ local a,s=harness({uniquePools=true});a.run();assert(s.writes==2)
+end)
+test('only documented native chunk normalization is accepted',function()
+ local before='<TRACK\nNAME "same"\nVU 64\n>\n'
+ local patched=api.track_clef_chunk(before,2)
+ local native='<TRACK\nNAME "same"\nLANEREC -1 -1 -1 0\nVU 64\nSCORE 0 2 0 0\n>\n'
+ assert(api.track_equivalent(patched,native))
+ assert(not api.track_equivalent(patched,native:gsub('NAME "same"','NAME "changed"')))
+ assert(not api.track_equivalent(patched,native:gsub('SCORE 0 2','SCORE 6 2')))
+ assert(not api.track_equivalent(patched,native:gsub('LANEREC %-1 %-1 %-1 0','LANEREC 1 2 3 4')))
+end)
+test('rollback of an implicit default explicitly restores clef zero',function()
+ local before='<TRACK\nNAME "same"\n>\n'
+ local restored=api.track_clef_chunk(before,0,true)
+ assert(restored:find('SCORE 0 0 0 0',1,true) and api.track_equivalent(before,restored))
+end)
+test('pure zoom works for pooled/repeating/stretched sources without analysis or MIDI writes',function()
+ local a,s=harness({pool=true,loop=true,sourceLength=2,rate=0.5});a.zoom_dialog()
+ assert(s.zoomPercent=='150' and s.writes==0 and not s.command)
+end)
 print(('PASS %d standalone tests; no live API traffic'):format(checks))

@@ -3,7 +3,7 @@
 -- @author Klangwerke
 -- @about Independent REAPER action. No Composition Studio dependency.
 -- Experimental standalone action: OpenAI API or prepared DISPLAY rows.
--- Technically simulated test candidate; native REAPER acceptance remains required.
+-- Offline and isolated REAPER 7.84/Linux runtime tested; visual/platform acceptance pending.
 local R=reaper
 local project=R.EnumProjects(-1, "")
 local MAX_RESPONSE=1024*1024
@@ -35,10 +35,33 @@ local function check_note(a,b,ch,pitch,velocity)
  for _,v in ipairs({ch,pitch,velocity}) do assert(finite(v) and v%1==0,"Ungueltiger MIDI-Notenwert.") end
  assert(ch>=0 and ch<=15 and pitch>=0 and pitch<=127 and velocity>=1 and velocity<=127,"MIDI-Notenwert ausserhalb des Wertebereichs.")
 end
+-- Every in-project MIDI source has a pool identity, even when unpooled.
+-- It is shared only when that identity occurs in multiple project takes.
+local function project_pools()
+ local counts,chunks={},{}
+ for i=0,R.CountMediaItems(project)-1 do
+  local item=R.GetMediaItem(project,i)
+  local midi=false
+  for j=0,R.CountTakes(item)-1 do if R.TakeIsMIDI(R.GetTake(item,j)) then midi=true;break end end
+  if midi then
+   local ok,chunk=R.GetItemStateChunk(item,"",false)
+   assert(ok and type(chunk)=="string","MIDI-Pool-Inventar konnte nicht gelesen werden.")
+   chunks[item]=chunk
+   for id in chunk:gmatch("POOLEDEVTS%s+{([^}]+)}") do
+    if id:gsub("[0%-]",""):match("%w") then
+     id=id:upper();counts[id]=(counts[id] or 0)+1
+    end
+   end
+  end
+ end
+ return counts,chunks
+end
 local stream
-local function selected()
+local function selected(viewOnly)
  local out={}
  local editor=assert(R.MIDIEditor_GetActive(),"Bitte den MIDI-/Notationseditor mit den gewuenschten Tracks oeffnen.")
+ local pools,itemChunks={},{}
+ if not viewOnly then pools,itemChunks=project_pools() end
  local takes,seen={},{}
  assert(R.MIDIEditor_EnumTakes,"REAPER mit MIDIEditor_EnumTakes wird benoetigt.")
  for i=0,65535 do
@@ -51,14 +74,15 @@ local function selected()
   if take and R.TakeIsMIDI(take) then
    local ok,raw=R.MIDI_GetAllEvts(take)
    assert(ok and type(raw)=="string","MIDI-Ereignisse konnten nicht gelesen werden.")
+   if not viewOnly then
    stream(raw,{}) -- Reject a damaged event buffer before any paid request.
    assert(R.GetMediaItemTakeInfo_Value(take,"D_PLAYRATE")==1,"Take-Playrate ungleich 1 wird noch nicht unterstuetzt.")
-   local chunkOK,chunk=R.GetItemStateChunk(item,"",false)
-   assert(chunkOK,"Item-Quellschutz konnte nicht geprueft werden.")
+   local chunk=assert(itemChunks[item],"Item-Quellschutz konnte nicht geprueft werden.")
    for pool in chunk:gmatch("POOLEDEVTS%s+{([^}]+)}") do
-    assert(not pool:gsub("[0%-]",""):match("%w"),"Gepoolte MIDI-Quellen werden zum Schutz weiterer Items nicht bearbeitet.")
+    assert((pools[pool:upper()] or 0)<=1,"Tatsaechlich gepoolte MIDI-Quellen werden zum Schutz weiterer Items nicht bearbeitet.")
    end
    check_loop_extent(item,take,chunk)
+   end
    local notes={}
    local counted,count=R.MIDI_CountEvts(take)
    assert(counted and finite(count) and count>=0 and count%1==0,"MIDI-Noteninventar konnte nicht gelesen werden.")
@@ -352,7 +376,7 @@ local function source_guard(rows,tempo)
  assert(R.GetProjectStateChangeCount(project)==tempo,"Projekt wurde waehrend der Analyse geaendert.")
  for _,row in ipairs(rows) do
   assert(R.ValidatePtr2(project,row.item,"MediaItem*") and R.ValidatePtr2(project,row.take,"MediaItem_Take*"),"MIDI-Quelle existiert nicht mehr.")
-  assert(R.GetMediaItemTake_Item(row.take)==row.item,"Aktiver Take wurde gewechselt.")
+  assert(R.GetMediaItemTake_Item(row.take)==row.item,"Take-Item-Zuordnung wurde geaendert.")
   local ok,raw=R.MIDI_GetAllEvts(row.take)
   assert(ok and raw==row.raw,"Quell-MIDI wurde veraendert.")
   assert(R.GetMediaItemInfo_Value(row.item,"D_POSITION")==row.position and R.GetMediaItemInfo_Value(row.item,"D_LENGTH")==row.length
@@ -360,6 +384,239 @@ local function source_guard(rows,tempo)
  end
 end
 
+-- Only the second field of the TRACK-level SCORE line is edited. Nested item,
+-- plugin and source chunks are retained byte-for-byte, as are all other fields.
+local function track_clef_chunk(chunk,wanted,force)
+ assert(type(chunk)=="string" and #chunk<4*1024*1024,"Track-State fehlt oder ist zu gross.")
+ local depth,root,found,current=0,false,nil,0
+ local pos=1
+ local top,scoreFields,scoreExtra={},nil,""
+ while pos<=#chunk do
+  local stop=chunk:find("\n",pos,true) or #chunk+1
+  local line=chunk:sub(pos,stop-1):gsub("\r$","")
+  local text=line:match("^%s*(.-)%s*$")
+  if depth==1 then top[#top+1]={first=pos,last=math.min(stop,#chunk),text=text} end
+  if depth==1 and text:match("^SCORE%s") then
+   assert(not found,"Mehrdeutige SCORE-Zeilen im Track.")
+   local prefix,first,gap,clef,rest=line:match("^(%s*SCORE%s+)(%S+)(%s+)(%S+)(.*)$")
+   local a,b,extra
+   if rest then a,b,extra=rest:match("^%s+(%S+)%s+(%S+)(.*)$") end
+   current=tonumber(clef)
+   assert(first and tonumber(first) and tonumber(first)%1==0 and current and current%1==0 and current>=0 and current<=12
+    and finite(tonumber(a)) and finite(tonumber(b)),"Unbekanntes SCORE-Format.")
+   scoreFields={tonumber(first),current,tonumber(a),tonumber(b)};scoreExtra=extra or ""
+   found={first=pos+#prefix+#first+#gap,last=pos+#prefix+#first+#gap+#clef-1}
+  end
+  if text:sub(1,1)=="<" then
+   if depth==0 then assert(not root and (text=="<TRACK" or text:match("^<TRACK%s")),"Kein eindeutiger Track-State.");root=true end
+   depth=depth+1
+  elseif text==">" then depth=depth-1;assert(depth>=0,"Beschaedigter Track-State.")
+  elseif depth==0 then assert(text=="","Daten ausserhalb des Track-State.") end
+  pos=stop+1
+ end
+ assert(root and depth==0,"Unvollstaendiger Track-State.")
+ local info={top=top,fields=scoreFields or {0,0,0,0},extra=scoreExtra}
+ if wanted==nil or (wanted==current and not (force and not found)) then return chunk,current,info end
+ assert(wanted%1==0 and wanted>=0 and wanted<=12,"Ungueltiger Schluessel.")
+ if found then return chunk:sub(1,found.first-1)..wanted..chunk:sub(found.last+1),current,info end
+ local lineEnd=assert(chunk:find("\n",1,true),"Track-Kopf ohne Zeilenende.")
+ local nl=chunk:sub(lineEnd-1,lineEnd)=="\r\n" and "\r\n" or "\n"
+ return chunk:sub(1,lineEnd).."SCORE 0 "..wanted.." 0 0"..nl..chunk:sub(lineEnd+1),current,info
+end
+-- REAPER 7.84 moves SCORE into its canonical position and may add the
+-- default LANEREC line. Permit only those observed normalizations; compare
+-- every SCORE value and all remaining track bytes, including nested chunks.
+local function track_equivalent(expected,actual)
+ local _,_,a=track_clef_chunk(expected)
+ local _,_,b=track_clef_chunk(actual)
+ for i=1,4 do if a.fields[i]~=b.fields[i] then return false end end
+ if a.extra~=b.extra then return false end
+ local function stripped(chunk,info)
+  local result,pos={},1
+  for _,line in ipairs(info.top) do
+   if line.text:match("^SCORE%s") or line.text=="LANEREC -1 -1 -1 0" then
+    result[#result+1]=chunk:sub(pos,line.first-1);pos=line.last+1
+   end
+  end
+  result[#result+1]=chunk:sub(pos)
+  return table.concat(result)
+ end
+ return stripped(expected,a)==stripped(actual,b)
+end
+local steps={0,0,1,1,2,3,3,4,4,5,5,6}
+local function diatonic(p) return math.floor(p/12)*7+steps[p%12+1] end
+local staff={{37,45},{25,33},{31,39},{29,37}} -- E4/F5, G2/A3, F3/G4, D3/E4
+local function choose_clef(notes,current)
+ if current>=5 then return current end -- preserve octave/percussion/chart conventions
+ local costs={0,0,0,0}
+ local active,drums,low,high={},0,127,0
+ for _,n in ipairs(notes) do
+  if not n.muted then
+   if n.channel==9 then drums=drums+1 else
+    active[#active+1]=n;low=math.min(low,n.pitch);high=math.max(high,n.pitch)
+    local p=diatonic(n.pitch)
+    local weight=math.max(0.25,math.min(2,n.duration_qn))
+    for clef,range in ipairs(staff) do
+     local distance=math.max(range[1]-p,p-range[2],0)
+     local ledger=math.floor(distance/2)
+     costs[clef]=costs[clef]+weight*ledger*ledger
+    end
+   end
+  end
+ end
+ if #active==0 then return drums>0 and 10 or current end
+ -- Retain an existing piano staff only for clear simultaneous broad chords.
+ -- A single line, even with a large range, never creates a piano staff.
+ if current==0 and low<55 and high>67 then
+  for _,n in ipairs(active) do
+   local chord,lo,hi=0,127,0
+   for _,other in ipairs(active) do
+    if math.abs(n.start_qn-other.start_qn)<0.08 and math.min(n.duration_qn,other.duration_qn)>0.125 then
+     chord=chord+1;lo=math.min(lo,other.pitch);hi=math.max(hi,other.pitch)
+    end
+   end
+   if chord>=3 and lo<55 and hi>67 then return 0 end
+  end
+ end
+ local best=costs[2]<costs[1] and 2 or 1
+ if current==1 or current==2 then
+  if costs[current]<=costs[best]+0.5 then return current end
+ elseif current==3 or current==4 then
+  if costs[current]<=costs[best]*1.1+0.5 then return current end
+ end
+ return best
+end
+local function guid(object,take)
+ local ok,id
+ if take then ok,id=R.GetSetMediaItemTakeInfo_String(object,"GUID","",false)
+ else ok,id=R.GetSetMediaItemInfo_String(object,"GUID","",false) end
+ assert(ok and type(id)=="string" and id~="","MIDI-Identitaet fehlt.")
+ return id
+end
+local function track_inventory(track)
+ local byGUID={}
+ for i=0,R.CountTrackMediaItems(track)-1 do
+  local item=R.GetTrackMediaItem(track,i)
+  for j=0,R.CountTakes(item)-1 do
+   local take=R.GetTake(item,j)
+   local id=guid(take,true)
+   assert(not byGUID[id],"Doppelte Take-Identitaet.")
+   local raw
+   if R.TakeIsMIDI(take) then
+    local ok;ok,raw=R.MIDI_GetAllEvts(take);assert(ok and type(raw)=="string","Track-Inventar nicht lesbar.")
+   end
+   byGUID[id]={take=take,item=item,itemGUID=guid(item,false),raw=raw,
+    position=R.GetMediaItemInfo_Value(item,"D_POSITION"),length=R.GetMediaItemInfo_Value(item,"D_LENGTH"),
+    rate=R.GetMediaItemTakeInfo_Value(take,"D_PLAYRATE"),offset=R.GetMediaItemTakeInfo_Value(take,"D_STARTOFFS")}
+  end
+ end
+ return byGUID
+end
+local function read_track(track)
+ local ok,chunk=R.GetTrackStateChunk(track,"",false)
+ assert(ok and type(chunk)=="string","Track-State nicht lesbar.")
+ return chunk
+end
+local function prepare_clefs(rows)
+ local tracks,seen={},{}
+ for _,row in ipairs(rows) do
+  row.track=assert(R.GetMediaItem_Track(row.item),"Track fehlt.")
+  row.takeGUID=guid(row.take,true);row.itemGUID=guid(row.item,false)
+  local target=seen[row.track]
+  if not target then
+   local before=read_track(row.track)
+   local _,current=track_clef_chunk(before)
+   target={track=row.track,before=before,current=current,notes={},sources=track_inventory(row.track)}
+   tracks[#tracks+1]=target;seen[row.track]=target
+  end
+  for _,note in ipairs(row.notes) do target.notes[#target.notes+1]=note end
+ end
+ local changed=0
+ for _,target in ipairs(tracks) do
+  target.wanted=choose_clef(target.notes,target.current)
+  if target.wanted~=target.current then changed=changed+1 end
+ end
+ return tracks,changed
+end
+local function verify_tracks(tracks,rows,expected)
+ for _,target in ipairs(tracks) do
+  local now=track_inventory(target.track)
+  for id,before in pairs(target.sources) do
+   local after=now[id]
+   assert(after and after.itemGUID==before.itemGUID and after.position==before.position and after.length==before.length
+    and after.rate==before.rate and after.offset==before.offset,"Track-Items oder Takes wurden veraendert.")
+   assert(after.raw==((expected and expected[id]) or before.raw),"MIDI-Integritaetspruefung nach Schluesselwahl fehlgeschlagen.")
+   for _,row in ipairs(rows) do if row.takeGUID==id then row.take=after.take;row.item=after.item end end
+   now[id]=nil
+  end
+  assert(next(now)==nil,"Unerwarteter Take nach Schluesselwahl.")
+ end
+end
+local function zoom_value(rows,editor,percent)
+ percent=percent or tonumber(R.GetExtState("NativeNotationStudio","ZoomPercent")) or 100
+ assert(finite(percent) and percent>=50 and percent<=250,"Zoomfaktor muss zwischen 50 und 250 Prozent liegen.")
+ local measures={}
+ for _,row in ipairs(rows) do
+  local track=row.track or R.GetMediaItem_Track(row.item)
+  local counts=measures[track] or {};measures[track]=counts
+  for _,note in ipairs(row.notes) do
+   local bar=R.TimeMap_QNToMeasures(project,note.start_qn)
+   counts[bar]=(counts[bar] or 0)+1
+  end
+ end
+ local density=0
+ for _,counts in pairs(measures) do for _,count in pairs(counts) do density=math.max(density,count) end end
+ local base=density>=28 and 120 or density>=18 and 105 or density>=10 and 90 or 80
+ local pixels=base*percent/100
+ local unit=R.MIDIEditor_GetSetting_int(editor,"timebase_unit")
+ assert(unit==0 or unit==1,"Zoom-Zeitbasis wird nicht unterstuetzt.")
+ if unit==0 then
+  local bpm=R.TimeMap2_GetDividedBpmAtTime(project,R.GetCursorPositionEx(project))
+  assert(finite(bpm) and bpm>0,"Tempo fuer Zoom fehlt.")
+  pixels=pixels*bpm/60
+ end
+ return math.floor(pixels*1024+0.5),percent,base
+end
+local function apply_zoom(rows,editor,percent)
+ local value,factor,base=zoom_value(rows,editor,percent)
+ local before=R.MIDIEditor_GetSetting_int(editor,"pixels_per_timebase_unit")
+ assert(before>=0,"Aktueller Zoom konnte nicht gelesen werden.")
+ local ok,why=pcall(function()
+  assert(R.MIDIEditor_SetSetting_int(editor,"pixels_per_timebase_unit",value),"REAPER hat den Zoom nicht uebernommen.")
+  assert(R.MIDIEditor_GetSetting_int(editor,"pixels_per_timebase_unit")==value,"Zoom-Ruecklesepruefung fehlgeschlagen.")
+ end)
+ if not ok then
+  local restored=pcall(function()
+   assert(R.MIDIEditor_SetSetting_int(editor,"pixels_per_timebase_unit",before))
+   assert(R.MIDIEditor_GetSetting_int(editor,"pixels_per_timebase_unit")==before)
+  end)
+  error(tostring(why)..(restored and "" or " Vorheriger Zoom konnte nicht wiederhergestellt werden."))
+ end
+ return factor,base
+end
+local function zoom_dialog()
+ local rows,editor=selected(true)
+ local _,current=zoom_value(rows,editor)
+ local ok,value=R.GetUserInputs("Native Notation Studio - Zoom",1,"Zoomfaktor in Prozent (50-250):",tostring(current))
+ if not ok then return end
+ local factor=tonumber(value)
+ assert(factor,"Ungueltiger Zoomfaktor.")
+ apply_zoom(rows,editor,factor)
+ R.SetExtState("NativeNotationStudio","ZoomPercent",tostring(factor),true)
+end
+
+local function guard_visible(rows,editor)
+ local focused=R.MIDIEditor_GetActive()
+ assert(R.MIDIEditor_GetMode(editor)~=-1 and (not focused or focused==editor),"Editor wurde geschlossen oder gewechselt.")
+ local current={}
+ for i=0,65535 do
+  local take=R.MIDIEditor_EnumTakes(editor,i,false);if not take then break end
+  assert(R.ValidatePtr2(project,take,"MediaItem_Take*"),"Dargestellter Take ist nicht mehr gueltig.")
+  current[guid(take,true)]=true
+ end
+ for _,row in ipairs(rows) do assert(current[row.takeGUID],"Dargestellte Tracks wurden geaendert.");current[row.takeGUID]=nil end
+ assert(next(current)==nil,"Dargestellte Tracks wurden geaendert.")
+end
 local function prepare_view(editor)
  local section=assert(R.SectionFromUniqueID(32060),"MIDI-Aktionsbereich fehlt.")
  local mode,spacing
@@ -380,6 +637,8 @@ local function run()
  local rows,editor=selected()
  assert(#rows>0,"Keine dargestellten MIDI-Takes gefunden.")
  local show=prepare_view(editor)
+ local tracks,clefCount=prepare_clefs(rows)
+ zoom_value(rows,editor) -- Validate settings before any API request.
  local targets={}
  for _,row in ipairs(rows) do
   for _,note in ipairs(row.notes) do
@@ -405,12 +664,7 @@ local function run()
  local stamp=R.GetProjectStateChangeCount(project)
  local function complete(response)
  source_guard(rows,stamp)
- local focused=R.MIDIEditor_GetActive()
- assert(R.MIDIEditor_GetMode(editor)~=-1 and (not focused or focused==editor),"Editor wurde geschlossen oder gewechselt.")
- local current={}
- for i=0,65535 do local tk=R.MIDIEditor_EnumTakes(editor,i,false);if not tk then break end;current[tk]=true end
- for _,row in ipairs(rows) do assert(current[row.take],"Dargestellte Tracks wurden geaendert.");current[row.take]=nil end
- assert(next(current)==nil,"Dargestellte Tracks wurden geaendert.")
+ guard_visible(rows,editor)
  local plan=parse(response,targets)
  local edits,counts={},{}
  for i,t in ipairs(targets) do
@@ -438,16 +692,15 @@ local function run()
   local output,n=stream(now,unique)
   if n>0 then writes[#writes+1]={row=row,before=now,after=output};changed=changed+n end
  end
- if changed==0 then show();fail("Keine sicheren Anzeigeänderungen. Noteninventar: "..path);return end
+ if changed==0 and clefCount==0 then show();apply_zoom(rows,editor);fail("Keine sicheren Rhythmusaenderungen; Schluessel bereits passend, Zoom angewendet.");return end
  source_guard(rows,stamp)
- local focused=R.MIDIEditor_GetActive()
- assert(R.MIDIEditor_GetMode(editor)~=-1 and (not focused or focused==editor),"Editor wurde geschlossen oder gewechselt.")
- local current={}
- for i=0,65535 do local tk=R.MIDIEditor_EnumTakes(editor,i,false);if not tk then break end;current[tk]=true end
- for _,row in ipairs(rows) do assert(current[row.take],"Dargestellte Tracks wurden geaendert.");current[row.take]=nil end
- assert(next(current)==nil,"Dargestellte Tracks wurden geaendert.")
+ guard_visible(rows,editor)
+ for _,target in ipairs(tracks) do assert(read_track(target.track)==target.before,"Track-State wurde waehrend der Analyse geaendert.") end
  R.Undo_BeginBlock2(project)
  local attempted=0
+ local trackAttempts={}
+ local expected={}
+ for _,w in ipairs(writes) do expected[w.row.takeGUID]=w.after end
  local okWrite,why=pcall(function()
   for i,w in ipairs(writes) do
    attempted=i
@@ -457,9 +710,40 @@ local function run()
    local check,actual=R.MIDI_GetAllEvts(w.row.take)
    assert(check and actual==w.after,"Schreibprüfung fehlgeschlagen.")
   end
+  for _,target in ipairs(tracks) do
+   if target.wanted~=target.current then
+    local chunk=read_track(target.track)
+    local patched=track_clef_chunk(chunk,target.wanted)
+    trackAttempts[#trackAttempts+1]=target
+    assert(R.SetTrackStateChunk(target.track,patched,false),"Schluessel konnte nicht gesetzt werden.")
+    assert(track_equivalent(patched,read_track(target.track)),"Schluessel-Ruecklesepruefung fehlgeschlagen.")
+    verify_tracks(tracks,rows,expected)
+    guard_visible(rows,editor)
+   end
+  end
+  verify_tracks(tracks,rows,expected)
  end)
  if not okWrite then
   local errors={}
+  for i=#trackAttempts,1,-1 do
+   local target=trackAttempts[i]
+   local ok=pcall(function()
+    local original=track_clef_chunk(target.before,target.current,true)
+    assert(R.SetTrackStateChunk(target.track,original,false))
+    assert(track_equivalent(target.before,read_track(target.track)))
+   end)
+   if not ok then errors[#errors+1]="Track "..i end
+  end
+  -- Chunk setters can replace item/take pointers. Resolve stable GUIDs first.
+  for _,target in ipairs(tracks) do
+   local ok=pcall(function()
+    local inventory=track_inventory(target.track)
+    for _,row in ipairs(rows) do if row.track==target.track then
+     local found=assert(inventory[row.takeGUID]);row.take=found.take;row.item=found.item
+    end end
+   end)
+   if not ok then errors[#errors+1]="Take-Identitaet" end
+  end
   for i=attempted,1,-1 do
    local w=writes[i]
    local restored=pcall(function()
@@ -468,13 +752,16 @@ local function run()
    end)
    if not restored then errors[#errors+1]=tostring(i) end
   end
+  local verified=pcall(verify_tracks,tracks,rows)
+  if not verified then errors[#errors+1]="Integritaetspruefung" end
   if #errors>0 then why=tostring(why).."\nWiederherstellung fehlgeschlagen fuer Takes "..table.concat(errors,",")..". Bitte sofort REAPER Undo verwenden." end
  end
- R.Undo_EndBlock2(project,okWrite and "Native Notation Studio" or "Native Notation Studio: Rücknahme",4)
- for _,w in ipairs(writes) do R.UpdateItemInProject(w.row.item) end
+ R.Undo_EndBlock2(project,okWrite and "Native Notation Studio" or "Native Notation Studio: Rücknahme",clefCount>0 and 5 or 4)
+ for _,w in ipairs(writes) do if R.ValidatePtr2(project,w.row.item,"MediaItem*") then pcall(R.UpdateItemInProject,w.row.item) end end
  assert(okWrite,why)
  show()
- fail(changed.." Anzeigeänderungen geschrieben. REAPER Undo kann sie rückgängig machen.")
+ local zoomOK,zoomWhy=pcall(apply_zoom,rows,editor)
+ fail(changed.." Rhythmus-Anzeigeaenderungen, "..clefCount.." Track-Schluessel gesetzt. REAPER Undo kann sie rueckgaengig machen."..(zoomOK and (" Zoom "..tostring(zoomWhy).."%.") or " Zoom: "..tostring(zoomWhy)))
  end
  -- Prepared response is a deterministic test hook, never the normal UI path.
  local fixture=R.GetExtState("NativeNotationStudio","TestResponseFile")
@@ -485,7 +772,7 @@ local function run()
  end
 end
 local exports={parse=parse,stream=stream,decode_json=decode_json,response_text=response_text,
- json_string=json_string,transport_files=transport_files,selected=selected,run=run,source_guard=source_guard,call_openai=call_openai,check_loop_extent=check_loop_extent}
-if _G.NATIVE_NOTATION_TEST then return exports end
+ json_string=json_string,transport_files=transport_files,selected=selected,run=run,source_guard=source_guard,call_openai=call_openai,check_loop_extent=check_loop_extent,track_clef_chunk=track_clef_chunk,track_equivalent=track_equivalent,choose_clef=choose_clef,prepare_clefs=prepare_clefs,zoom_value=zoom_value,apply_zoom=apply_zoom,zoom_dialog=zoom_dialog}
+if _G.NATIVE_NOTATION_TEST or _G.NATIVE_NOTATION_MODULE then return exports end
 local ok,err=xpcall(run,debug.traceback)
 if not ok then fail(err) end

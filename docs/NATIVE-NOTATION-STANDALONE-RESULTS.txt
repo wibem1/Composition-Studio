@@ -5,22 +5,22 @@ PASS reject unsupported source pool
 PASS reject unsupported source rate
 PASS ordinary non-repeating loop-source item is supported
 PASS non-repeating seconds-based source is supported
-PASS preflight rejection note_read
 PASS preflight rejection offset_repetition
-PASS preflight rejection independent_tempo
 PASS preflight rejection unknown_length
-PASS preflight rejection negative_origin
-PASS preflight rejection bad_qn
-PASS preflight rejection count_read
-PASS preflight rejection infinite_length
 PASS preflight rejection second_pool
+PASS preflight rejection note_read
+PASS preflight rejection bad_qn
+PASS preflight rejection infinite_length
+PASS preflight rejection independent_tempo
+PASS preflight rejection negative_origin
+PASS preflight rejection count_read
+PASS bad source note zero_velocity
 PASS bad source note negative_duration
 PASS bad source note fractional_pitch
 PASS bad source note zero_duration
-PASS bad source note nan_tick
 PASS bad source note infinite_tick
 PASS bad source note invalid_channel
-PASS bad source note zero_velocity
+PASS bad source note nan_tick
 PASS valid conservative display plan
 PASS reject invalid DISPLAY 1
 PASS reject invalid DISPLAY 2
@@ -88,8 +88,73 @@ PASS corrupt source stream fails before API launch
 PASS cancelled oversized response is discarded and cleaned without an error
 PASS timeout no write
 PASS no valid interpretation leaves MIDI and undo unchanged
-PASS 90 standalone tests; no live API traffic
+PASS automatic clef high
+PASS automatic clef low
+PASS automatic clef central single line
+PASS automatic clef wide single line
+PASS preserve suitable/conventional clef alto
+PASS preserve suitable/conventional clef octave
+PASS preserve suitable/conventional clef chart
+PASS preserve suitable/conventional clef one_line
+PASS preserve suitable/conventional clef percussion
+PASS preserve suitable/conventional clef tenor
+PASS GM percussion receives percussion clef
+PASS muted outlier does not change treble clef
+PASS clear existing two-hand chord keeps piano staff
+PASS wide sequential melody never creates piano staff
+PASS same chord does not create piano staff from treble
+PASS empty or fully muted track keeps current clef
+PASS only top-level clef changes; other fields and nested data are byte-exact
+PASS default SCORE line can be inserted with CRLF preserved
+PASS reject ambiguous/unsupported track chunk extra_close
+PASS reject ambiguous/unsupported track chunk unknown
+PASS reject ambiguous/unsupported track chunk duplicate
+PASS reject ambiguous/unsupported track chunk bad_fields
+PASS reject ambiguous/unsupported track chunk wrong_root
+PASS reject ambiguous/unsupported track chunk unclosed
+PASS different visible tracks receive independent clefs with unchanged performance
+PASS clef still applies when AI offers no safe rhythm offsets
+PASS clef setter failure rolls back chunks and MIDI with recreated pointers
+PASS hidden take corruption is detected and rolled back
+PASS several visible takes on same track share one clef decision
+PASS zoom repeats are absolute and do not accumulate
+PASS stored zoom factor is respected
+PASS seconds timebase uses tempo conversion
+PASS dense bars get more horizontal space
+PASS zoom factor limit 0
+PASS zoom factor limit 49
+PASS zoom factor limit 251
+PASS zoom factor limit inf
+PASS zoom setting dialog persists factor and performs no API call
+PASS cancelled zoom dialog leaves view untouched
+PASS zoom readback failure restores original scale
+PASS clefs and rhythm share simulated Undo/Redo block with item and track flags
+PASS non-MIDI track change during analysis invalidates the whole result
+PASS zoom setter failure that changes the scale is restored
+PASS companion zoom action loads the actual main file in module mode with no AI
+PASS ordinary unique POOLEDEVTS identities are not shared pools
+PASS only documented native chunk normalization is accepted
+PASS rollback of an implicit default explicitly restores clef zero
+PASS pure zoom works for pooled/repeating/stretched sources without analysis or MIDI writes
+PASS 138 standalone tests; no live API traffic
 PASS real Unix wrapper: literal paths, header, request and exit 0
 PASS real Unix wrapper: literal paths, header, request and exit 22
 PASS real Unix wrapper: literal paths, header, request and exit 28
 PASS standalone offline suite; no external requests, no paid API calls
+
+=== Actual REAPER 7.84 Linux, isolated instance, prepared response (no API) ===
+START 7.84/linux-x86_64
+LOOP_SOURCE_FLAG 1.0
+LOOP_SOURCE_FLAG 1.0
+OPEN COMMAND SENT
+NATIVE EDITOR OPEN
+VISIBLE TAKES 2
+STATUS 4 Rhythmus-Anzeigeaenderungen, 2 Track-Schluessel gesetzt. REAPER Undo kann sie rueckgaengig machen. Zoom 100%.
+ZOOM 81920 UNIT 1
+CLEF TRACK 0 2
+CLEF TRACK 1 1
+PASS native two-track standalone flow, clefs, zoom and performance integrity
+PASS native absolute zoom 150 percent, repeated and reset
+PASS native standalone Undo
+PASS native standalone Redo
+ALL PASSED
