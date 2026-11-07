@@ -1,7 +1,7 @@
 -- @description Native Notation Studio - Notenansicht optimieren (offline)
 -- @version 0.1.0-test
 -- @author Klangwerke
--- @about No API, no MIDI note writing. Display quantization, minimize ties, spacing and safe optional horizontal zoom.
+-- @about No API, no MIDI note writing. Readable 1/8 display, 1/16 minimum, spacing, safe horizontal zoom.
 -- Vertical notation zoom and track clef editing excluded until validated.
 local R=reaper
 local function require_action(section,names)
@@ -33,8 +33,10 @@ local function run()
  local section=assert(R.SectionFromUniqueID(32060),'MIDI-Aktionsbereich nicht verfuegbar.')
  -- Resolve actions before changing anything. Do not call MIDI-data quantization.
  local notation=require_action(section,{'view: mode: musical notation','view: mode: notation','mode: notation'})
- local quant=require_action(section,{'notation: set display quantization to 1/16 (default)'})
- local minimum=require_action(section,{'notation: set minimum display quantization note length to 1/64 (default)','notation: set minimum display quantization note length to 1/64'})
+ -- Conservative, easily readable baseline. Unlike 1/64, 1/16 as the minimum
+ -- prevents rendering tiny ornaments/expressive fragments as packed 64ths.
+ local quant=require_action(section,{'notation: set display quantization to 1/8'})
+ local minimum=require_action(section,{'notation: set minimum display quantization note length to 1/16'})
  local proportional=require_action(section,{'notation: proportional (musical) note spacing'})
  -- Optional REAPER-native setting: reduce unnecessary ties in the score.
  -- Never toggle if the action state cannot be read reliably.
