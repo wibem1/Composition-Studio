@@ -73,9 +73,13 @@ local function run()
  if zoomOut and zoomIn then
   local systems=math.max(1,count)
   local targetHeight=math.min(145,math.max(65,(height-145)/systems))
-  local steps=math.max(0,math.min(13,math.floor((targetHeight-55)/11+0.5)))
-  for i=1,18 do if not R.MIDIEditor_OnCommand(editor,zoomOut) then break end end
-  for i=1,steps do if not R.MIDIEditor_OnCommand(editor,zoomIn) then break end end
+  -- Start at the native maximum instead of its minimum: the old 18x zoom-out
+  -- baseline shrank the notation excessively on REAPER 7.83.
+  -- As a heuristic, allow more room for a single instrument and less for
+  -- multiple displayed tracks. No MIDI or notation data is touched.
+  local reductions=math.max(1,math.min(11,math.floor((145-targetHeight)/13+0.5)+3))
+  for i=1,24 do if not R.MIDIEditor_OnCommand(editor,zoomIn) then break end end
+  for i=1,reductions do if not R.MIDIEditor_OnCommand(editor,zoomOut) then break end end
  end
 end
 local ok,why=xpcall(run,debug.traceback)
