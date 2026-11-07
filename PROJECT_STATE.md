@@ -1,3 +1,9 @@
+## 07.11.2026 – Musikalische Taktstruktur als isolierter, schreibfreier Baustein
+
+Nach dem unbrauchbaren Windows-Notenbild und dem Befund aus Issue #24 wurde ein erster isolierter Kern `Native-Notation-Musical-Analysis.lua` implementiert (Commit `aac189f24df976d530f4da4f7962bbb23c18e7ec`). Er nimmt bereits gelesene MIDI-Noten samt Taktgrenzen entgegen und gruppiert **nach Take und Takt**. Er erkennt benachbarte Einsaetze als moegliche Arpeggio-/Akkordgruppen (0,06 QN), erhaelt die Rohzeiten exakt, bestimmt Register und berechnet mehrere **unverbindliche** Rasterhypothesen (gerade und triolische Teilungen). Er schreibt weder MIDI noch SCORE-Information. Das zugehoerige Offline-Testskript `tests/test_native_notation_musical_analysis.lua` prueft drei Takt-/Take-Gruppen, gemeinsame Einsaetze, Ordnung, Register, Raster, Fehlereingaben und stumme Noten. Lokaler Aufruf mit `texlua` erfolgreich: `musical analysis: 10 checks passed`. Kein API-Aufruf, keine Kosten.
+
+**Abnahmegrenze:** Das Modul ist **noch nicht** in die produktive Standalone-Aktion eingebunden; die musikalische Stimmen-/Pausen-/Binderekonstruktion und eine sichtbar verbesserte Notenansicht sind **nicht** erreicht. Taktuebergreifende Phrasen, Notenaufteilung und Validierung gegen echte REAPER-Partituren bleiben offen. Naechster begrenzter Schritt: robuste Integration der nur lesenden Taktdiagnose in die KI-Auftragsvorbereitung und ein Test anhand einer realen problematischen Notenpassage, vor jedem notationsveraendernden Algorithmus. Die letzte bestehende Testfassung bleibt unveraendert; keine Freigabe.
+
 
 ## 07.11.2026 – Zweiter Windows-Praxisbefund: automatische Zoom-Korrektur nicht erfolgreich
 
