@@ -1,5 +1,12 @@
 # Projektstand – Composition-Studio
 
+## 07.11.2026 – Windows: API-Key-Ersteinrichtung mit DPAPI (nicht nativ abgenommen)
+
+Im Entwicklungsbranch implementiert: Fehlt die Umgebungsvariable `OPENAI_API_KEY` und gibt es noch keine verschlüsselt gespeicherte Zugangsinformation, öffnet die Standalone-Aktion unter Windows ein verdecktes Passwort-Eingabefenster. Die Eingabe wird direkt im PowerShell-Prozess über Windows-DPAPI (`ConvertFrom-SecureString`) für das aktuelle Benutzerkonto in `%APPDATA%\\NativeNotationStudio\\api-key.dpapi` gespeichert; Lua erhält den Klartext nicht. Weitere Starts entschlüsseln den Wert innerhalb des API-Transportprozesses. Vorhandene Umgebungsvariablen bleiben vorrangig. Auf macOS/Linux gilt vorerst das bisherige Umgebungsvariablenverfahren. Kein API-Key im GitHub-Repository, kein API-Aufruf für diesen Entwicklungsschritt.
+
+**Status:** Quellcodeänderung implementiert, aber noch **kein Windows-PowerShell-/REAPER-Praxistest**, keine Freigabe. Prüfung offen: Erststart, Abbrechen, Wiederstart, fehlender/ungültiger Schlüssel, Rechte- und Pfadfehler. Die separate 500-Noten-Grenze (Issue #23) bleibt unverändert; damit kann der Nutzer weiterhin bei umfangreichen Partituren vor dem KI-Aufruf abbrechen.
+
+
 ## 07.11.2026 – Automatische Track-Schluessel und absoluter Zoom; echter REAPER-Test bestanden
 
 **Auftrag umgesetzt:** `Native-Notation-Studio.lua` waehlt fuer jeden dargestellten Track anhand der Tonlagen/gewichteten Hilfslinien einen passenden Standardschluessel; keine Tracknamen-Heuristik. Hohe/tiefe Stimmen: Violin-/Bassschluessel. Geeignete bestehende Alt-/Tenor- und bewusst gesetzte Oktav-/Schlagzeug-/Chart-Konfigurationen werden beruecksichtigt. Einzelstimmen erzeugen kein Klaviersystem; ein bestehendes Doppelsystem bleibt nur bei klar breiten gleichzeitigen Akkorden erhalten. GM-Schlagzeug auf Kanal 10 wird erkannt. Manuelle Schluesselwechsel innerhalb der Partitur bleiben erhalten.
