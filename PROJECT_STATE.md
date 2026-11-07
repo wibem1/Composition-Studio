@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 07.11.2026 – Folgepruefung: normale MIDI-Items mit Loop-source-Option zulassen
+
+Die vorige Testfassung wies jedes gesetzte `B_LOOPSRC` ab. Das war zu streng: Die Option allein belegt keine tatsaechliche Wiederholung. Die Standalone-Aktion vergleicht jetzt Item-Ausdehnung und Quelllaenge (QN bzw. Sekunden) mit dem Quellursprung. Nicht wiederholte Items mit gesetzter Option werden zugelassen; tatsaechliche Wiederholungen, unklare Quelllaengen und Loop-Quellen mit eigenem Tempo werden weiterhin vollstaendig vor dem KI-Aufruf abgewiesen. Alle Pool-Verweise im Item werden geprueft, nicht nur der erste.
+
+Zusaetzlich werden der gesamte MIDI-Ereignispuffer, erfolgreiches Lesen jeder Note, endliche und positive Zeitwerte sowie Kanal-/Tonhoehen-/Velocity-Grenzen **vor einem API-Aufruf** geprueft. Keine stille Teilanalyse nach Lesefehlern. Der Prompt kennzeichnet stumme Noten. Ein abgebrochener Auftrag verwirft seine Antwort vor dem Einlesen; selbst eine uebergrosse Antwort fuehrt dann nicht zu einer unnoetigen Fehlermeldung. Regulaere Antwort-Lesefehler bereinigen die temporaeren Auftragsdateien.
+
+**Nachweis:** jetzt **90 Standalone-Tests** unter Lua 5.4 und zusaetzlich TeX-Lua/Lua 5.3 bestanden, dazu unveraendert drei echte Unix-Wrapperlaeufe mit lokalem Ersatzdienst. Neue Faelle: nicht wiederholte QN-/Sekundenquellen, Quellursprung/Startversatz, Null-/unendliche Quelllaenge, eigenes Quelltempo, zweiter Pool-Verweis, Noten-/Inventarlesefehler, ungueltige MIDI-Werte, beschaedigter Quellpuffer und abgebrochene uebergrosse Antwort samt Bereinigung. Keine Netzwerk-/KI-Anfrage, keine Gebuehren. [Aktuelles Pruefprotokoll](docs/NATIVE-NOTATION-STANDALONE-RESULTS.txt).
+
+**Einordnung unveraendert:** Testfassung mit Simulation, keine Produktionsfreigabe. Echte REAPER-Darstellung, Wiedergabe, Undo/Redo, Providerzugang und native Windows-/macOS-Abnahme stehen aus. Automatische Schluessel-/Stimmenzuweisung wird mangels hinreichend belegter sicherer Schnittstelle nicht vorgetaeuscht. Der dokumentierte einzelne Praxistest bleibt der naechste praktische Abnahmeschritt; keine zusaetzlichen Benutzertests. Aenderungen nur im vorgegebenen Entwicklungsbranch.
+
 ## 07.11.2026 – Eigenstaendiges Native Notation Studio: technisch simulierte Testfassung
 
 **Verbindliche Zielkorrektur des Nutzers:** Ein Knopfdruck soll die Notation der **aktuell im REAPER-MIDI-/Notationseditor dargestellten Tracks** verbessern, unabhaengig von markierten Einzelnoten. `Native-Notation-Studio.lua` erfasst deshalb alle vom Editor gemeldeten sichtbaren Takes (`MIDIEditor_EnumTakes(..., false)`) und deren vollstaendige Noteninhalte. Kein Arrangement-Auswahlersatz und keine Integration in Composition Studio.

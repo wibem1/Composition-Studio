@@ -1,8 +1,26 @@
 PASS complete standalone Lua 5.4 load
 PASS all displayed takes, all notes regardless selection
+PASS reject unsupported source loop
 PASS reject unsupported source pool
 PASS reject unsupported source rate
-PASS reject unsupported source loop
+PASS ordinary non-repeating loop-source item is supported
+PASS non-repeating seconds-based source is supported
+PASS preflight rejection note_read
+PASS preflight rejection offset_repetition
+PASS preflight rejection independent_tempo
+PASS preflight rejection unknown_length
+PASS preflight rejection negative_origin
+PASS preflight rejection bad_qn
+PASS preflight rejection count_read
+PASS preflight rejection infinite_length
+PASS preflight rejection second_pool
+PASS bad source note negative_duration
+PASS bad source note fractional_pitch
+PASS bad source note zero_duration
+PASS bad source note nan_tick
+PASS bad source note infinite_tick
+PASS bad source note invalid_channel
+PASS bad source note zero_velocity
 PASS valid conservative display plan
 PASS reject invalid DISPLAY 1
 PASS reject invalid DISPLAY 2
@@ -66,9 +84,11 @@ PASS gfx focus does not invalidate the captured MIDI editor
 PASS early or malformed completion marker keeps waiting safely
 PASS oversized response fails without writes
 PASS strict JSON rejects invalid UTF-8 and whitespace
+PASS corrupt source stream fails before API launch
+PASS cancelled oversized response is discarded and cleaned without an error
 PASS timeout no write
 PASS no valid interpretation leaves MIDI and undo unchanged
-PASS 70 standalone tests; no live API traffic
+PASS 90 standalone tests; no live API traffic
 PASS real Unix wrapper: literal paths, header, request and exit 0
 PASS real Unix wrapper: literal paths, header, request and exit 22
 PASS real Unix wrapper: literal paths, header, request and exit 28

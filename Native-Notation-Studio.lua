@@ -9,6 +9,33 @@ local project=R.EnumProjects(-1, "")
 local MAX_RESPONSE=1024*1024
 local function finite(n) return type(n)=="number" and n==n and math.abs(n)<math.huge end
 local function fail(message) R.ShowMessageBox(tostring(message),"Native Notation Studio",0) end
+-- A loop-source checkbox does not imply that the item actually repeats.
+local function check_loop_extent(item,take,chunk)
+ if R.GetMediaItemInfo_Value(item,"B_LOOPSRC")==0 then return end
+ local source=assert(R.GetMediaItemTake_Source(take),"MIDI-Quelle fehlt.")
+ local length,isQN=R.GetMediaSourceLength(source)
+ assert(finite(length) and length>0,"MIDI-Quelllaenge ist nicht eindeutig.")
+ local position=R.GetMediaItemInfo_Value(item,"D_POSITION")
+ local finish=position+R.GetMediaItemInfo_Value(item,"D_LENGTH")
+ local origin,first,last
+ if isQN then
+  assert(not chunk:match("IGNTEMPO%s+1%f[%D]"),"Loop-Quelle mit eigenem Tempo wird noch nicht unterstuetzt.")
+  origin=R.MIDI_GetProjQNFromPPQPos(take,0)
+  first=R.TimeMap2_timeToQN(project,position)
+  last=R.TimeMap2_timeToQN(project,finish)
+ else
+  origin=R.MIDI_GetProjTimeFromPPQPos(take,0)
+  first,last=position,finish
+ end
+ assert(finite(origin) and finite(first) and finite(last) and first>=origin-1e-7 and last<=origin+length+1e-7,
+  "Tatsaechlich geloopte MIDI-Items werden noch nicht unterstuetzt. Keine Teilbearbeitung.")
+end
+local function check_note(a,b,ch,pitch,velocity)
+ assert(finite(a) and finite(b) and b>a,"Ungueltige MIDI-Notenzeiten.")
+ for _,v in ipairs({ch,pitch,velocity}) do assert(finite(v) and v%1==0,"Ungueltiger MIDI-Notenwert.") end
+ assert(ch>=0 and ch<=15 and pitch>=0 and pitch<=127 and velocity>=1 and velocity<=127,"MIDI-Notenwert ausserhalb des Wertebereichs.")
+end
+local stream
 local function selected()
  local out={}
  local editor=assert(R.MIDIEditor_GetActive(),"Bitte den MIDI-/Notationseditor mit den gewuenschten Tracks oeffnen.")
@@ -23,21 +50,27 @@ local function selected()
   local item=R.GetMediaItemTake_Item(take)
   if take and R.TakeIsMIDI(take) then
    local ok,raw=R.MIDI_GetAllEvts(take)
-   assert(ok,"MIDI-Ereignisse konnten nicht gelesen werden.")
+   assert(ok and type(raw)=="string","MIDI-Ereignisse konnten nicht gelesen werden.")
+   stream(raw,{}) -- Reject a damaged event buffer before any paid request.
    assert(R.GetMediaItemTakeInfo_Value(take,"D_PLAYRATE")==1,"Take-Playrate ungleich 1 wird noch nicht unterstuetzt.")
    local chunkOK,chunk=R.GetItemStateChunk(item,"",false)
    assert(chunkOK,"Item-Quellschutz konnte nicht geprueft werden.")
-   local pool=chunk:match("POOLEDEVTS%s+{([^}]+)}")
-   assert(not pool or not pool:gsub("[0%-]",""):match("%w"),"Gepoolte MIDI-Quellen werden zum Schutz weiterer Items nicht bearbeitet.")
-   assert(R.GetMediaItemInfo_Value(item,"B_LOOPSRC")==0,"Geloopte MIDI-Items bitte zuerst entloopen; keine Aenderung.")
+   for pool in chunk:gmatch("POOLEDEVTS%s+{([^}]+)}") do
+    assert(not pool:gsub("[0%-]",""):match("%w"),"Gepoolte MIDI-Quellen werden zum Schutz weiterer Items nicht bearbeitet.")
+   end
+   check_loop_extent(item,take,chunk)
    local notes={}
-   local _,count=R.MIDI_CountEvts(take)
+   local counted,count=R.MIDI_CountEvts(take)
+   assert(counted and finite(count) and count>=0 and count%1==0,"MIDI-Noteninventar konnte nicht gelesen werden.")
    for j=0,count-1 do
-    local yes,sel,_,a,b,ch,pitch,velocity=R.MIDI_GetNote(take,j)
+    local yes,sel,muted,a,b,ch,pitch,velocity=R.MIDI_GetNote(take,j)
+    assert(yes,"MIDI-Note konnte nicht gelesen werden; keine Teilanalyse.")
+    check_note(a,b,ch,pitch,velocity)
     if yes then
      local start=R.MIDI_GetProjQNFromPPQPos(take,a)
      local finish=R.MIDI_GetProjQNFromPPQPos(take,b)
-     notes[#notes+1]={start_qn=start,duration_qn=finish-start,channel=ch,pitch=pitch,velocity=velocity,ppq=a,selected=sel}
+     assert(finite(start) and finite(finish) and finish>start,"Ungueltiger musikalischer Zeitbezug.")
+     notes[#notes+1]={start_qn=start,duration_qn=finish-start,channel=ch,pitch=pitch,velocity=velocity,ppq=a,selected=sel,muted=muted}
     end
    end
    out[#out+1]={item=item,take=take,raw=raw,notes=notes,
@@ -73,7 +106,7 @@ local function parse(reply,targets)
  end
  return plan
 end
-local function stream(raw,changes)
+stream=function(raw,changes)
  local events,ons,metadata,after={}, {}, {}, {}
  local pos,tick=1,0
  local prefix=string.char(255,15)
@@ -296,9 +329,10 @@ local function call_openai(prompt,complete)
    end
    local code=read_file(job.done,64)
    if code and tonumber(code:match("^%s*(%d+)%s*$")) then
-    local data=tonumber(code)==0 and read_file(job.output) or nil
+    if cancelled then cleanup(job);gfx.quit();return end
+    local readOK,data=pcall(function() return tonumber(code)==0 and read_file(job.output) or nil end)
     cleanup(job);gfx.quit()
-    if cancelled then return end
+    assert(readOK,data)
     assert(tonumber(code)==0,"KI-Transport fehlgeschlagen (Exitcode "..code..").")
     assert(data,"Keine Antwort vom KI-Dienst.")
     complete(response_text(data));return
@@ -361,7 +395,7 @@ local function run()
  for i,t in ipairs(targets) do
   local n=t.note
   local measure,bar,barend=R.TimeMap_QNToMeasures(project,n.start_qn)
-  lines[#lines+1]=string.format("Take %d | ",row_ids[t.row])..string.format("Takt %d | Taktgrenzen %.9f %.9f | ",measure+1,bar,barend)..string.format("ID %d | Start %.9f | Dauer %.9f | Ton %d | Kanal %d | Velocity %d",i,n.start_qn,n.duration_qn,n.pitch,n.channel,n.velocity)
+  lines[#lines+1]=string.format("Take %d | ",row_ids[t.row])..string.format("Takt %d | Taktgrenzen %.9f %.9f | ",measure+1,bar,barend)..string.format("ID %d | Start %.9f | Dauer %.9f | Ton %d | Kanal %d | Velocity %d | Stumm %s",i,n.start_qn,n.duration_qn,n.pitch,n.channel,n.velocity,tostring(n.muted))
  end
  local path=R.GetResourcePath().."/NativeNotationStudio-notes.txt"
  write_file(path,"NATIVE NOTATION STUDIO - Noteninventar\n"..table.concat(lines,"\n").."\n")
@@ -451,7 +485,7 @@ local function run()
  end
 end
 local exports={parse=parse,stream=stream,decode_json=decode_json,response_text=response_text,
- json_string=json_string,transport_files=transport_files,selected=selected,run=run,source_guard=source_guard,call_openai=call_openai}
+ json_string=json_string,transport_files=transport_files,selected=selected,run=run,source_guard=source_guard,call_openai=call_openai,check_loop_extent=check_loop_extent}
 if _G.NATIVE_NOTATION_TEST then return exports end
 local ok,err=xpcall(run,debug.traceback)
 if not ok then fail(err) end

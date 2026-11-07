@@ -34,16 +34,19 @@ local function harness(options)
  MIDIEditor_GetMode=function() return state.editorClosed and -1 or 0 end,
  MIDIEditor_EnumTakes=function(_,i,editable) assert(editable==false);return state.visible[i+1] end,
  GetMediaItemTake_Item=function(t) return t end,
+ GetMediaItemTake_Source=function(t) return t end,
+ GetMediaSourceLength=function() return o.sourceLength or 4,o.sourceSeconds~=true end,
+ MIDI_GetProjTimeFromPPQPos=function(_,p) return (o.origin or 0)+p/960 end,
  GetActiveTake=function(t) return t end,
  TakeIsMIDI=function() return true end,
- MIDI_CountEvts=function() return true,o.noteCount or #notes end,
- MIDI_GetNote=function(_,i) return table.unpack(notes[i%2+1]) end,
+ MIDI_CountEvts=function() return not o.countFail,o.noteCount or #notes end,
+ MIDI_GetNote=function(_,i) if o.noteFail then return false end;return table.unpack(o.badNote or notes[i%2+1]) end,
  MIDI_GetAllEvts=function(t) return true,state.streams[t] end,
- MIDI_GetProjQNFromPPQPos=function(_,p) return p/960 end,
+ MIDI_GetProjQNFromPPQPos=function(_,p) if o.badQN then return 0/0 end;return (o.origin or 0)+p/960 end,
  MIDI_GetPPQPosFromProjQN=function(_,q) return q*960 end,
  GetMediaItemInfo_Value=function(_,key) return ({D_POSITION=0,D_LENGTH=4,B_LOOPSRC=o.loop and 1 or 0})[key] end,
  GetMediaItemTakeInfo_Value=function(_,key) return ({D_PLAYRATE=o.rate or 1,D_STARTOFFS=0})[key] end,
- GetItemStateChunk=function() return true,o.pool and 'POOLEDEVTS {1234-1111}' or '<ITEM\n>' end,
+ GetItemStateChunk=function() return true,o.chunk or (o.pool and 'POOLEDEVTS {1234-1111}' or '<ITEM\n>') end,
  TimeMap2_timeToQN=function(_,v) return v end,
  TimeMap_QNToMeasures=function(_,q) return math.floor(q/4),math.floor(q/4)*4,math.floor(q/4)*4+4 end,
  GetProjectStateChangeCount=function() return state.stamp end,
@@ -97,7 +100,19 @@ test('complete standalone Lua 5.4 load',function() assert(type(api.run)=='functi
 test('all displayed takes, all notes regardless selection',function()
  local rows=api.selected();assert(#rows==2 and #rows[1].notes==2 and #rows[2].notes==2)
 end)
-for name,o in pairs({loop={loop=true},pool={pool=true},rate={rate=0.5}}) do test('reject unsupported source '..name,function() reject(function() harness(o).selected() end) end) end
+for name,o in pairs({loop={loop=true,sourceLength=2},pool={pool=true},rate={rate=0.5}}) do test('reject unsupported source '..name,function() reject(function() harness(o).selected() end) end) end
+test('ordinary non-repeating loop-source item is supported',function()
+ local a,s=harness({loop=true});a.run();assert(s.writes==2)
+end)
+test('non-repeating seconds-based source is supported',function()
+ local a,s=harness({loop=true,sourceSeconds=true});a.run();assert(s.writes==2)
+end)
+for name,opts in pairs({negative_origin={loop=true,origin=1},offset_repetition={loop=true,origin=-1},unknown_length={loop=true,sourceLength=0},infinite_length={loop=true,sourceLength=math.huge},independent_tempo={loop=true,chunk='IGNTEMPO 1 120 4 4'},second_pool={chunk='POOLEDEVTS {0000-0000}\nPOOLEDEVTS {1234-1111}'},note_read={noteFail=true},count_read={countFail=true},bad_qn={badQN=true}}) do
+ test('preflight rejection '..name,function() local a,s=harness(opts);reject(a.run);assert(s.writes==0 and not s.command) end)
+end
+for name,note in pairs({zero_duration={true,false,false,30,30,0,60,80},negative_duration={true,false,false,30,20,0,60,80},fractional_pitch={true,false,false,30,60,0,60.5,80},invalid_channel={true,false,false,30,60,16,60,80},nan_tick={true,false,false,0/0,60,0,60,80},infinite_tick={true,false,false,30,math.huge,0,60,80},zero_velocity={true,false,false,30,60,0,60,0}}) do
+ test('bad source note '..name,function() local a,s=harness({badNote=note});reject(a.run);assert(s.writes==0 and not s.command) end)
+end
 local targets={{row={start_qn=0,end_qn=4},note={start_qn=30/960,duration_qn=420/960}}}
 local good='DISPLAY|1|0|0.5|SICHER'
 test('valid conservative display plan',function() local p=api.parse(good,targets);assert(p[1].start==-30/960 and p[1].length==0.0625) end)
@@ -200,6 +215,14 @@ end)
 test('strict JSON rejects invalid UTF-8 and whitespace',function()
  reject(function() api.decode_json('"'..string.char(255)..'"') end)
  reject(function() api.decode_json('[1,\v2]') end)
+end)
+test('corrupt source stream fails before API launch',function()
+ local a,s=harness({live=true});s.streams[1]=fixture():sub(1,-3);reject(a.run);assert(s.writes==0 and not s.command)
+end)
+test('cancelled oversized response is discarded and cleaned without an error',function()
+ local a,s=harness({live=true});a.run();s.cancel=true;s.poll()
+ finish(a,s,'0',string.rep('X',1048577));assert(s.writes==0 and #s.messages==0)
+ for p in pairs(s.files) do assert(not p:find('NNS-',1,true)) end
 end)
 test('timeout no write',function() local a,s=harness({live=true});a.run();s.time=101;s.poll();assert(s.writes==0 and #s.messages>0 and #s.queue==0) end)
 test('no valid interpretation leaves MIDI and undo unchanged',function() local a,s=harness();s.files['/response.txt']='uncertain';a.run();assert(s.writes==0 and s.undo==0) end)
