@@ -1,8 +1,8 @@
 -- @description Native Notation Studio - Notenansicht optimieren (offline)
 -- @version 0.1.0-test
 -- @author Klangwerke
--- @about No API, no MIDI note writing. Readable 1/8 display, 1/16 minimum, spacing, safe horizontal zoom.
--- Automatic clef choice uses checked SCORE edits, undo and source verification. Vertical zoom pending.
+-- @about No API, no MIDI note writing. Display quantization, clefs, bounded horizontal/vertical zoom.
+-- Automatic clef choice uses checked SCORE edits, undo and source verification. Vertical zoom is heuristic.
 local R=reaper
 local function require_action(section,names)
  for i=0,19999 do
@@ -216,6 +216,44 @@ local function commit_clefs(targets,project)
  assert(ok,why)
 end
 
+-- REAPER does not expose notation staff height as a stable numeric setting.
+-- Apply a SMALL, bounded number of native vertical zoom commands, never a
+-- repeated 24-step reset. Remember the applied delta for this editor session.
+local function vertical_zoom(editor,section,takes)
+ local zoomIn=require_action(section,{'view: zoom in vertically'})
+ local zoomOut=require_action(section,{'view: zoom out vertically'})
+ local height=nil
+ if R.JS_Window_GetClientSize then
+  local ok,_,h=pcall(R.JS_Window_GetClientSize,editor)
+  if ok and finite(h) and h>=300 and h<=12000 then height=h end
+ end
+ -- Without reliable dimensions, preserve the user-selected vertical zoom.
+ if not height then return false end
+ local tracks={}
+ for _,take in ipairs(takes) do
+  local item=R.GetMediaItemTake_Item(take)
+  if item then tracks[R.GetMediaItem_Track(item)]=true end
+ end
+ local count=0
+ for _ in pairs(tracks) do count=count+1 end
+ count=math.max(count,1)
+ -- Space per staff determines whether a moderate enlargement is appropriate.
+ -- Existing UI layout cannot be measured; this deliberately favors small steps.
+ local perTrack=(height-160)/count
+ local target=perTrack>=280 and 4 or perTrack>=190 and 3 or perTrack>=135 and 2 or perTrack>=100 and 1 or 0
+ local key='VerticalZoom_'..tostring(editor):gsub('[^%w]','')..'_'..tostring(R.EnumProjects(-1,''))
+ local previous=tonumber(R.GetExtState('NativeNotationStudioOffline',key)) or 0
+ if previous<0 or previous>4 or previous%1~=0 then previous=0 end
+ local delta=target-previous
+ if delta==0 then return true end
+ local action=delta>0 and zoomIn or zoomOut
+ for i=1,math.abs(delta) do
+  R.MIDIEditor_OnCommand(editor,action)
+ end
+ R.SetExtState('NativeNotationStudioOffline',key,tostring(target),false)
+ return true
+end
+
 local function run()
  local project=R.EnumProjects(-1,'')
  local editor=assert(R.MIDIEditor_GetActive(),'Bitte den REAPER-MIDI-/Notationseditor oeffnen.')
@@ -241,6 +279,9 @@ local function run()
  local quant=require_action(section,{'notation: set display quantization to 1/8'})
  local minimum=require_action(section,{'notation: set minimum display quantization note length to 1/16'})
  local proportional=require_action(section,{'notation: proportional (musical) note spacing'})
+ -- Resolve vertical zoom actions before making any view or track changes.
+ local verticalIn=require_action(section,{'view: zoom in vertically'})
+ local verticalOut=require_action(section,{'view: zoom out vertically'})
  -- Optional REAPER-native setting: reduce unnecessary ties in the score.
  -- Never toggle if the action state cannot be read reliably.
  local minimizeTies=nil
@@ -295,7 +336,8 @@ local function run()
  local clefTargets=prepare_clef_targets(takes)
  -- The clef is a track-level notation setting; MIDI events remain byte-identical.
  commit_clefs(clefTargets,project)
- -- Vertical zoom remains excluded until its real notation behavior is known.
+ -- After the final staff configuration, enlarge the displayed notation.
+ vertical_zoom(editor,section,takes)
 end
 local ok,why=xpcall(run,debug.traceback)
 if not ok then R.ShowMessageBox(tostring(why),'Native Notation Studio - Offline',0) end
