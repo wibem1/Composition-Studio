@@ -2,8 +2,8 @@
 -- @version 0.1.0-test
 -- @author Klangwerke
 -- @about Independent REAPER action. No Composition Studio dependency.
--- This standalone test harness accepts DISPLAY rows from a prepared musical interpretation.
--- AI provider integration is not included in this first extraction.
+-- Experimental standalone action: OpenAI API or prepared DISPLAY rows.
+-- No release until runtime, transport and REAPER tests have passed.
 local R=reaper
 local function fail(message) R.ShowMessageBox(tostring(message),"Native Notation Studio",0) end
 local function selected()
@@ -137,7 +137,9 @@ local function call_openai(promptPath)
  local code=tonumber(result:match("^%s*(-?%d+)"))
  assert(code==0,"KI-Transport fehlgeschlagen (Exitcode "..tostring(code or "unbekannt")..").")
  local f=assert(io.open(output,"rb"),"Keine Antwort vom KI-Dienst.")
- local data=f:read("*a");f:close()
+ local data=f:read(1024*1024+1);f:close()
+ assert(#data<=1024*1024,"KI-Antwort ist zu gross; Vorgang abgebrochen.")
+ assert(not data:match('"error"%s*:'),"KI-Dienst meldet einen Fehler; keine MIDI-Aenderung.")
  -- Decode JSON string values without interpreting escaped text as JSON structure.
  local function strings(json)
   local out={}
