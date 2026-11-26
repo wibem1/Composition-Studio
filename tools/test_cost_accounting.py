@@ -21,6 +21,12 @@ def env(saved=None):
     r.globals().TEST_ROOT=scratch.name.replace("\\","/")
     r.globals().saved=r.table_from(saved or {})
     r.execute("""
+    -- Historical tariff fixtures must not change with the CI runner's date.
+    local real_date=os.date
+    os.date=function(format,...)
+     if format=="%Y-%m-%d" then return "2026-11-05" end
+     return real_date(format,...)
+    end
     provider="openai"; model="gpt-5.6-sol"; busy=false
     reaper={GetExtState=function(_,k) return saved[k] or "" end,
      SetExtState=function(_,k,v) saved[k]=v end,

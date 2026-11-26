@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 26.11.2026 – 1.5.0: Kompakt- und Studioansicht in Entwicklung
+
+**Kandidat:** `1.5-test1` auf [`feat/studio-mode-1.5.0`](https://github.com/wibem1/Composition-Studio/tree/feat/studio-mode-1.5.0). Basis `62f869672c32cbf52fa7fc2b56ced8f7f87f45a5`. `main` liefert weiterhin den veröffentlichten Stand 1.4.2.
+
+**Umgesetzt:** Über **Studioansicht** und **Kompaktansicht** dieselbe laufende Sitzung umschalten. Die Kompaktansicht verwendet die bisherige Fensterkennung und das native REAPER-Docking. Die helle Studioansicht ist frei skalierbar. Die zuletzt gewählte Ansicht und der normale Studio-Fensterrahmen bleiben gespeichert. Im Menü **…** lässt sich das Studiofenster über dem REAPER-Arbeitsbereich maximieren und auf seine vorige Größe zurücksetzen. Nach einem Neustart öffnet es im normalen Fensterrahmen. Chat, Entwurf, Job, Modell, Verlauf und Anwenden nutzen weiterhin dieselben Funktionen. Der bestehende Updateweg zeigt auf `main`. Der Kandidat enthält die Studio- und Offline-Artefakte aus dem modularen Generator.
+
+**Prüfstatus:** Am Code- und Teststand `cc79c4bbae4daddb8d23ac7a6c614518e0cd01cd` waren alle fünf GitHub-Prüfjobs grün. Der [vollständige Offline-Runner](https://github.com/wibem1/Composition-Studio/actions/runs/45832133200) bestand 21 Python-Suiten und drei Lua-Prüfskripte. Abgedeckt sind 112 Dear-ImGui-Layouts, beide Ansichtswechsel mit erhaltenem Entwurf und Vorschlag, Fensterwiederherstellung, Workflow, Modellauswahl, bytegenaue Artefakte und das Offline-Upgrade vom exakten 1.4.2-Stand mit bytegenauer Sicherung. [Lua-Syntax unter Linux und macOS](https://github.com/wibem1/Composition-Studio/actions/runs/45832122870) bestanden. Der native LilyPond-Compilerlauf ist mangels Compiler übersprungen. Native REAPER-Abnahme bleibt offen. Keine Freigabe.
+
+**Nächster Schritt:** Kandidaten nach bestandener GitHub-Regression in einer separaten REAPER-Testumgebung bei 150 % Skalierung prüfen. Kompaktansicht andocken, mit Entwurf und gespeichertem Vorschlag hin- und herschalten, Studiofenster verschieben und skalieren, maximieren und zurücksetzen sowie nach Neustart Ansicht und Fensterrahmen prüfen. Anwenden und Undo an einer Projektkopie gegenprüfen.
+
 ## 26.11.2026 – Neue Entwicklungsrichtung vereinbart (Planung)
 
 **Verbindlicher Plan:** [Entwicklungsplan ab 1.4.2](docs/DEVELOPMENT-ROADMAP.md). REAPER bleibt DAW; umschaltbarer heller Studiomodus, MIDI Pattern Studio mit hoher Priorität, eigenständige lokale KI-Modellverwaltung und spätere Spezial-Engines. Keine Laufzeitabhängigkeit von AI Music Studio. Vorhandene Modelle nur nach Prüfung weiterverwenden. Zielversionen 1.5.0 bis 1.11.0 sind Planung, nicht implementiert.

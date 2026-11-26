@@ -117,7 +117,8 @@ print('PASS saved 1.4.0 raw-guard proposal after item selection and fresh restar
 # Execute the actual UI loop with a scrolled-conversation stand-in; action must be outside it.
 ui=(ROOT/'src/ui/reaper.lua').read_text()
 status=ui[ui.index('local function draw_workflow_status()'):ui.index('local function draw_history()')]
-loop=ui[ui.index('local function loop()'):]
+window=ui[ui.index('local studio_window ='):ui.index('local function clipboard_set')]
+loop=ui[ui.index('local function loop()'):ui.rindex('\nend)()')]
 for state in ['ready','applied']:
     lua=LuaRuntime(unpack_returned_tuples=True)
     lua.globals().STATE=state
@@ -132,13 +133,13 @@ local push_font,pop_font=function()return false end,noop
 local draw_model_picker,draw_history,remember_closed,set_font_size,submit=noop,noop,noop,noop,noop
 local function text_context_menu(_,s)return s end
 local costs={amount=function()return "0"end}
-local reaper={ImGui_Begin=function()return true,true end,ImGui_GetContentRegionAvail=function()return 360,480 end,
+local reaper={GetExtState=function()return "" end,ImGui_Begin=function()return true,true end,ImGui_GetContentRegionAvail=function()return 360,480 end,
  ImGui_Button=function(_,label)buttons[#buttons+1]={label=label,inside=inside};return false end,
  ImGui_GetStyleVar=function()return 4,4 end,ImGui_GetFrameHeight=function()return 20 end,
  ImGui_BeginChild=function()inside=true;return true end,ImGui_EndChild=function()inside=false end,
  ImGui_BeginPopup=function()return false end,ImGui_InputTextMultiline=function()return false,""end,defer=noop}
 setmetatable(reaper,{__index=function()return function()return 0 end end})
-''' + status + loop + '\nreturn buttons')
+''' + window + status + loop + '\nreturn buttons')
     matches=[v for v in result.values() if v.label=='Änderungen anwenden']
     assert (len(matches)==1 and not matches[0].inside) if state=='ready' else not matches
 print('PASS actual UI result/apply control outside scrolling chat; already applied results have no apply button')
