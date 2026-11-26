@@ -18,7 +18,9 @@ assert(not translate('{"bpm":120,"tracks":[{"notes":[[0,1,155,80]]}]}'))
 
 -- Cost regression: a new user request must start with an empty per-order
 -- counter even when the controller is bypassed for JSON composition.
-local submit=assert(source:match("local function submit%(%)(.-)end\nlocal function wrap_text"))
+local submit_start=assert(source:find("local function submit()",1,true))
+local ui_start=assert(source:find("local function wrap_text",submit_start,true))
+local submit=source:sub(submit_start,ui_start-1)
 assert(submit:find("costs.begin()",1,true),"Direct JSON composition must reset order costs")
 
 -- Verify the experimental two-call workflow is connected to both new-composition entry paths.
