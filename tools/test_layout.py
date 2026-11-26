@@ -8,7 +8,7 @@ from lupa.lua54 import LuaRuntime
 from imgui_bundle import imgui
 
 source=(Path(sys.argv[1]) if len(sys.argv)>1 else Path(__file__).resolve().parents[1]/'Composition Studio.lua').read_text(encoding='utf-8')
-ui=source[source.index('local function wrap_text(s,limit)'):]
+ui=source[source.index('local function wrap_text(s,limit)'):source.rindex('\nend)()')]
 
 def case(width,height,font_size,state,mode,exercise_switch=False):
     context=imgui.create_context()

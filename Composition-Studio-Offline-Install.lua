@@ -3462,6 +3462,8 @@ local function poll_job()
  if stage=="summary" then add("KI",workflow_core.readable(text)); busy=false; return end
 end
 local function submit() local r=trim(input); if r=="" or busy then return end; input=""; info_visible=false; history_mode=false; costs.begin(); last_diag.communication_log=""; last_diag.composition_idea=""; add("Du",r); busy=true; begin_process(r) end
+-- Keep UI locals in their own function: the generated chunk has a 200-local limit.
+;(function()
 local function wrap_text(s,limit) limit=math.max(12,math.floor(limit or 40)); local out={}; for line in (tostring(s or "").."\n"):gmatch("(.-)\n") do while #line>limit do local cut=limit; local part=line:sub(1,limit); local sp=part:match("^.*()%s+"); if sp and sp>math.floor(limit*0.55) then cut=sp end; out[#out+1]=line:sub(1,cut):gsub("%s+$",""); line=line:sub(cut+1):gsub("^%s+","") end; out[#out+1]=line end; return table.concat(out,"\n"):gsub("\n$","") end
 -- One chat session, with separate native window identities for the two views.
 local studio_window = (function()
@@ -3744,6 +3746,7 @@ if theme_count>0 then reaper.ImGui_PopStyleColor(ctx,theme_count) end
 if open then reaper.defer(loop) elseif not restarting then remember_closed() end
 end
 loop()
+end)()
 ]====]
 local function complete_update(status,fresh)
  local rv=fresh and fresh:match("%-%- @version%s+([%w%.%-]+)") or nil
