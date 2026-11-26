@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 26.11.2026 – 1.5-test1 über Studio-Update bereitgestellt
+
+Der Projektinhaber hat die Bereitstellung als Testfassung über den gemeinsamen Updatekanal ausdrücklich bestätigt. [PR #25](https://github.com/wibem1/Composition-Studio/pull/25) wurde mit `abcd6eab2b524a510211aa59f1209e6ca23d3c2e` in `main` übernommen. Der tatsächliche Download des Updaters liefert `1.5-test1` und stimmt bytegenau mit dem geprüften Studio-Artefakt überein. Der Offline-Installer stimmt ebenfalls mit dem geprüften Artefakt überein. Der vorige [1.4.2-Stand](https://github.com/wibem1/Composition-Studio/tree/62f869672c32cbf52fa7fc2b56ced8f7f87f45a5) bleibt reproduzierbar.
+
+**Installation:** Studio-Menü → Update. Der Updater sichert beim Installieren die vorige Skriptdatei. Studio nach Abschluss erneut öffnen, sofern es nicht automatisch neu startet.
+
+**Nächster Schritt:** Native REAPER-Abnahme bei 150 % Windows-Skalierung. Die endgültige Freigabe von 1.5.0 bleibt offen.
+
 ## 26.11.2026 – 1.5.0: Kompakt- und Studioansicht in Entwicklung
 
 **Kandidat:** `1.5-test1` auf [`feat/studio-mode-1.5.0`](https://github.com/wibem1/Composition-Studio/tree/feat/studio-mode-1.5.0). Basis `62f869672c32cbf52fa7fc2b56ced8f7f87f45a5`. `main` liefert weiterhin den veröffentlichten Stand 1.4.2.
