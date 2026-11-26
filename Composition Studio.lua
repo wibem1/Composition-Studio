@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.4.2
+-- @version 1.5-test1
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.4.2"
+local VERSION="1.5-test1"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -3420,6 +3420,91 @@ local function poll_job()
 end
 local function submit() local r=trim(input); if r=="" or busy then return end; input=""; info_visible=false; history_mode=false; costs.begin(); last_diag.communication_log=""; last_diag.composition_idea=""; add("Du",r); busy=true; begin_process(r) end
 local function wrap_text(s,limit) limit=math.max(12,math.floor(limit or 40)); local out={}; for line in (tostring(s or "").."\n"):gmatch("(.-)\n") do while #line>limit do local cut=limit; local part=line:sub(1,limit); local sp=part:match("^.*()%s+"); if sp and sp>math.floor(limit*0.55) then cut=sp end; out[#out+1]=line:sub(1,cut):gsub("%s+$",""); line=line:sub(cut+1):gsub("^%s+","") end; out[#out+1]=line end; return table.concat(out,"\n"):gsub("\n$","") end
+-- One chat session, with separate native window identities for the two views.
+local studio_window = (function()
+ local mode_key, bounds_key = "InterfaceMode", "StudioWindowBoundsV1"
+ local view = {
+  mode = reaper.GetExtState(EXT_SECTION,mode_key)=="studio" and "studio" or "compact",
+  maximized = false,
+ }
+ local saved = reaper.GetExtState(EXT_SECTION,bounds_key)
+ local x,y,w,h = saved:match("^(-?%d+) (-?%d+) (%d+) (%d+)$")
+ if x and math.abs(tonumber(x))<=100000 and math.abs(tonumber(y))<=100000
+  and tonumber(w)>=1 and tonumber(w)<=10000 and tonumber(h)>=1 and tonumber(h)<=10000 then
+  view.bounds = {tonumber(x),tonumber(y),tonumber(w),tonumber(h)}
+ end
+ local restore = view.bounds~=nil
+ local palette = {
+  Text=0x18263AFF, TextDisabled=0x526477FF, WindowBg=0xF7F9FCFF,
+  ChildBg=0xFFFFFFFF, PopupBg=0xFFFFFFFF, Border=0xA8B6C6FF,
+  FrameBg=0xEDF2F8FF, FrameBgHovered=0xDDE9F5FF, FrameBgActive=0xCDDFF1FF,
+  TitleBg=0xDCE6F0FF, TitleBgActive=0xCFDEECFF, TitleBgCollapsed=0xDCE6F0FF,
+  Button=0xDCE8F5FF, ButtonHovered=0xC5DCF3FF, ButtonActive=0xA9C9E8FF,
+  Header=0xE1ECF7FF, HeaderHovered=0xC5DCF3FF, HeaderActive=0xA9C9E8FF,
+  Separator=0xA8B6C6FF, ScrollbarBg=0xEDF2F8FF, ScrollbarGrab=0x8EA4BAFF,
+  ScrollbarGrabHovered=0x718DA8FF, ScrollbarGrabActive=0x5D7C9AFF,
+  ResizeGrip=0x93AAC4C0, ResizeGripHovered=0x6489B4E0, ResizeGripActive=0x3F6795FF,
+  TextSelectedBg=0x86B6E5A0, NavHighlight=0x346CA5FF, NavCursor=0x346CA5FF,
+ }
+ function view.toggle()
+  view.mode = view.mode=="studio" and "compact" or "studio"
+  reaper.SetExtState(EXT_SECTION,mode_key,view.mode,true)
+ end
+ function view.toggle_maximize()
+  view.maximized = not view.maximized
+  restore = not view.maximized and view.bounds~=nil
+ end
+ function view.prepare()
+  if view.mode=="compact" then
+   reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver())
+   reaper.ImGui_SetNextWindowSizeConstraints(ctx,360,480,10000,10000)
+   return "Studio v"..VERSION.."###CompositionStudioMain",0,0
+  end
+  local viewport = reaper.ImGui_GetMainViewport(ctx)
+  local ax,ay = reaper.ImGui_Viewport_GetWorkPos(viewport)
+  local aw,ah = reaper.ImGui_Viewport_GetWorkSize(viewport)
+  local minimum_w,minimum_h = 460,480
+  view.can_maximize = aw>=minimum_w and ah>=minimum_h
+  if not view.can_maximize and view.maximized then view.toggle_maximize() end
+  local flags = reaper.ImGui_WindowFlags_NoDocking()
+  if view.maximized then
+   reaper.ImGui_SetNextWindowPos(ctx,ax,ay)
+   reaper.ImGui_SetNextWindowSize(ctx,aw,ah)
+   flags=flags|reaper.ImGui_WindowFlags_NoMove()|reaper.ImGui_WindowFlags_NoResize()
+  elseif restore then
+   local bx,by,bw,bh=table.unpack(view.bounds)
+   reaper.ImGui_SetNextWindowPos(ctx,bx,by)
+   reaper.ImGui_SetNextWindowSize(ctx,bw,bh)
+   restore=false
+  else
+   reaper.ImGui_SetNextWindowSize(ctx,math.min(960,math.max(minimum_w,aw)),math.min(760,math.max(minimum_h,ah)),reaper.ImGui_Cond_FirstUseEver())
+  end
+  reaper.ImGui_SetNextWindowSizeConstraints(ctx,minimum_w,minimum_h,10000,10000)
+  local count=0
+  for name,color in pairs(palette) do
+   local index=reaper["ImGui_Col_"..name]
+   if index then
+    reaper.ImGui_PushStyleColor(ctx,index(),color)
+    count=count+1
+   end
+  end
+  return "Composition Studio v"..VERSION.."###CompositionStudioWorkspace",flags,count
+ end
+ function view.remember_bounds()
+  if view.mode~="studio" or view.maximized then return end
+  local bx,by=reaper.ImGui_GetWindowPos(ctx)
+  local bw,bh=reaper.ImGui_GetWindowSize(ctx)
+  view.bounds={bx,by,bw,bh}
+  if reaper.ImGui_IsMouseDown(ctx,0) and open then return end
+  local geometry=("%d %d %d %d"):format(math.floor(bx),math.floor(by),math.floor(bw),math.floor(bh))
+  if geometry~=saved then
+   reaper.SetExtState(EXT_SECTION,bounds_key,geometry,true)
+   saved=geometry
+  end
+ end
+ return view
+end)()
+
 local function clipboard_set(s) if type(reaper.ImGui_SetClipboardText)=="function" then reaper.ImGui_SetClipboardText(ctx,s or "") end end
 local function clipboard_get() if type(reaper.ImGui_GetClipboardText)=="function" then return reaper.ImGui_GetClipboardText(ctx) or "" end return "" end
 local function text_context_menu(id,text,editable)
@@ -3530,12 +3615,23 @@ local function draw_history()
  if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project); workflow_adapter.history_error=false; workflow_adapter.load() end end
-local function loop() focused_or_last_notation_editor(); workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change(); reaper.ImGui_SetNextWindowSize(ctx,360,620,reaper.ImGui_Cond_FirstUseEver()); reaper.ImGui_SetNextWindowSizeConstraints(ctx,360,480,10000,10000); local visible; visible,open=reaper.ImGui_Begin(ctx,"Studio v"..VERSION.."###CompositionStudioMain",open); if visible then local pushed=push_font(); local items=selected_items(false); local tracks=selected_tracks(); reaper.ImGui_Text(ctx,"Studio"); reaper.ImGui_SameLine(ctx)
+local function loop() focused_or_last_notation_editor(); workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change()
+local is_studio=studio_window.mode=="studio"
+local title,window_flags,theme_count=studio_window.prepare()
+local visible
+visible,open=reaper.ImGui_Begin(ctx,title,open,window_flags)
+if visible then
+ studio_window.remember_bounds()
+ local pushed=push_font()
+ local items=selected_items(false)
+ local tracks=selected_tracks()
+ if reaper.ImGui_Button(ctx,studio_window.mode=="compact" and "Studioansicht" or "Kompaktansicht") then studio_window.toggle() end
+ reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
 reaper.ImGui_SameLine(ctx)
-if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
+if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if is_studio and reaper.ImGui_MenuItem(ctx,studio_window.maximized and "Fenstergröße wiederherstellen" or "Studiofenster maximieren",nil,false,studio_window.can_maximize) then studio_window.toggle_maximize() end; if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(composition_mode=="concept" and " ✓" or "")) then composition_mode="concept"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Konzeption + Komposition (2 KI-Aufrufe)." end
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 -- BEGIN WHOLE TRACK MENU
@@ -3601,6 +3697,7 @@ if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end
 pop_font(pushed)
 reaper.ImGui_End(ctx)
 end
+if theme_count>0 then reaper.ImGui_PopStyleColor(ctx,theme_count) end
 if open then reaper.defer(loop) elseif not restarting then remember_closed() end
 end
 loop()
