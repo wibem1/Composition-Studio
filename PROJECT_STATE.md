@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 26.11.2026 – Neue Entwicklungsrichtung vereinbart (Planung)
+
+**Verbindlicher Plan:** [Entwicklungsplan ab 1.4.2](docs/DEVELOPMENT-ROADMAP.md). REAPER bleibt DAW; umschaltbarer heller Studiomodus, MIDI Pattern Studio mit hoher Priorität, eigenständige lokale KI-Modellverwaltung und spätere Spezial-Engines. Keine Laufzeitabhängigkeit von AI Music Studio. Vorhandene Modelle nur nach Prüfung weiterverwenden. Zielversionen 1.5.0 bis 1.11.0 sind Planung, nicht implementiert.
+
+**Aktueller Stand:** 1.4.2 bleibt unverändert veröffentlichte Testfassung. Nutzer hat lokale API-Erreichbarkeit, DDSP-Status und Stimmenkatalog von AI Music Studio bestätigt; unabhängige Modellnutzung und Rendering noch ungeprüft. Keine Softwareänderung, kein Build, kein Release im Rahmen dieser Dokumentation.
+
+**Nächster Schritt:** 1.5.0 – Kompakt-/Studiomodus mit gemeinsamem Chat, heller Studioansicht und persistenter Fensterverwaltung auf separatem Entwicklungsbranch; bestehende Funktionen und Updateweg schützen. Danach Pattern Studio (1.6.0).
+
 ## 06.11.2026 – Testfreigabe 1.4.2 veröffentlicht: Spurplatzierung
 
 **Veröffentlichungsauftrag:** Nutzer fordert Veröffentlichung von PR #21. Alle fünf bisherigen CI-Jobs am Featurestand `0b381835429590a575d272b04d66170a78aa0d66` bestanden. Header und Laufzeit auf 1.4.2 synchronisiert, Artefakte neu erzeugt und exakte Installation aus dem veröffentlichten 1.4.1-Stand `b1eadfbc9589d5df4667562c02595826e1ddf503` mit Backup ergänzt. Vollständiger lokaler Release-Runner mit 21 Python-Suiten und drei Lua-Dateien bestanden, einschließlich exaktem Upgrade/Backup aus 1.4.1. Alle fünf CI-Jobs am finalen Kandidaten `0330065ae875ff4b08725417f90029a36f5b43d3` erfolgreich, einschließlich [vollständigem Runner](https://github.com/wibem1/Composition-Studio/actions/runs/42229077772). [PR #21](https://github.com/wibem1/Composition-Studio/pull/21) regulär gemergt: `b0368233bf4be23f5214dcf8266bdf3e9c4fcb33`. Studio und Offline-Installer auf main byteidentisch zum geprüften Kandidaten; tatsächlichen Update-Download ebenfalls bytegenau verifiziert.
