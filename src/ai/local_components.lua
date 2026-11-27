@@ -1,9 +1,6 @@
-local ai_component_manager=(function()
-local manager=(function()
 -- Local AI component discovery and MIDI-DDSP adapter.
 -- External worker is user-selected and is never installed, edited, or auto-downloaded here.
-mponent discovery and MIDI-DDSP adapter.
--- External worker is user-selected and is never installed, edited, or auto-downloaded here.
+local ai_component_manager=(function()
 local manager={open=false,job=nil,status="Python und Worker auswählen, dann Verbindung prüfen.",
  python=reaper.GetExtState(EXT_SECTION,"LocalDDSPPythonV1"),
  worker=reaper.GetExtState(EXT_SECTION,"LocalDDSPWorkerV1"),
@@ -196,13 +193,6 @@ local function draw_ai_components(ctx)
  if manager.output then reaper.ImGui_TextWrapped(ctx,"Renderdatei: "..manager.output.."\nMIDI-Item-Start: "..string.format("%.3f s",manager.output_position)) end
  reaper.ImGui_TextWrapped(ctx,"Prüfen und Rendern sind lokale CPU-Aufrufe. Fehlende Modellgewichte werden nicht automatisch geladen.")
 end
-
-manager.draw=draw_ai_components
-manager.open_window=open_ai_components
-manager.poll=poll_ai_components
-return manager
-end)()
-
 manager.draw=draw_ai_components
 manager.open_window=open_ai_components
 manager.poll=poll_ai_components
