@@ -203,6 +203,7 @@ do
   end
 
   return {parts=version_parts, is_newer=version_is_newer}
+
  end
  local version=create_version_module()
  version_parts,version_is_newer=version.parts,version.is_newer
@@ -3419,12 +3420,6 @@ local function poll_job()
  if stage=="summary" then add("KI",workflow_core.readable(text)); busy=false; return end
 end
 local function submit() local r=trim(input); if r=="" or busy then return end; input=""; info_visible=false; history_mode=false; costs.begin(); last_diag.communication_log=""; last_diag.composition_idea=""; add("Du",r); busy=true; begin_process(r) end
--- Local AI component discovery and MIDI-DDSP adapter.
--- External worker is user-selected and is never installed, edited, or auto-downloaded here.
-local ai_component_manager={open=false,job=nil,status="Python und Worker auswählen, dann Verbindung prüfen.",
- python=reaper.GetExtState(EXT_SECTION,"LocalDDSPPythonV1"),
- worker=reaper.GetExtState(EXT_SECTION,"LocalDDSPWorkerV1"),
- instrument=1,checked=false,weights=false,output=nil,output_position=0,cancel_requested=false}
 -- Local AI component discovery and MIDI-DDSP adapter.
 -- External worker is user-selected and is never installed, edited, or auto-downloaded here.
 local ai_component_manager={open=false,job=nil,status="Python und Worker auswählen, dann Verbindung prüfen.",
