@@ -2,9 +2,11 @@
 
 ## 27.11.2026 – Lokale KI-Integration 1.6-test3 (ENTWICKLUNGSFASSUNG)
 
-Branch: [feat/local-ai-manager-ddsp-1.6.0](https://github.com/wibem1/Composition-Studio/tree/feat/local-ai-manager-ddsp-1.6.0), Code-Commit `640f6102646f3da4a9f5609e59405ca18e5e9e1b`. Composition Studio startet Python und den manuell ausgewählten MIDI-DDSP-Worker direkt; AI Music Studio und sein Server werden nicht benötigt. MIDI-Originale bleiben unverändert. Ein bestätigtes WAV wird auf eine neue REAPER-Spur importiert. Fehlgeschlagene/abgebrochene Renderdateien werden entfernt. Die KI-Komponentenansicht exportiert auf ausdrücklichen Klick eine JSON-Diagnose über den REAPER-Dateidialog.
+[PR #26](https://github.com/wibem1/Composition-Studio/pull/26) wurde als Commit `71431658f1b4569e8c00381782dc8ca2226403cd` nach `main` übernommen; der Entwicklungsbranch [feat/local-ai-manager-ddsp-1.6.0](https://github.com/wibem1/Composition-Studio/tree/feat/local-ai-manager-ddsp-1.6.0) enthält den geprüften Code-Commit `640f6102646f3da4a9f5609e59405ca18e5e9e1b`. Composition Studio startet Python und den manuell ausgewählten MIDI-DDSP-Worker direkt; AI Music Studio und sein Server werden nicht benötigt. MIDI-Originale bleiben unverändert. Ein bestätigtes WAV wird auf eine neue REAPER-Spur importiert. Fehlgeschlagene/abgebrochene Renderdateien werden entfernt. Die KI-Komponentenansicht exportiert auf ausdrücklichen Klick eine JSON-Diagnose über den REAPER-Dateidialog.
 
-**Version:** 1.6-test3; Testkandidat, keine Freigabe.
+**Version:** 1.6-test3; als ausdrücklich gekennzeichnetes Testupdate über die eingebaute Updatefunktion auf `main` verfügbar. Keine endgültige 1.6.0-Freigabe.
+
+**Updateweg:** Der bestehende Updater lädt `Composition Studio.lua` von `main`; dieser Download enthält jetzt 1.6-test3. Installation in Composition Studio über **… → Update**.
 
 **Prüfungen am Code-Commit `640f6102646f3da4a9f5609e59405ca18e5e9e1b`:** [Local AI component regression #23](https://github.com/wibem1/Composition-Studio/actions/runs/45982948803) einschließlich Lua-Mocktest des Diagnoseexports, [Modular Studio regression #48](https://github.com/wibem1/Composition-Studio/actions/runs/45982948881), [Notation selection #114](https://github.com/wibem1/Composition-Studio/actions/runs/45982948950) und [Score workspace bridge #84](https://github.com/wibem1/Composition-Studio/actions/runs/45982948943) bestanden. Das belegt Offline-/CI-Verhalten, keinen echten PC-Render.
 
