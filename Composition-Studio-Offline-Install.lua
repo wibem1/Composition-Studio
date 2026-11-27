@@ -3463,6 +3463,7 @@ local function poll_job()
 end
 local function submit() local r=trim(input); if r=="" or busy then return end; input=""; info_visible=false; history_mode=false; costs.begin(); last_diag.communication_log=""; last_diag.composition_idea=""; add("Du",r); busy=true; begin_process(r) end
 local ai_component_manager=(function()
+local manager=(function()
 -- Local AI component discovery and MIDI-DDSP adapter.
 -- External worker is user-selected and is never installed, edited, or auto-downloaded here.
 mponent discovery and MIDI-DDSP adapter.
@@ -3659,6 +3660,12 @@ local function draw_ai_components(ctx)
  if manager.output then reaper.ImGui_TextWrapped(ctx,"Renderdatei: "..manager.output.."\nMIDI-Item-Start: "..string.format("%.3f s",manager.output_position)) end
  reaper.ImGui_TextWrapped(ctx,"Prüfen und Rendern sind lokale CPU-Aufrufe. Fehlende Modellgewichte werden nicht automatisch geladen.")
 end
+
+manager.draw=draw_ai_components
+manager.open_window=open_ai_components
+manager.poll=poll_ai_components
+return manager
+end)()
 
 manager.draw=draw_ai_components
 manager.open_window=open_ai_components
