@@ -1,5 +1,15 @@
 # Projektstand – Composition-Studio
 
+## 27.11.2026 – Lokale KI-Integration 1.6-test1 (ENTWICKLUNGSFASSUNG)
+
+Auf dem Branch [feat/local-ai-manager-ddsp-1.6.0](https://github.com/wibem1/Composition-Studio/tree/feat/local-ai-manager-ddsp-1.6.0) wird eine erste vertikale MIDI-DDSP-Anbindung umgesetzt. Pfade zu bestehendem Python und `midi_ddsp_worker.py` sind manuell wählbar; der direkte Worker-Check unterscheidet Paketimport von Modellgewichten. MIDI wird direkt an den lokalen Worker übergeben. Ein WAV-Import erfolgt nach Nutzerbestätigung auf einer neuen REAPER-Spur.
+
+**Versionsstand:** 1.6-test1, Entwicklungszweig; keine Releasefreigabe. AI Music Studio/Backend wird nicht gestartet oder verändert; es wird kein fremder Worker-Code kopiert. Fehlende Modellgewichte lösen keinen automatischen Download aus.
+
+**Prüfstatus:** Referenz-Worker-CLI und Datenformat im GitHub-Quellcode geprüft. Automatisierte GitHub-Prüfungen sind nach dem Commit auszuführen und hier nachzutragen. Echter Windows-/REAPER-Test, Audio-/Timingprüfung und Nutzerabnahme sind OFFEN. Vollständige Verwaltung eigener Installationen/Updates/Deinstallation ist ebenfalls offen.
+
+**Nächster Schritt:** GitHub-Regressionen auswerten, Kandidat auf Windows mit vorhandener DDSP-Umgebung testen und danach die Manager-Lücken gegenüber 1.6.0 schließen.
+
 ## 27.11.2026 – Prioritätskorrektur: lokale KI-Integration zuerst (PLANUNG)
 
 Projektinhaber entscheidet, den vorherigen Integrationsauftrag zuerst abzuschließen. [Roadmap und konkreter Auftrag](docs/DEVELOPMENT-ROADMAP.md), Plan-Commit `db38fae351b936b8a747ccb1426eefd3b8ec25ae`. Ziel 1.6.0: lokale Komponenten erkennen, eigenständig nutzen und verwalten; erste reale MIDI-DDSP-Inferenz ohne laufendes AI Music Studio nachweisen. Plugin-Datenbank nun 1.7.0, KI-Pluginsteuerung 1.8.0, Pattern Studio 1.9.0. Der unmittelbar folgende frühere Planungseintrag ist hinsichtlich der Priorität überholt.

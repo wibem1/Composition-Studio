@@ -212,7 +212,7 @@ if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
 reaper.ImGui_SameLine(ctx)
-if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if is_studio and reaper.ImGui_MenuItem(ctx,studio_window.maximized and "Fenstergröße wiederherstellen" or "Studiofenster maximieren",nil,false,studio_window.can_maximize) then studio_window.toggle_maximize() end; if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
+if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if is_studio and reaper.ImGui_MenuItem(ctx,studio_window.maximized and "Fenstergröße wiederherstellen" or "Studiofenster maximieren",nil,false,studio_window.can_maximize) then studio_window.toggle_maximize() end; if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"KI-Komponenten…") then open_ai_components() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(composition_mode=="concept" and " ✓" or "")) then composition_mode="concept"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Konzeption + Komposition (2 KI-Aufrufe)." end
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 -- BEGIN WHOLE TRACK MENU
@@ -277,6 +277,12 @@ reaper.ImGui_SameLine(ctx,0,gap)
 if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end
 pop_font(pushed)
 reaper.ImGui_End(ctx)
+end
+if ai_component_manager.open then
+ local visible,keep_open=reaper.ImGui_Begin(ctx,"KI-Komponenten###CompositionStudioAIComponents",ai_component_manager.open)
+ ai_component_manager.open=keep_open
+ if visible then draw_ai_components(ctx) end
+ reaper.ImGui_End(ctx)
 end
 if theme_count>0 then reaper.ImGui_PopStyleColor(ctx,theme_count) end
 if open then reaper.defer(loop) elseif not restarting then remember_closed() end

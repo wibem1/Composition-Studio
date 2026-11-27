@@ -42,7 +42,7 @@ end
 
 local fresh=[====[
 -- @description Composition Studio
--- @version 1.5-test1
+-- @version 1.6-test1
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -86,7 +86,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.5-test1"
+local VERSION="1.6-test1"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -3462,6 +3462,188 @@ local function poll_job()
  if stage=="summary" then add("KI",workflow_core.readable(text)); busy=false; return end
 end
 local function submit() local r=trim(input); if r=="" or busy then return end; input=""; info_visible=false; history_mode=false; costs.begin(); last_diag.communication_log=""; last_diag.composition_idea=""; add("Du",r); busy=true; begin_process(r) end
+-- Local AI component discovery and MIDI-DDSP adapter.
+-- External worker is user-selected and is never installed, edited, or auto-downloaded here.
+local ai_component_manager={open=false,job=nil,status="Python und Worker auswählen, dann Verbindung prüfen.",
+ python=reaper.GetExtState(EXT_SECTION,"LocalDDSPPythonV1"),
+ worker=reaper.GetExtState(EXT_SECTION,"LocalDDSPWorkerV1"),
+ instrument=1,checked=false,weights=false,output=nil,output_position=0,cancel_requested=false}
+local AI_DDSP_INSTRUMENTS={
+ {"Violine","violin"},{"Bratsche","viola"},{"Cello","cello"},{"Kontrabass","double-bass"},
+ {"Flöte","flute"},{"Oboe","oboe"},{"Klarinette","clarinet"},{"Saxophon","saxophone"},
+ {"Fagott","bassoon"},{"Trompete","trumpet"},{"Horn","horn"},{"Posaune","trombone"},{"Tuba","tuba"}
+}
+local function ai_component_choose(key,title,extension)
+ local ok,path=reaper.GetUserFileNameForRead("",title,extension)
+ if ok and path and path~="" then
+  ai_component_manager[key]=path
+  reaper.SetExtState(EXT_SECTION,key=="python" and "LocalDDSPPythonV1" or "LocalDDSPWorkerV1",path,true)
+  ai_component_manager.checked=false;ai_component_manager.weights=false
+  ai_component_manager.status="Pfad gespeichert. Bitte Verbindung prüfen."
+ end
+end
+local function ai_component_start(action,request_path,output_path)
+ if ai_component_manager.job then return false end
+ if not IS_WINDOWS then ai_component_manager.status="MIDI-DDSP-Worker wird in dieser Fassung nur unter Windows gestartet.";return false end
+ if ai_component_manager.python=="" or ai_component_manager.worker=="" then
+  ai_component_manager.status="Bitte Python.exe und midi_ddsp_worker.py auswählen.";return false
+ end
+ local stdout,stderr,exit,pid,script=temp_path(".ddsp.out"),temp_path(".ddsp.err"),temp_path(".ddsp.exit"),temp_path(".ddsp.pid"),temp_path(".ddsp.ps1")
+ local args='"'..ai_component_manager.worker..'" '..(action=="check" and "--check" or '"'..request_path..'"')
+ local lines={
+  "$ErrorActionPreference = 'Stop'",
+  "$p = Start-Process -FilePath "..ps_quote(ai_component_manager.python).." -ArgumentList "..ps_quote(args)..
+    " -PassThru -WindowStyle Hidden -RedirectStandardOutput "..ps_quote(stdout).." -RedirectStandardError "..ps_quote(stderr),
+  "[IO.File]::WriteAllText("..ps_quote(pid)..",[string]$p.Id)",
+  "if (-not $p.WaitForExit(900000)) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; [IO.File]::WriteAllText("..ps_quote(exit)..",'TIMEOUT') } else { $p.WaitForExit(); [IO.File]::WriteAllText("..ps_quote(exit)..",[string]$p.ExitCode) }",
+  "Remove-Item -LiteralPath "..ps_quote(script).." -ErrorAction SilentlyContinue"
+ }
+ local f=io.open(script,"wb")
+ if not f then ai_component_manager.status="PowerShell-Startdatei konnte nicht erstellt werden.";return false end
+ f:write("\239\187\191"..table.concat(lines,"\r\n"));f:close()
+ if not ps_launch(script,true) then os.remove(script);ai_component_manager.status="Der lokale MIDI-DDSP-Prozess konnte nicht gestartet werden.";return false end
+ ai_component_manager.job={action=action,request=request_path,output=output_path,stdout=stdout,stderr=stderr,exit=exit,pid=pid,script=script,deadline=reaper.time_precise()+905,cancelled=false}
+ ai_component_manager.status=action=="check" and "MIDI-DDSP-Umgebung wird geprüft …" or "MIDI-DDSP rendert die ausgewählte MIDI-Partie …"
+ return true
+end
+local function poll_ai_components()
+ local j=ai_component_manager.job;if not j then return end
+ local code=read_file(j.exit)
+ if not code and reaper.time_precise()<j.deadline then return end
+ ai_component_manager.job=nil
+ local stdout=read_file(j.stdout) or "";local stderr=read_file(j.stderr) or ""
+ local value=trim(code or "TIMEOUT")
+ if j.cancelled or ai_component_manager.cancel_requested then
+  ai_component_manager.status="MIDI-DDSP-Auftrag abgebrochen.";ai_component_manager.cancel_requested=false
+ elseif value=="0" then
+  if j.action=="check" then
+   ai_component_manager.checked=stdout:find('"ok"%s*:%s*true')~=nil
+   ai_component_manager.weights=stdout:find('"weights"%s*:%s*true')~=nil
+   if ai_component_manager.checked and ai_component_manager.weights then ai_component_manager.status="MIDI-DDSP einsatzbereit; Modellgewichte gefunden."
+   elseif ai_component_manager.checked then ai_component_manager.status="Python-Pakete importierbar, aber MIDI-DDSP-Modellgewichte fehlen. Es wird nichts automatisch heruntergeladen."
+   else ai_component_manager.status="Der Worker meldet keinen erfolgreichen Importtest. Diagnoseausgabe prüfen." end
+  elseif stdout:find('"done"%s*:%s*true') and j.output and read_file(j.output) then
+   ai_component_manager.output=j.output;ai_component_manager.output_position=j.position or 0
+   ai_component_manager.status="Audio fertig. Vor dem Import kannst du die Datei prüfen."
+  else ai_component_manager.status="Der Worker endete ohne gültige Audioausgabe. "..trim(stderr):sub(-500) end
+ else
+  ai_component_manager.checked=false;ai_component_manager.weights=false
+  local detail=trim(stderr);if detail=="" then detail=trim(stdout) end
+  if value=="TIMEOUT" then ai_component_manager.status="MIDI-DDSP nach 15 Minuten beendet (Zeitlimit)."
+  else ai_component_manager.status="MIDI-DDSP fehlgeschlagen ("..value.."): "..detail:sub(-500) end
+ end
+ for _,p in ipairs({j.stdout,j.stderr,j.exit,j.pid,j.request,j.script}) do if p and p~="" then os.remove(p) end end
+end
+local function ai_component_cancel()
+ local j=ai_component_manager.job;if not j then return end
+ local raw=read_file(j.pid);local pid=tonumber(trim(raw or ""))
+ if not pid then ai_component_manager.status="Abbruch wird vorbereitet; Prozesskennung noch nicht verfügbar.";return end
+ local script=temp_path(".ddsp-cancel.ps1");local f=io.open(script,"wb")
+ if not f then ai_component_manager.status="Abbruchskript konnte nicht erstellt werden.";return end
+ f:write("\239\187\191Stop-Process -Id "..math.floor(pid).." -Force -ErrorAction SilentlyContinue\r\nRemove-Item -LiteralPath "..ps_quote(script).." -ErrorAction SilentlyContinue\r\n");f:close()
+ if ps_launch(script,true) then j.cancelled=true;ai_component_manager.status="MIDI-DDSP wird abgebrochen …"
+ else ai_component_manager.status="Abbruch konnte nicht ausgelöst werden." end
+end
+local function ai_component_check()
+ ai_component_manager.checked=false;ai_component_manager.weights=false
+ ai_component_start("check")
+end
+local function ai_component_selected_notes()
+ local item=reaper.GetSelectedMediaItem(0,0)
+ local take=item and reaper.GetActiveTake(item) or nil
+ if not take then
+  local editor=reaper.MIDIEditor_GetActive()
+  take=editor and reaper.MIDIEditor_GetTake(editor) or nil
+  if take then item=reaper.GetMediaItemTake_Item(take) end
+ end
+ if not take or not item or not reaper.TakeIsMIDI(take) then return nil,nil,"Bitte ein MIDI-Item auswählen oder im MIDI-Editor öffnen." end
+ local ok,count=reaper.MIDI_CountEvts(take)
+ if not ok or not count or count<1 then return nil,nil,"Das MIDI-Item enthält keine Noten." end
+ local item_start=reaper.GetMediaItemInfo_Value(item,"D_POSITION")
+ local notes={}
+ for i=0,count-1 do
+  local good,_,muted,startppq,endppq,_,pitch,velocity=reaper.MIDI_GetNote(take,i)
+  if good and not muted then
+   local start=reaper.MIDI_GetProjTimeFromPPQPos(take,startppq)-item_start
+   local finish=reaper.MIDI_GetProjTimeFromPPQPos(take,endppq)-item_start
+   if finish>start then notes[#notes+1]=string.format('{"pitch":%d,"start":%.6f,"end":%.6f,"velocity":%d}',pitch,start,finish,velocity) end
+  end
+ end
+ if #notes==0 then return nil,nil,"Keine spielbaren MIDI-Noten gefunden." end
+ return notes,item_start,nil
+end
+local function ai_component_render()
+ if not ai_component_manager.checked then ai_component_manager.status="Zuerst die MIDI-DDSP-Umgebung prüfen.";return end
+ if not ai_component_manager.weights then ai_component_manager.status="MIDI-DDSP-Modelle fehlen. Der Worker wird nicht gestartet, damit er nichts ungefragt herunterlädt.";return end
+ local notes,position,err=ai_component_selected_notes()
+ if not notes then ai_component_manager.status=err;return end
+ local instrument=AI_DDSP_INSTRUMENTS[ai_component_manager.instrument][2]
+ local output=temp_path(".wav");local request=temp_path(".json")
+ local payload='{"notes":['..table.concat(notes,",")..'],"instrument":"'..instrument..'","out":"'..json_escape(output)..'","voices":4,"transpose":0}'
+ if not write_file(request,payload) then ai_component_manager.status="MIDI-Anfrage konnte nicht geschrieben werden.";return end
+ local started=ai_component_start("render",request,output)
+ if started then ai_component_manager.job.position=position else os.remove(request) end
+end
+local function ai_component_import()
+ local path=ai_component_manager.output
+ if not path or not read_file(path) then ai_component_manager.status="Die erzeugte WAV-Datei wurde nicht gefunden.";return end
+ local cursor=reaper.GetCursorPosition()
+ local selected={}
+ local n=reaper.CountTracks(0)
+ for i=0,n-1 do
+  local tr=reaper.GetTrack(0,i)
+  local was=reaper.GetMediaTrackInfo_Value(tr,"I_SELECTED")>0
+  selected[#selected+1]={track=tr,selected=was}
+  reaper.SetMediaTrackInfo_Value(tr,"I_SELECTED",0)
+ end
+ reaper.Undo_BeginBlock2(0)
+ local ok,err=xpcall(function()
+  local index=reaper.CountTracks(0);reaper.InsertTrackAtIndex(index,true)
+  local track=reaper.GetTrack(0,index)
+  assert(track,"Neue Audiospur konnte nicht angelegt werden.")
+  reaper.GetSetMediaTrackInfo_String(track,"P_NAME","MIDI-DDSP – "..AI_DDSP_INSTRUMENTS[ai_component_manager.instrument][1],true)
+  reaper.SetMediaTrackInfo_Value(track,"I_SELECTED",1)
+  reaper.SetEditCurPos(ai_component_manager.output_position,false,false)
+  reaper.InsertMedia(path,0)
+  assert(reaper.CountTrackMediaItems(track)>0,"REAPER hat die WAV-Datei nicht auf der neuen Spur eingefügt.")
+ end,function(e)return tostring(e) end)
+ reaper.SetEditCurPos(cursor,false,false)
+ if not ok then pcall(reaper.Undo_DoUndo2,0) end
+ for _,entry in ipairs(selected) do pcall(reaper.SetMediaTrackInfo_Value,entry.track,"I_SELECTED",entry.selected and 1 or 0) end
+ reaper.Undo_EndBlock2(0,ok and "MIDI-DDSP-Audio auf neuer Spur übernehmen" or "MIDI-DDSP-Import zurücknehmen",-1)
+ if ok then ai_component_manager.status="Audio auf neuer REAPER-Spur übernommen.";ai_component_manager.output=nil
+ else ai_component_manager.status="Import zurückgenommen: "..tostring(err) end
+end
+local function open_ai_components() ai_component_manager.open=true end
+local function draw_ai_components(ctx)
+ reaper.ImGui_Text(ctx,"Lokale Engine · MIDI-DDSP")
+ reaper.ImGui_TextWrapped(ctx,"Composition Studio ruft den ausgewählten Worker direkt auf. AI Music Studio muss nicht laufen; seine Dateien werden nicht geändert.")
+ if reaper.ImGui_Button(ctx,"Python.exe auswählen …",-1) then ai_component_choose("python","MIDI-DDSP Python auswählen","exe") end
+ reaper.ImGui_TextWrapped(ctx,ai_component_manager.python~="" and ai_component_manager.python or "Python: nicht ausgewählt")
+ if reaper.ImGui_Button(ctx,"midi_ddsp_worker.py auswählen …",-1) then ai_component_choose("worker","MIDI-DDSP Worker auswählen","py") end
+ reaper.ImGui_TextWrapped(ctx,ai_component_manager.worker~="" and ai_component_manager.worker or "Worker: nicht ausgewählt")
+ if reaper.ImGui_Button(ctx,"Umgebung prüfen",-1) and not ai_component_manager.job then ai_component_check() end
+ if ai_component_manager.job then
+  if reaper.ImGui_Button(ctx,"Auftrag abbrechen",-1) then ai_component_cancel() end
+ else
+  local inst=AI_DDSP_INSTRUMENTS[ai_component_manager.instrument]
+  if reaper.ImGui_Button(ctx,"Instrument: "..inst[1].." (weiter)",-1) then
+   ai_component_manager.instrument=ai_component_manager.instrument%#AI_DDSP_INSTRUMENTS+1
+  end
+  if reaper.ImGui_Button(ctx,"Ausgewähltes MIDI rendern",-1) then ai_component_render() end
+  if ai_component_manager.output and reaper.ImGui_Button(ctx,"WAV auf neuer REAPER-Spur übernehmen",-1) then ai_component_import() end
+ end
+ reaper.ImGui_Separator(ctx)
+ reaper.ImGui_TextWrapped(ctx,"Status: "..ai_component_manager.status)
+ if ai_component_manager.checked then
+  reaper.ImGui_TextWrapped(ctx,"Komponentenstatus: Python/Worker importierbar"..(ai_component_manager.weights and " · Gewichte vorhanden" or " · Gewichte fehlen"))
+ end
+ if ai_component_manager.output then reaper.ImGui_TextWrapped(ctx,"Renderdatei: "..ai_component_manager.output.."\nMIDI-Item-Start: "..string.format("%.3f s",ai_component_manager.output_position)) end
+ reaper.ImGui_TextWrapped(ctx,"Prüfen und Rendern sind lokale CPU-Aufrufe. Fehlende Modellgewichte werden nicht automatisch geladen.")
+end
+-- BEGIN MODULE EXPORTS
+return {ai_component_manager=ai_component_manager,draw_ai_components=draw_ai_components,open_ai_components=open_ai_components,poll_ai_components=poll_ai_components}
+
 -- Keep UI locals in their own function: the generated chunk has a 200-local limit.
 ;(function()
 local function wrap_text(s,limit) limit=math.max(12,math.floor(limit or 40)); local out={}; for line in (tostring(s or "").."\n"):gmatch("(.-)\n") do while #line>limit do local cut=limit; local part=line:sub(1,limit); local sp=part:match("^.*()%s+"); if sp and sp>math.floor(limit*0.55) then cut=sp end; out[#out+1]=line:sub(1,cut):gsub("%s+$",""); line=line:sub(cut+1):gsub("^%s+","") end; out[#out+1]=line end; return table.concat(out,"\n"):gsub("\n$","") end
@@ -3676,7 +3858,7 @@ if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
 reaper.ImGui_SameLine(ctx)
-if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if is_studio and reaper.ImGui_MenuItem(ctx,studio_window.maximized and "Fenstergröße wiederherstellen" or "Studiofenster maximieren",nil,false,studio_window.can_maximize) then studio_window.toggle_maximize() end; if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
+if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if is_studio and reaper.ImGui_MenuItem(ctx,studio_window.maximized and "Fenstergröße wiederherstellen" or "Studiofenster maximieren",nil,false,studio_window.can_maximize) then studio_window.toggle_maximize() end; if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"KI-Komponenten…") then open_ai_components() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(composition_mode=="concept" and " ✓" or "")) then composition_mode="concept"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Konzeption + Komposition (2 KI-Aufrufe)." end
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 -- BEGIN WHOLE TRACK MENU
@@ -3742,6 +3924,12 @@ if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end
 pop_font(pushed)
 reaper.ImGui_End(ctx)
 end
+if ai_component_manager.open then
+ local visible,keep_open=reaper.ImGui_Begin(ctx,"KI-Komponenten###CompositionStudioAIComponents",ai_component_manager.open)
+ ai_component_manager.open=keep_open
+ if visible then draw_ai_components(ctx) end
+ reaper.ImGui_End(ctx)
+end
 if theme_count>0 then reaper.ImGui_PopStyleColor(ctx,theme_count) end
 if open then reaper.defer(loop) elseif not restarting then remember_closed() end
 end
@@ -3794,8 +3982,8 @@ local function complete_update(status,fresh)
  end
  os.remove(rollback)
  update_status="Version "..rv.." wurde installiert. Bitte Composition Studio erneut öffnen."
- busy=false
- reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true)
+busy=false
+reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true)
 end
 
 local previous=SCRIPT_PATH~="" and read_file(SCRIPT_PATH) or nil

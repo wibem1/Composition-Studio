@@ -15,7 +15,7 @@ local VERSION=installed:match("%-%- @version%s+([%w%.%-]+)") or "0.0.0"
 local UPDATE_URL="https://raw.githubusercontent.com/wibem1/Composition-Studio/main/Composition%20Studio.lua"
 local open,busy,restarting=true,false,false
 local update_status="Update wird vorbereitet …"
-local function trim(s)return (s or ""):gsub("^%s+",""):gsub("%s+$","")end
+local function trim(s)return (s or ""):gsub("^%s+",""):gsub("%s+$")end
 local IS_WINDOWS=reaper.GetOS():match("Win")~=nil
 local function shell_quote(s)
  s=tostring(s)
