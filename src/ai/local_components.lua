@@ -168,7 +168,7 @@ local function ai_component_import()
  else manager.status="Import zurückgenommen: "..tostring(err) end
 end
 local function ai_component_export_diagnosis()
- local ok,path=reaper.GetUserFileNameForWrite("Composition-Studio-KI-Diagnose.json","KI-Komponentendiagnose speichern","json")
+ local ok,path=reaper.GetUserFileName(0,"KI-Komponentendiagnose speichern",".json","JSON-Diagnose|*.json")
  if not ok or not path or path=="" then return end
  local report={
   "{",
@@ -182,7 +182,7 @@ local function ai_component_export_diagnosis()
   '  "status": "'..json_escape(manager.status)..'"',
   "}"
  }
- if not write_file(path,table.concat(report,"\\n")) then
+ if not write_file(path,table.concat(report,"\n")) then
   manager.status="Diagnose konnte nicht gespeichert werden."
  else
   manager.status="Diagnose gespeichert: "..path

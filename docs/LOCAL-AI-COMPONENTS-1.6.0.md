@@ -1,4 +1,4 @@
-# Lokale KI-Komponenten und MIDI-DDSP – 1.6-Teststand 1.6-test2
+# Lokale KI-Komponenten und MIDI-DDSP – 1.6-Teststand 1.6-test3
 
 Stand: 27.11.2026 · Entwicklungsfassung, keine Freigabe.
 

@@ -1,5 +1,5 @@
 -- @description Composition Studio
--- @version 1.6-test2
+-- @version 1.6-test3
 -- @author Klangwerke
 -- @about Dockable AI chat, controlled REAPER actions and MIDI composition.
 
@@ -43,7 +43,7 @@ local workflow_core=create_workflow_core({["version"]="1.0.0",["format"]="Compos
 -- END SHARED WORKFLOW CORE
 
 local SCRIPT_NAME="Composition Studio"
-local VERSION="1.6-test2"
+local VERSION="1.6-test3"
 local EXT_SECTION="CompositionStudio"
 local COMPOSITION_ENGINE_NAME="Composition Engine"
 local COMPOSITION_ENGINE_VERSION="2.3.2"
@@ -3589,7 +3589,7 @@ local function ai_component_import()
  else manager.status="Import zurückgenommen: "..tostring(err) end
 end
 local function ai_component_export_diagnosis()
- local ok,path=reaper.GetUserFileNameForWrite("Composition-Studio-KI-Diagnose.json","KI-Komponentendiagnose speichern","json")
+ local ok,path=reaper.GetUserFileName(0,"KI-Komponentendiagnose speichern",".json","JSON-Diagnose|*.json")
  if not ok or not path or path=="" then return end
  local report={
   "{",
@@ -3603,7 +3603,7 @@ local function ai_component_export_diagnosis()
   '  "status": "'..json_escape(manager.status)..'"',
   "}"
  }
- if not write_file(path,table.concat(report,"\\n")) then
+ if not write_file(path,table.concat(report,"\n")) then
   manager.status="Diagnose konnte nicht gespeichert werden."
  else
   manager.status="Diagnose gespeichert: "..path

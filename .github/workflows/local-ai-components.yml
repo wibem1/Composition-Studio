@@ -21,5 +21,6 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y lua5.4
       - run: python tools/build_studio.py --check
       - run: python tools/test_modular_build.py
+      - run: python tools/test_local_ai_component.py
       - run: python tools/test_version_module.py
       - run: luac5.4 -p 'Composition Studio.lua'
