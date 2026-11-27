@@ -2070,17 +2070,11 @@
       "path": "src/ai/local_components.lua",
       "kind": "host",
       "exports": [
-        "ai_component_manager",
-        "draw_ai_components",
-        "open_ai_components",
-        "poll_ai_components"
+        "ai_component_manager"
       ],
       "parameters": [],
       "provides": [
-        "ai_component_manager",
-        "draw_ai_components",
-        "open_ai_components",
-        "poll_ai_components"
+        "ai_component_manager"
       ],
       "requires": [
         "EXT_SECTION",
@@ -2216,10 +2210,7 @@
         "whole_track",
         "workflow_adapter",
         "workflow_core",
-        "ai_component_manager",
-        "draw_ai_components",
-        "open_ai_components",
-        "poll_ai_components"
+        "ai_component_manager"
       ],
       "writes": [
         "chat_start",
