@@ -3491,6 +3491,14 @@ local function ai_component_start(action,request_path,output_path)
  if ai_component_manager.python=="" or ai_component_manager.worker=="" then
   ai_component_manager.status="Bitte Python.exe und midi_ddsp_worker.py auswählen.";return false
  end
+ local py_leaf=(ai_component_manager.python:gsub("\\","/"):match("([^/]+)$") or ""):lower()
+ local worker_leaf=(ai_component_manager.worker:gsub("\\","/"):match("([^/]+)$") or ""):lower()
+ if py_leaf~="python.exe" and py_leaf~="python3.exe" then
+  ai_component_manager.status="Nur python.exe oder python3.exe wird gestartet.";return false
+ end
+ if worker_leaf~="midi_ddsp_worker.py" then
+  ai_component_manager.status="Es wird ausschließlich midi_ddsp_worker.py gestartet.";return false
+ end
  local stdout,stderr,exit,pid,script=temp_path(".ddsp.out"),temp_path(".ddsp.err"),temp_path(".ddsp.exit"),temp_path(".ddsp.pid"),temp_path(".ddsp.ps1")
  local args='"'..ai_component_manager.worker..'" '..(action=="check" and "--check" or '"'..request_path..'"')
  local lines={
@@ -3986,8 +3994,8 @@ local function complete_update(status,fresh)
  end
  os.remove(rollback)
  update_status="Version "..rv.." wurde installiert. Bitte Composition Studio erneut öffnen."
-busy=false
-reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true)
+ busy=false
+ reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true)
 end
 
 local previous=SCRIPT_PATH~="" and read_file(SCRIPT_PATH) or nil
