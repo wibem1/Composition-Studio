@@ -80,6 +80,7 @@ local function poll_ai_components()
   if value=="TIMEOUT" then manager.status="MIDI-DDSP nach 15 Minuten beendet (Zeitlimit)."
   else manager.status="MIDI-DDSP fehlgeschlagen ("..value.."): "..detail:sub(-500) end
  end
+ if j.output and manager.output~=j.output then os.remove(j.output) end
  for _,p in ipairs({j.stdout,j.stderr,j.exit,j.pid,j.request,j.script}) do if p and p~="" then os.remove(p) end end
 end
 local function ai_component_cancel()
@@ -166,6 +167,27 @@ local function ai_component_import()
  if ok then manager.status="Audio auf neuer REAPER-Spur übernommen.";manager.output=nil
  else manager.status="Import zurückgenommen: "..tostring(err) end
 end
+local function ai_component_export_diagnosis()
+ local ok,path=reaper.GetUserFileNameForWrite("Composition-Studio-KI-Diagnose.json","KI-Komponentendiagnose speichern","json")
+ if not ok or not path or path=="" then return end
+ local report={
+  "{",
+  '  "schema": "composition-studio.local-ai/v1",',
+  '  "component": "MIDI-DDSP",',
+  '  "created_utc": "'..os.date("!%Y-%m-%dT%H:%M:%SZ")..'",',
+  '  "python": "'..json_escape(manager.python)..'",',
+  '  "worker": "'..json_escape(manager.worker)..'",',
+  '  "imports_ok": '..tostring(manager.checked)..',',
+  '  "weights_found": '..tostring(manager.weights)..',',
+  '  "status": "'..json_escape(manager.status)..'"',
+  "}"
+ }
+ if not write_file(path,table.concat(report,"\\n")) then
+  manager.status="Diagnose konnte nicht gespeichert werden."
+ else
+  manager.status="Diagnose gespeichert: "..path
+ end
+end
 local function open_ai_components() manager.open=true end
 local function draw_ai_components(ctx)
  reaper.ImGui_Text(ctx,"Lokale Engine · MIDI-DDSP")
@@ -185,6 +207,7 @@ local function draw_ai_components(ctx)
   if reaper.ImGui_Button(ctx,"Ausgewähltes MIDI rendern",-1) then ai_component_render() end
   if manager.output and reaper.ImGui_Button(ctx,"WAV auf neuer REAPER-Spur übernehmen",-1) then ai_component_import() end
  end
+ if not manager.job and reaper.ImGui_Button(ctx,"Diagnose exportieren",-1) then ai_component_export_diagnosis() end
  reaper.ImGui_Separator(ctx)
  reaper.ImGui_TextWrapped(ctx,"Status: "..manager.status)
  if manager.checked then

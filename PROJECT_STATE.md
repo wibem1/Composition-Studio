@@ -1,14 +1,14 @@
 # Projektstand – Composition-Studio
 
-## 27.11.2026 – Lokale KI-Integration 1.6-test1 (ENTWICKLUNGSFASSUNG)
+## 27.11.2026 – Lokale KI-Integration 1.6-test2 (ENTWICKLUNGSFASSUNG)
 
-Auf dem Branch [feat/local-ai-manager-ddsp-1.6.0](https://github.com/wibem1/Composition-Studio/tree/feat/local-ai-manager-ddsp-1.6.0) wird eine erste vertikale MIDI-DDSP-Anbindung umgesetzt. Pfade zu bestehendem Python und `midi_ddsp_worker.py` sind manuell wählbar; der direkte Worker-Check unterscheidet Paketimport von Modellgewichten. MIDI wird direkt an den lokalen Worker übergeben. Ein WAV-Import erfolgt nach Nutzerbestätigung auf einer neuen REAPER-Spur.
+Auf dem Branch [feat/local-ai-manager-ddsp-1.6.0](https://github.com/wibem1/Composition-Studio/tree/feat/local-ai-manager-ddsp-1.6.0) wird die MIDI-DDSP-Anbindung als Testfassung fortgeführt. Python und `midi_ddsp_worker.py` sind manuell auswählbar; der Worker wird direkt angesprochen, ohne AI Music Studio oder dessen Server. Die MIDI-Originalspur bleibt unangetastet; WAV-Import erfolgt nach Bestätigung auf neuer REAPER-Spur. Fehlgeschlagene oder abgebrochene Renderdateien werden beseitigt. Die Ansicht kann auf ausdrücklichen Nutzerklick eine JSON-Diagnose mit Pfaden und lokalen Prüfergebnissen exportieren.
 
-**Versionsstand:** 1.6-test1, Entwicklungszweig; keine Releasefreigabe. AI Music Studio/Backend wird nicht gestartet oder verändert; es wird kein fremder Worker-Code kopiert. Fehlende Modellgewichte lösen keinen automatischen Download aus.
+**Versionsstand:** 1.6-test2; Entwicklungsfassung, keine Freigabe.
 
-**Prüfstatus:** Referenz-Worker-CLI und Datenformat im GitHub-Quellcode geprüft. Am Code-Commit `170c87ce8563373e51b1d2e8121a58cb04d29c32` bestanden [Build-/Modul-/Versions-/Lua-Prüfungen](https://github.com/wibem1/Composition-Studio/actions/runs/45979473272), die vollständige Offline-Regression `tools/test_all.py` ([GitHub Actions](https://github.com/wibem1/Composition-Studio/actions/runs/45979473275)) sowie [Notation Selection](https://github.com/wibem1/Composition-Studio/actions/runs/45979473340) und [Score Workspace Bridge](https://github.com/wibem1/Composition-Studio/actions/runs/45979473155). Echter Windows-/REAPER-Test, Audio-/Timingprüfung und Nutzerabnahme sind OFFEN. Vollständige Verwaltung eigener Installationen/Updates/Deinstallation ist ebenfalls offen.
+**Prüfstatus:** GitHub-CI am Code-Commit `170c87ce8563373e51b1d2e8121a58cb04d29c32` bestand Build-/Modul-/Versions-/Lua-Prüfungen, die vollständige Offline-Regression `tools/test_all.py`, Notation Selection und Score Workspace Bridge (Run-Links in [Testdokumentation](docs/LOCAL-AI-COMPONENTS-1.6.0.md)). Für 1.6-test2 noch ausstehend: GitHub-CI nach dem Update, echter Windows-/REAPER-Render, Audio-/Timingprüfung, Abbruch-/Importgegenprobe und Nutzerabnahme. Vollständige Verwaltung eigener isolierter Installationen, Updates und Deinstallation sowie ein geprüfter Komponentenkatalog bleiben offen.
 
-**Nächster Schritt:** `1.6-test1` auf Windows mit der vorhandenen MIDI-DDSP-Umgebung in REAPER durch Diagnose, Render und WAV-Übernahme gegenprüfen.
+**Nächster Schritt:** 1.6-test2 in REAPER mit der vorhandenen Windows-DDSP-Umgebung prüfen; danach lizenzgeprüfte Installations-, Update- und Entfernungsabläufe eigener isolierter Komponenten ergänzen.
 
 ## 27.11.2026 – Prioritätskorrektur: lokale KI-Integration zuerst (PLANUNG)
 

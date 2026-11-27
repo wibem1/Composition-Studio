@@ -1,4 +1,4 @@
-# Lokale KI-Komponenten und MIDI-DDSP – 1.6-Teststand
+# Lokale KI-Komponenten und MIDI-DDSP – 1.6-Teststand 1.6-test2
 
 Stand: 27.11.2026 · Entwicklungsfassung, keine Freigabe.
 
@@ -25,5 +25,5 @@ Der Worker-Aufruf folgt der bestehenden CLI von AI Music Studio (`midi_ddsp_work
 
 - GitHub-Quellcodeprüfung: Worker-CLI, Check-Ausgabe (`ok`, `weights`), JSON-Notenformat, unterstützte Instrument-IDs und WAV-Ausgabe geprüft.
 - Automatisierte Modul-/Artefakt-, Versions-, vollständige Offline-Regression und Lua-Prüfungen: bestanden am Code-Commit `170c87ce8563373e51b1d2e8121a58cb04d29c32`; siehe [Local AI component regression](https://github.com/wibem1/Composition-Studio/actions/runs/45979473272) und [vollständiger Regressionstest](https://github.com/wibem1/Composition-Studio/actions/runs/45979473275).
-- Noch offen: echter Windows-REAPER-Importtest mit der installierten Umgebung, Audio-/Timing-Gegenprobe und Nutzerabnahme. Diese Entwicklungsversion ist deshalb keine funktionsbestätigte 1.6.0-Freigabe.
+- Noch offen: vollständige isolierte Installations-/Update-/Entfernungsverwaltung eigener Komponenten, geprüfter Katalog, Speicherbedarf und Lizenzpins. Echter Windows-REAPER-Importtest mit der installierten Umgebung, Audio-/Timing-Gegenprobe und Nutzerabnahme. Diese Entwicklungsversion ist deshalb keine funktionsbestätigte 1.6.0-Freigabe.
 - Die vollständige Verwaltung (Installation, Aktualisierung und Entfernung eigener isolierter Komponenten, Speicherbedarf und Katalog-/Lizenzpins) bleibt offen. Diese erste vertikale Integration erkennt und nutzt MIDI-DDSP, installiert oder verändert aber keine fremde Umgebung.
