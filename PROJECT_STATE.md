@@ -6,9 +6,9 @@ Auf dem Branch [feat/local-ai-manager-ddsp-1.6.0](https://github.com/wibem1/Comp
 
 **Versionsstand:** 1.6-test1, Entwicklungszweig; keine Releasefreigabe. AI Music Studio/Backend wird nicht gestartet oder verändert; es wird kein fremder Worker-Code kopiert. Fehlende Modellgewichte lösen keinen automatischen Download aus.
 
-**Prüfstatus:** Referenz-Worker-CLI und Datenformat im GitHub-Quellcode geprüft. Automatisierte GitHub-Prüfungen sind nach dem Commit auszuführen und hier nachzutragen. Echter Windows-/REAPER-Test, Audio-/Timingprüfung und Nutzerabnahme sind OFFEN. Vollständige Verwaltung eigener Installationen/Updates/Deinstallation ist ebenfalls offen.
+**Prüfstatus:** Referenz-Worker-CLI und Datenformat im GitHub-Quellcode geprüft. [Modul-/Artefaktprüfung, Versionsregression und Lua-Syntax](https://github.com/wibem1/Composition-Studio/actions/runs/45978868032) sowie [Linux-/macOS-Lua-Syntax und JSON-Brücke](https://github.com/wibem1/Composition-Studio/actions/runs/45978867997) bestanden am Commit `7847d7c12f12eeb61229b3d0bf0c4d39d181a301`. Echter Windows-/REAPER-Test, Audio-/Timingprüfung und Nutzerabnahme sind OFFEN. Vollständige Verwaltung eigener Installationen/Updates/Deinstallation ist ebenfalls offen.
 
-**Nächster Schritt:** GitHub-Regressionen auswerten, Kandidat auf Windows mit vorhandener DDSP-Umgebung testen und danach die Manager-Lücken gegenüber 1.6.0 schließen.
+**Nächster Schritt:** `1.6-test1` auf Windows mit der vorhandenen MIDI-DDSP-Umgebung in REAPER durch Diagnose, Render und WAV-Übernahme gegenprüfen.
 
 ## 27.11.2026 – Prioritätskorrektur: lokale KI-Integration zuerst (PLANUNG)
 

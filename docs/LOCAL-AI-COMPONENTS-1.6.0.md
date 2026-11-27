@@ -24,6 +24,6 @@ Der Worker-Aufruf folgt der bestehenden CLI von AI Music Studio (`midi_ddsp_work
 ## Prüfstatus und Grenzen
 
 - GitHub-Quellcodeprüfung: Worker-CLI, Check-Ausgabe (`ok`, `weights`), JSON-Notenformat, unterstützte Instrument-IDs und WAV-Ausgabe geprüft.
-- Automatisierte Quell-/Artefakt- und Lua-Prüfungen: laufen in GitHub Actions; Ergebnis wird nach dem Lauf in `PROJECT_STATE.md` ergänzt.
+- Automatisierte Modul-/Artefakt-, Versions- und Lua-Prüfungen: bestanden in [Local AI component regression](https://github.com/wibem1/Composition-Studio/actions/runs/45978868032) und [REAPER Lua syntax and JSON bridge](https://github.com/wibem1/Composition-Studio/actions/runs/45978867997) am Commit `7847d7c12f12eeb61229b3d0bf0c4d39d181a301`.
 - Noch offen: echter Windows-REAPER-Importtest mit der installierten Umgebung, Audio-/Timing-Gegenprobe und Nutzerabnahme. Diese Entwicklungsversion ist deshalb keine funktionsbestätigte 1.6.0-Freigabe.
 - Die vollständige Verwaltung (Installation, Aktualisierung und Entfernung eigener isolierter Komponenten, Speicherbedarf und Katalog-/Lizenzpins) bleibt offen. Diese erste vertikale Integration erkennt und nutzt MIDI-DDSP, installiert oder verändert aber keine fremde Umgebung.
