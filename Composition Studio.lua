@@ -3425,11 +3425,20 @@ local ai_component_manager={open=false,job=nil,status="Python und Worker auswäh
  python=reaper.GetExtState(EXT_SECTION,"LocalDDSPPythonV1"),
  worker=reaper.GetExtState(EXT_SECTION,"LocalDDSPWorkerV1"),
  instrument=1,checked=false,weights=false,output=nil,output_position=0,cancel_requested=false}
+-- Local AI component discovery and MIDI-DDSP adapter.
+-- External worker is user-selected and is never installed, edited, or auto-downloaded here.
+local ai_component_manager={open=false,job=nil,status="Python und Worker auswählen, dann Verbindung prüfen.",
+ python=reaper.GetExtState(EXT_SECTION,"LocalDDSPPythonV1"),
+ worker=reaper.GetExtState(EXT_SECTION,"LocalDDSPWorkerV1"),
+ instrument=1,checked=false,weights=false,output=nil,output_position=0,cancel_requested=false}
 local AI_DDSP_INSTRUMENTS={
  {"Violine","violin"},{"Bratsche","viola"},{"Cello","cello"},{"Kontrabass","double-bass"},
  {"Flöte","flute"},{"Oboe","oboe"},{"Klarinette","clarinet"},{"Saxophon","saxophone"},
  {"Fagott","bassoon"},{"Trompete","trumpet"},{"Horn","horn"},{"Posaune","trombone"},{"Tuba","tuba"}
 }
+local function ai_component_file_exists(path)
+ local f=io.open(path,"rb");if not f then return false end;f:close();return true
+end
 local function ai_component_choose(key,title,extension)
  local ok,path=reaper.GetUserFileNameForRead("",title,extension)
  if ok and path and path~="" then
@@ -3479,7 +3488,7 @@ local function poll_ai_components()
    if ai_component_manager.checked and ai_component_manager.weights then ai_component_manager.status="MIDI-DDSP einsatzbereit; Modellgewichte gefunden."
    elseif ai_component_manager.checked then ai_component_manager.status="Python-Pakete importierbar, aber MIDI-DDSP-Modellgewichte fehlen. Es wird nichts automatisch heruntergeladen."
    else ai_component_manager.status="Der Worker meldet keinen erfolgreichen Importtest. Diagnoseausgabe prüfen." end
-  elseif stdout:find('"done"%s*:%s*true') and j.output and read_file(j.output) then
+  elseif stdout:find('"done"%s*:%s*true') and j.output and ai_component_file_exists(j.output) then
    ai_component_manager.output=j.output;ai_component_manager.output_position=j.position or 0
    ai_component_manager.status="Audio fertig. Vor dem Import kannst du die Datei prüfen."
   else ai_component_manager.status="Der Worker endete ohne gültige Audioausgabe. "..trim(stderr):sub(-500) end
@@ -3543,7 +3552,7 @@ local function ai_component_render()
 end
 local function ai_component_import()
  local path=ai_component_manager.output
- if not path or not read_file(path) then ai_component_manager.status="Die erzeugte WAV-Datei wurde nicht gefunden.";return end
+ if not path or not ai_component_file_exists(path) then ai_component_manager.status="Die erzeugte WAV-Datei wurde nicht gefunden.";return end
  local cursor=reaper.GetCursorPosition()
  local selected={}
  local n=reaper.CountTracks(0)
@@ -3598,9 +3607,6 @@ local function draw_ai_components(ctx)
  if ai_component_manager.output then reaper.ImGui_TextWrapped(ctx,"Renderdatei: "..ai_component_manager.output.."\nMIDI-Item-Start: "..string.format("%.3f s",ai_component_manager.output_position)) end
  reaper.ImGui_TextWrapped(ctx,"Prüfen und Rendern sind lokale CPU-Aufrufe. Fehlende Modellgewichte werden nicht automatisch geladen.")
 end
--- BEGIN MODULE EXPORTS
-return {ai_component_manager=ai_component_manager,draw_ai_components=draw_ai_components,open_ai_components=open_ai_components,poll_ai_components=poll_ai_components}
-
 -- Keep UI locals in their own function: the generated chunk has a 200-local limit.
 ;(function()
 local function wrap_text(s,limit) limit=math.max(12,math.floor(limit or 40)); local out={}; for line in (tostring(s or "").."\n"):gmatch("(.-)\n") do while #line>limit do local cut=limit; local part=line:sub(1,limit); local sp=part:match("^.*()%s+"); if sp and sp>math.floor(limit*0.55) then cut=sp end; out[#out+1]=line:sub(1,cut):gsub("%s+$",""); line=line:sub(cut+1):gsub("^%s+","") end; out[#out+1]=line end; return table.concat(out,"\n"):gsub("\n$","") end

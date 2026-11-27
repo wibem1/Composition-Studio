@@ -9,6 +9,9 @@ local AI_DDSP_INSTRUMENTS={
  {"Flöte","flute"},{"Oboe","oboe"},{"Klarinette","clarinet"},{"Saxophon","saxophone"},
  {"Fagott","bassoon"},{"Trompete","trumpet"},{"Horn","horn"},{"Posaune","trombone"},{"Tuba","tuba"}
 }
+local function ai_component_file_exists(path)
+ local f=io.open(path,"rb");if not f then return false end;f:close();return true
+end
 local function ai_component_choose(key,title,extension)
  local ok,path=reaper.GetUserFileNameForRead("",title,extension)
  if ok and path and path~="" then
@@ -58,7 +61,7 @@ local function poll_ai_components()
    if ai_component_manager.checked and ai_component_manager.weights then ai_component_manager.status="MIDI-DDSP einsatzbereit; Modellgewichte gefunden."
    elseif ai_component_manager.checked then ai_component_manager.status="Python-Pakete importierbar, aber MIDI-DDSP-Modellgewichte fehlen. Es wird nichts automatisch heruntergeladen."
    else ai_component_manager.status="Der Worker meldet keinen erfolgreichen Importtest. Diagnoseausgabe prüfen." end
-  elseif stdout:find('"done"%s*:%s*true') and j.output and read_file(j.output) then
+  elseif stdout:find('"done"%s*:%s*true') and j.output and ai_component_file_exists(j.output) then
    ai_component_manager.output=j.output;ai_component_manager.output_position=j.position or 0
    ai_component_manager.status="Audio fertig. Vor dem Import kannst du die Datei prüfen."
   else ai_component_manager.status="Der Worker endete ohne gültige Audioausgabe. "..trim(stderr):sub(-500) end
@@ -122,7 +125,7 @@ local function ai_component_render()
 end
 local function ai_component_import()
  local path=ai_component_manager.output
- if not path or not read_file(path) then ai_component_manager.status="Die erzeugte WAV-Datei wurde nicht gefunden.";return end
+ if not path or not ai_component_file_exists(path) then ai_component_manager.status="Die erzeugte WAV-Datei wurde nicht gefunden.";return end
  local cursor=reaper.GetCursorPosition()
  local selected={}
  local n=reaper.CountTracks(0)
