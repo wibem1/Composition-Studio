@@ -1,6 +1,8 @@
 # Lokale KI-Komponenten und MIDI-DDSP – 1.6-Teststand · 1.6-test3
 
-Stand: 27.11.2026 · Entwicklungsfassung, keine Freigabe.
+Stand: 27.11.2026 · 1.6-test3 als Testupdate über die eingebaute Updatefunktion auf `main` verfügbar; keine endgültige 1.6.0-Freigabe.
+
+In Composition Studio **… → Update** wählen. Der bestehende Updater lädt den geprüften Kandidaten aus `main`.
 
 ## Umsetzung in diesem Testkandidaten
 
