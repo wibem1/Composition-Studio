@@ -34,7 +34,6 @@ do
   end
 
   return {parts=version_parts, is_newer=version_is_newer}
-
  end
  local version=create_version_module()
  version_parts,version_is_newer=version.parts,version.is_newer
@@ -247,7 +246,6 @@ do
   end
 
   return {parts=version_parts, is_newer=version_is_newer}
-
  end
  local version=create_version_module()
  version_parts,version_is_newer=version.parts,version.is_newer
