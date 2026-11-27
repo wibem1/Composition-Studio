@@ -3567,10 +3567,14 @@ local function ai_component_import()
   reaper.InsertMedia(path,0)
   assert(reaper.CountTrackMediaItems(track)>0,"REAPER hat die WAV-Datei nicht auf der neuen Spur eingefügt.")
  end,function(e)return tostring(e) end)
+ if not ok then
+  reaper.Undo_EndBlock2(0,"MIDI-DDSP-Import zurücknehmen",-1)
+  pcall(reaper.Undo_DoUndo2,0)
+ else
+  reaper.Undo_EndBlock2(0,"MIDI-DDSP-Audio auf neuer Spur übernehmen",-1)
+ end
  reaper.SetEditCurPos(cursor,false,false)
- if not ok then pcall(reaper.Undo_DoUndo2,0) end
  for _,entry in ipairs(selected) do pcall(reaper.SetMediaTrackInfo_Value,entry.track,"I_SELECTED",entry.selected and 1 or 0) end
- reaper.Undo_EndBlock2(0,ok and "MIDI-DDSP-Audio auf neuer Spur übernehmen" or "MIDI-DDSP-Import zurücknehmen",-1)
  if ok then ai_component_manager.status="Audio auf neuer REAPER-Spur übernommen.";ai_component_manager.output=nil
  else ai_component_manager.status="Import zurückgenommen: "..tostring(err) end
 end
