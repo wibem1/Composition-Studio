@@ -25,7 +25,7 @@ for unit in manifest['units']:
         previous = subprocess.check_output(['git', 'show', '31b5849af27b67dab488bda72c07c9a2d83e3166:' + unit['path']], cwd=ROOT, text=True)
         legacy_runtime = legacy_runtime.replace(inline(unit), previous, 1)
 for unit in manifest['units']:
-    if unit['id'] in ('music/model', 'music/memory', 'workflow/music_workspace', 'music/whole_track', 'workflow/whole_track', 'diagnostics/partial_response'):
+    if unit['id'] in ('music/model', 'music/memory', 'workflow/music_workspace', 'music/whole_track', 'workflow/whole_track', 'diagnostics/partial_response', 'ai/local_components'):
         legacy_runtime = legacy_runtime.replace(inline(unit), '', 1)
 # Compact transport is checked separately for exact event/operation preservation.
 legacy_runtime = re.sub(r'-- BEGIN COMPACT MUSIC ([A-Z]+)\n.*?-- END COMPACT MUSIC \1\n', '', legacy_runtime, flags=re.S)

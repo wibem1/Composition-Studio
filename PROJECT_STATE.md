@@ -1,5 +1,17 @@
 # Projektstand – Composition-Studio
 
+## 27.11.2026 – Lokale KI-Integration 1.6-test3 (ENTWICKLUNGSFASSUNG)
+
+Branch: [feat/local-ai-manager-ddsp-1.6.0](https://github.com/wibem1/Composition-Studio/tree/feat/local-ai-manager-ddsp-1.6.0), Code-Commit `640f6102646f3da4a9f5609e59405ca18e5e9e1b`. Composition Studio startet Python und den manuell ausgewählten MIDI-DDSP-Worker direkt; AI Music Studio und sein Server werden nicht benötigt. MIDI-Originale bleiben unverändert. Ein bestätigtes WAV wird auf eine neue REAPER-Spur importiert. Fehlgeschlagene/abgebrochene Renderdateien werden entfernt. Die KI-Komponentenansicht exportiert auf ausdrücklichen Klick eine JSON-Diagnose über den REAPER-Dateidialog.
+
+**Version:** 1.6-test3; Testkandidat, keine Freigabe.
+
+**Prüfungen am Code-Commit `640f6102646f3da4a9f5609e59405ca18e5e9e1b`:** [Local AI component regression #23](https://github.com/wibem1/Composition-Studio/actions/runs/45982948803) einschließlich Lua-Mocktest des Diagnoseexports, [Modular Studio regression #48](https://github.com/wibem1/Composition-Studio/actions/runs/45982948881), [Notation selection #114](https://github.com/wibem1/Composition-Studio/actions/runs/45982948950) und [Score workspace bridge #84](https://github.com/wibem1/Composition-Studio/actions/runs/45982948943) bestanden. Das belegt Offline-/CI-Verhalten, keinen echten PC-Render.
+
+**Noch offen:** Windows-/REAPER-Diagnose mit den installierten Pfaden, MIDI-DDSP-Inferenz, hörbare Audio-/Timingkontrolle, WAV-Import und Nutzerabnahme. Außerdem vollständige Verwaltung eigener isolierter Komponenten (Katalog mit Lizenz-/Versionspins, Installieren, Aktualisieren, Entfernen, Speicherbedarf und Rückfall). 1.6.0 ist daher nicht freigabefähig.
+
+**Nächster Schritt:** 1.6-test3 in REAPER mit der installierten Windows-DDSP-Umgebung prüfen. Erst mit dessen Diagnose können kompatible Installations-/Updatepfade für eigene Komponenten abschließend festgelegt werden.
+
 ## 27.11.2026 – Prioritätskorrektur: lokale KI-Integration zuerst (PLANUNG)
 
 Projektinhaber entscheidet, den vorherigen Integrationsauftrag zuerst abzuschließen. [Roadmap und konkreter Auftrag](docs/DEVELOPMENT-ROADMAP.md), Plan-Commit `db38fae351b936b8a747ccb1426eefd3b8ec25ae`. Ziel 1.6.0: lokale Komponenten erkennen, eigenständig nutzen und verwalten; erste reale MIDI-DDSP-Inferenz ohne laufendes AI Music Studio nachweisen. Plugin-Datenbank nun 1.7.0, KI-Pluginsteuerung 1.8.0, Pattern Studio 1.9.0. Der unmittelbar folgende frühere Planungseintrag ist hinsichtlich der Priorität überholt.
