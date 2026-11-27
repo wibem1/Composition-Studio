@@ -1,5 +1,13 @@
 # Projektstand – Composition-Studio
 
+## 27.11.2026 – Plugin-Datenbank als neue Entwicklungspriorität (PLANUNG)
+
+Der Projektinhaber hat die universelle Plugin-Parameter-Datenbank für Composition Studio bestätigt. [Aktualisierter Entwicklungsplan und Implementierungsauftrag](docs/DEVELOPMENT-ROADMAP.md), Plan-Commit `5dd2ae2d295b1f7d80058bfe1945db3498f6eb9d`. Ziel 1.6.0: installierte Plugins inventarisieren, geladene Instanzen lesend analysieren, persistenten durchsuchbaren Katalog mit Diagnoseexport und Studio-Integration entwickeln. Ziel 1.7.0: kontrollierte KI-Steuerung und Handbuchintegration. MIDI Pattern Studio folgt als 1.8.0; weitere bisherige Ziele bleiben im Plan erhalten.
+
+**Belegter Ausgangspunkt:** 1.5-test1 auf main über Update verfügbar; native REAPER-Abnahme bei 150 % Windows-Skalierung und endgültige 1.5.0-Freigabe offen. Diese Dokumentationsänderung implementiert keinen Scanner, verändert keinen Softwarecode und veröffentlicht keine neue Version.
+
+**Nächster konkreter Schritt:** Neuen Entwicklungsbranch vom aktuellen main erstellen und das erste lesende Scanner-/Datenbankpaket gemäß Roadmap implementieren und prüfen. Bestehende Update-/Chatfunktionen schützen; keine kostenpflichtigen KI-Aufrufe oder automatische Pluginänderungen. Native Gegenprobe separat dokumentieren.
+
 ## 26.11.2026 – 1.5-test1 über Studio-Update bereitgestellt
 
 Der Projektinhaber hat die Bereitstellung als Testfassung über den gemeinsamen Updatekanal ausdrücklich bestätigt. [PR #25](https://github.com/wibem1/Composition-Studio/pull/25) wurde mit `abcd6eab2b524a510211aa59f1209e6ca23d3c2e` in `main` übernommen. Der tatsächliche Download des Updaters liefert `1.5-test1` und stimmt bytegenau mit dem geprüften Studio-Artefakt überein. Der Offline-Installer stimmt ebenfalls mit dem geprüften Artefakt überein. Der vorige [1.4.2-Stand](https://github.com/wibem1/Composition-Studio/tree/62f869672c32cbf52fa7fc2b56ced8f7f87f45a5) bleibt reproduzierbar.
