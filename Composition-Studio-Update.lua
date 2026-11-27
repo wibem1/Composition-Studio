@@ -219,7 +219,7 @@ local function tick()
   gfx.quit();message("Update abgebrochen. Die Studio-Datei wurde nicht verändert.");return
  end
  gfx.set(0.12,0.12,0.12,1);gfx.rect(0,0,gfx.w,gfx.h,1)
- gfx.set(1,1,1,1);gfx.x=14;gfx.y=16;gfx.drawstr(update_status)
+ gfx.set(1,1,1,1,1);gfx.x=14;gfx.y=16;gfx.drawstr(update_status)
  gfx.y=45;gfx.x=14;gfx.drawstr("Download und Datei werden vor der Installation geprüft.")
  gfx.update()
  poll_update()

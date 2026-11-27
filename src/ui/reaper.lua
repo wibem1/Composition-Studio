@@ -196,7 +196,7 @@ local function draw_history()
  if info_visible then reaper.ImGui_TextWrapped(ctx,info_text()); return end; local flags=0; if type(reaper.ImGui_InputTextFlags_ReadOnly)=="function" then flags=flags|reaper.ImGui_InputTextFlags_ReadOnly() end; if type(reaper.ImGui_InputTextFlags_NoHorizontalScroll)=="function" then flags=flags|reaper.ImGui_InputTextFlags_NoHorizontalScroll() end; local avail=select(1,reaper.ImGui_GetContentRegionAvail(ctx)); local limit=math.max(18,math.floor((avail-24)/9.5)); for i=chat_start,#history do local m=history[i]; reaper.ImGui_Text(ctx,m.role..":"); local text=wrap_text(m.text or "",limit); local lines=1; for _ in text:gmatch("\n") do lines=lines+1 end; local height=math.max(math.floor(48*font_size/14),math.min(math.floor(260*font_size/14),lines*math.floor(font_size*1.57)+math.floor(12*font_size/14))); reaper.ImGui_InputTextMultiline(ctx,"##chatmsg"..i,text,-1,height,flags); text_context_menu("##chat_context"..i,text,false); reaper.ImGui_Spacing(ctx) end; if history_mode then reaper.ImGui_Separator(ctx); if reaper.ImGui_Button(ctx,"Verlauf löschen") then clear_saved_history() end end end
 local function remember_closed() save_history(); reaper.SetExtState(EXT_SECTION,WINDOW_STATE_KEY,"0",true) end
 local function check_project_change() local p=reaper.EnumProjects(-1,""); if p~=current_project then save_history(current_project); current_project=p; load_history(current_project); workflow_adapter.history_error=false; workflow_adapter.load() end end
-local function loop() focused_or_last_notation_editor(); workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change()
+local function loop() if ai_component_manager then ai_component_manager.poll() end; focused_or_last_notation_editor(); workflow_adapter.models.poll(); poll_update(); poll_job(); finish_save_panel(); if not open then if not restarting then remember_closed() end; return end; check_project_change()
 local is_studio=studio_window.mode=="studio"
 local title,window_flags,theme_count=studio_window.prepare()
 local visible
@@ -212,7 +212,7 @@ if reaper.ImGui_Button(ctx,"A-") then set_font_size(font_size-1) end
 reaper.ImGui_SameLine(ctx)
 if reaper.ImGui_Button(ctx,"A+") then set_font_size(font_size+1) end
 reaper.ImGui_SameLine(ctx)
-if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if is_studio and reaper.ImGui_MenuItem(ctx,studio_window.maximized and "Fenstergröße wiederherstellen" or "Studiofenster maximieren",nil,false,studio_window.can_maximize) then studio_window.toggle_maximize() end; if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"KI-Komponenten…") then ai_component_manager.open_window() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
+if reaper.ImGui_Button(ctx,"...") then reaper.ImGui_OpenPopup(ctx,"##studio_menu") end; if reaper.ImGui_BeginPopup(ctx,"##studio_menu") then if is_studio and reaper.ImGui_MenuItem(ctx,studio_window.maximized and "Fenstergröße wiederherstellen" or "Studiofenster maximieren",nil,false,studio_window.can_maximize) then studio_window.toggle_maximize() end; if reaper.ImGui_MenuItem(ctx,"Info") then info_visible=true; history_mode=false end; if reaper.ImGui_MenuItem(ctx,"Kostenübersicht") then costs.show() end; if reaper.ImGui_MenuItem(ctx,"KI-Komponenten…") and ai_component_manager then ai_component_manager.open_window() end; if reaper.ImGui_MenuItem(ctx,"Kostenpreise einstellen ...") then costs.edit_rate() end;
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Konzeption + Komposition"..(composition_mode=="concept" and " ✓" or "")) then composition_mode="concept"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Konzeption + Komposition (2 KI-Aufrufe)." end
 if reaper.ImGui_MenuItem(ctx,"Komponieren: Direktes JSON"..(composition_mode=="direct" and " ✓" or "")) then composition_mode="direct"; reaper.SetExtState(EXT_SECTION,COMPOSITION_MODE_KEY,composition_mode,true); update_status="Verfahren: Direktes JSON (1 KI-Aufruf)." end
 -- BEGIN WHOLE TRACK MENU
@@ -278,7 +278,7 @@ if reaper.ImGui_Button(ctx,"Schließen",bw,bh) then open=false end
 pop_font(pushed)
 reaper.ImGui_End(ctx)
 end
-if ai_component_manager.open then
+if ai_component_manager and ai_component_manager.open then
  local visible,keep_open=reaper.ImGui_Begin(ctx,"KI-Komponenten###CompositionStudioAIComponents",ai_component_manager.open)
  ai_component_manager.open=keep_open
  if visible then ai_component_manager.draw(ctx) end
