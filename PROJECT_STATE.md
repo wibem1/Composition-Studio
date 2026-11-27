@@ -2,13 +2,15 @@
 
 ## 27.11.2026 – Lokale KI-Integration 1.6-test3 (ENTWICKLUNGSFASSUNG)
 
-Auf dem Branch [feat/local-ai-manager-ddsp-1.6.0](https://github.com/wibem1/Composition-Studio/tree/feat/local-ai-manager-ddsp-1.6.0) wird die MIDI-DDSP-Anbindung als Testfassung fortgeführt. Python und `midi_ddsp_worker.py` sind manuell auswählbar; der Worker wird direkt angesprochen, ohne AI Music Studio oder dessen Server. Die MIDI-Originalspur bleibt unangetastet; WAV-Import erfolgt nach Bestätigung auf neuer REAPER-Spur. Fehlgeschlagene oder abgebrochene Renderdateien werden beseitigt. Die Ansicht kann auf ausdrücklichen Nutzerklick eine JSON-Diagnose mit Pfaden und lokalen Prüfergebnissen exportieren.
+Branch: [feat/local-ai-manager-ddsp-1.6.0](https://github.com/wibem1/Composition-Studio/tree/feat/local-ai-manager-ddsp-1.6.0), Code-Commit `640f6102646f3da4a9f5609e59405ca18e5e9e1b`. Composition Studio startet Python und den manuell ausgewählten MIDI-DDSP-Worker direkt; AI Music Studio und sein Server werden nicht benötigt. MIDI-Originale bleiben unverändert. Ein bestätigtes WAV wird auf eine neue REAPER-Spur importiert. Fehlgeschlagene/abgebrochene Renderdateien werden entfernt. Die KI-Komponentenansicht exportiert auf ausdrücklichen Klick eine JSON-Diagnose über den REAPER-Dateidialog.
 
-**Versionsstand:** 1.6-test3; Entwicklungsfassung, keine Freigabe.
+**Version:** 1.6-test3; Testkandidat, keine Freigabe.
 
-**Prüfstatus:** GitHub-CI am Code-Commit `170c87ce8563373e51b1d2e8121a58cb04d29c32` bestand Build-/Modul-/Versions-/Lua-Prüfungen, die vollständige Offline-Regression `tools/test_all.py`, Notation Selection und Score Workspace Bridge (Run-Links in [Testdokumentation](docs/LOCAL-AI-COMPONENTS-1.6.0.md)). Für 1.6-test3 noch ausstehend: GitHub-CI nach dem Update, echter Windows-/REAPER-Render, Audio-/Timingprüfung, Abbruch-/Importgegenprobe und Nutzerabnahme. Vollständige Verwaltung eigener isolierter Installationen, Updates und Deinstallation sowie ein geprüfter Komponentenkatalog bleiben offen.
+**Prüfungen am Code-Commit `640f6102646f3da4a9f5609e59405ca18e5e9e1b`:** [Local AI component regression #23](https://github.com/wibem1/Composition-Studio/actions/runs/45982948803) einschließlich Lua-Mocktest des Diagnoseexports, [Modular Studio regression #48](https://github.com/wibem1/Composition-Studio/actions/runs/45982948881), [Notation selection #114](https://github.com/wibem1/Composition-Studio/actions/runs/45982948950) und [Score workspace bridge #84](https://github.com/wibem1/Composition-Studio/actions/runs/45982948943) bestanden. Das belegt Offline-/CI-Verhalten, keinen echten PC-Render.
 
-**Nächster Schritt:** 1.6-test3 in REAPER mit der vorhandenen Windows-DDSP-Umgebung prüfen; danach lizenzgeprüfte Installations-, Update- und Entfernungsabläufe eigener isolierter Komponenten ergänzen.
+**Noch offen:** Windows-/REAPER-Diagnose mit den installierten Pfaden, MIDI-DDSP-Inferenz, hörbare Audio-/Timingkontrolle, WAV-Import und Nutzerabnahme. Außerdem vollständige Verwaltung eigener isolierter Komponenten (Katalog mit Lizenz-/Versionspins, Installieren, Aktualisieren, Entfernen, Speicherbedarf und Rückfall). 1.6.0 ist daher nicht freigabefähig.
+
+**Nächster Schritt:** 1.6-test3 in REAPER mit der installierten Windows-DDSP-Umgebung prüfen. Erst mit dessen Diagnose können kompatible Installations-/Updatepfade für eigene Komponenten abschließend festgelegt werden.
 
 ## 27.11.2026 – Prioritätskorrektur: lokale KI-Integration zuerst (PLANUNG)
 

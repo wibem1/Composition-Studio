@@ -1,4 +1,4 @@
-# Lokale KI-Komponenten und MIDI-DDSP – 1.6-Teststand 1.6-test3
+# Lokale KI-Komponenten und MIDI-DDSP – 1.6-Teststand · 1.6-test3
 
 Stand: 27.11.2026 · Entwicklungsfassung, keine Freigabe.
 
@@ -23,7 +23,8 @@ Der Worker-Aufruf folgt der bestehenden CLI von AI Music Studio (`midi_ddsp_work
 
 ## Prüfstatus und Grenzen
 
-- GitHub-Quellcodeprüfung: Worker-CLI, Check-Ausgabe (`ok`, `weights`), JSON-Notenformat, unterstützte Instrument-IDs und WAV-Ausgabe geprüft.
-- Automatisierte Modul-/Artefakt-, Versions-, vollständige Offline-Regression und Lua-Prüfungen: bestanden am Code-Commit `170c87ce8563373e51b1d2e8121a58cb04d29c32`; siehe [Local AI component regression](https://github.com/wibem1/Composition-Studio/actions/runs/45979473272) und [vollständiger Regressionstest](https://github.com/wibem1/Composition-Studio/actions/runs/45979473275).
-- Noch offen: vollständige isolierte Installations-/Update-/Entfernungsverwaltung eigener Komponenten, geprüfter Katalog, Speicherbedarf und Lizenzpins. Echter Windows-REAPER-Importtest mit der installierten Umgebung, Audio-/Timing-Gegenprobe und Nutzerabnahme. Diese Entwicklungsversion ist deshalb keine funktionsbestätigte 1.6.0-Freigabe.
-- Die vollständige Verwaltung (Installation, Aktualisierung und Entfernung eigener isolierter Komponenten, Speicherbedarf und Katalog-/Lizenzpins) bleibt offen. Diese erste vertikale Integration erkennt und nutzt MIDI-DDSP, installiert oder verändert aber keine fremde Umgebung.
+- GitHub-Quellcodeprüfung: Worker-CLI, Check-Ausgabe, JSON-Notenformat, unterstützte Instrument-IDs und WAV-Ausgabe.
+- Am Code-Commit `640f6102646f3da4a9f5609e59405ca18e5e9e1b` bestanden: [Local AI component regression #23](https://github.com/wibem1/Composition-Studio/actions/runs/45982948803), [Modular Studio regression #48](https://github.com/wibem1/Composition-Studio/actions/runs/45982948881), [Notation selection #114](https://github.com/wibem1/Composition-Studio/actions/runs/45982948950), [Score workspace bridge #84](https://github.com/wibem1/Composition-Studio/actions/runs/45982948943). Der lokale KI-Lauf beinhaltet einen Lua-Mocktest für den Dateidialog und ein gültiges JSON-Diagnoseergebnis.
+- OFFEN: Windows-/REAPER-Praxistest mit den vorhandenen Pfaden, realer DDSP-Render, Audio-/Timingkontrolle, Abbruch und WAV-Import. Keine erfolgreiche reale Audiogenerierung behauptet.
+- OFFEN: eigene isolierte Komponenteninstallationen samt geprüftem Katalog, Lizenz-/Versionspins, Speicherbedarf, Updates, Entfernung und Rückfall. Der aktuelle Kandidat wählt vorhandene Python-/Worker-Dateien aus und nutzt sie; er installiert oder verändert keine fremde Umgebung.
+- Diese Testfassung ist keine 1.6.0-Freigabe. Die Diagnose enthält Pfade und wird nur auf ausdrücklichen Nutzerklick gespeichert.
