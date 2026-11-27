@@ -1,5 +1,11 @@
 # Projektstand – Composition-Studio
 
+## 27.11.2026 – Prioritätskorrektur: lokale KI-Integration zuerst (PLANUNG)
+
+Projektinhaber entscheidet, den vorherigen Integrationsauftrag zuerst abzuschließen. [Roadmap und konkreter Auftrag](docs/DEVELOPMENT-ROADMAP.md), Plan-Commit `db38fae351b936b8a747ccb1426eefd3b8ec25ae`. Ziel 1.6.0: lokale Komponenten erkennen, eigenständig nutzen und verwalten; erste reale MIDI-DDSP-Inferenz ohne laufendes AI Music Studio nachweisen. Plugin-Datenbank nun 1.7.0, KI-Pluginsteuerung 1.8.0, Pattern Studio 1.9.0. Der unmittelbar folgende frühere Planungseintrag ist hinsichtlich der Priorität überholt.
+
+**Nächster Schritt:** isolierten Entwicklungsbranch vom aktuellen main anlegen, tatsächliche Engine-Schnittstellen prüfen und lesende lokale Erkennung plus erste unabhängige MIDI-DDSP-Anbindung gemäß Roadmap implementieren. Ohne Zugriff auf den Windows-PC gezielte Diagnose und native Gegenprobe bereitstellen. Keine neue Version oder Codeänderung durch diesen Planungseintrag. 1.5-test1 bleibt Ausgangspunkt; native UI-Abnahme offen.
+
 ## 27.11.2026 – Plugin-Datenbank als neue Entwicklungspriorität (PLANUNG)
 
 Der Projektinhaber hat die universelle Plugin-Parameter-Datenbank für Composition Studio bestätigt. [Aktualisierter Entwicklungsplan und Implementierungsauftrag](docs/DEVELOPMENT-ROADMAP.md), Plan-Commit `5dd2ae2d295b1f7d80058bfe1945db3498f6eb9d`. Ziel 1.6.0: installierte Plugins inventarisieren, geladene Instanzen lesend analysieren, persistenten durchsuchbaren Katalog mit Diagnoseexport und Studio-Integration entwickeln. Ziel 1.7.0: kontrollierte KI-Steuerung und Handbuchintegration. MIDI Pattern Studio folgt als 1.8.0; weitere bisherige Ziele bleiben im Plan erhalten.
